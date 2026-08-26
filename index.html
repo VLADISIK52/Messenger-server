@@ -8,7 +8,6 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
         body { display: flex; height: 100vh; background: #0e1621; color: #fff; }
 
-        /* Экран входа */
         #auth-screen { position: fixed; inset: 0; background: #0e1621; display: flex; justify-content: center; align-items: center; z-index: 100; }
         .auth-box { background: #17212b; padding: 25px; border-radius: 12px; display: flex; flex-direction: column; gap: 12px; width: 320px; }
         input, button { padding: 12px; border-radius: 8px; border: none; font-size: 14px; outline: none; }
@@ -16,20 +15,21 @@
         button { background: #5288c1; color: #fff; font-weight: bold; cursor: pointer; }
         button.sec { background: #242f3d; }
 
-        /* Главный интерфейс */
         #app { display: flex; width: 100%; height: 100%; }
         #sidebar { width: 320px; border-right: 1px solid #242f3d; display: flex; flex-direction: column; padding: 15px; gap: 10px; background: #17212b; }
         #chat-area { flex-grow: 1; display: flex; flex-direction: column; background: #0e1621; }
         
+        #chats-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; overflow-y: auto; }
+        .chat-item { padding: 12px; background: #242f3d; border-radius: 8px; cursor: pointer; transition: 0.2s; word-break: break-all; }
+        .chat-item:hover, .chat-item.active { background: #2b5278; }
+
         #messages { flex-grow: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
         .msg { max-width: 65%; padding: 10px 14px; border-radius: 12px; background: #182533; align-self: flex-start; word-wrap: break-word; }
         .msg.my { background: #2b5278; align-self: flex-end; }
         
-        /* Кружочки и медиа */
         .circle-video { width: 200px; height: 200px; border-radius: 50%; object-fit: cover; border: 3px solid #5288c1; display: block; margin-top: 5px; }
         audio { margin-top: 5px; max-width: 250px; }
 
-        /* Панель ввода */
         .input-panel { padding: 15px; background: #17212b; display: flex; gap: 10px; align-items: center; }
         .input-panel input { flex-grow: 1; }
         .icon-btn { background: #242f3d; border-radius: 50%; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; }
@@ -40,7 +40,6 @@
 </head>
 <body>
 
-<!-- Экран Авторизации -->
 <div id="auth-screen">
     <div class="auth-box">
         <h3 style="text-align:center">Мессенджер</h3>
@@ -51,26 +50,22 @@
     </div>
 </div>
 
-<!-- Основной Мессенджер -->
 <div id="app">
     <div id="sidebar">
         <h3>Чаты</h3>
         <button onclick="createPrivate()">+ Написать в ЛС</button>
         <button class="sec" onclick="createGroup()">+ Создать группу</button>
-        <div id="chats-list" style="margin-top:10px"></div>
+        <div id="chats-list"></div>
     </div>
     
     <div id="chat-area">
         <div id="messages"></div>
         
         <div class="input-panel">
-            <input type="text" id="msg-input" placeholder="Напишите сообщение...">
+            <input type="text" id="msg-input" placeholder="Выберите чат..." disabled>
             <button onclick="sendText()">Отправить</button>
-            
-            <!-- Кнопка ГС -->
-            <div class="icon-btn" id="voice-btn" title="Удерживай или нажми для ГС" onclick="toggleVoice()">🎤</div>
-            <!-- Кнопка Кружочка -->
-            <div class="icon-btn" id="circle-btn" title="Записать кружочек" onclick="toggleCircle()">📷</div>
+            <div class="icon-btn" id="voice-btn" title="Голосовое" onclick="toggleVoice()">🎤</div>
+            <div class="icon-btn" id="circle-btn" title="Кружочек" onclick="toggleCircle()">📷</div>
         </div>
     </div>
 </div>
@@ -86,7 +81,6 @@
     let isRecordingVoice = false;
     let isRecordingCircle = false;
 
-    // Вход / Регистрация
     async function auth(type) {
         const u = document.getElementById('username').value.trim();
         const p = document.getElementById('password').value.trim();
@@ -103,12 +97,12 @@
             currentUser = u;
             document.getElementById('auth-screen').style.display = 'none';
             connectWS();
+            loadChats();
         } else {
             alert(data.detail || "Ошибка входа");
         }
     }
 
-    // Соединение WebSocket
     function connectWS() {
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
         ws = new WebSocket(`${protocol}//${location.host}/ws/${currentUser}`);
@@ -118,10 +112,40 @@
             if (data.chat_id === activeChatId) {
                 renderMessage(data);
             }
+            loadChats(); // Обновляем список чатов
         };
     }
 
-    // Отрисовка сообщений
+    async function loadChats() {
+        const res = await fetch(`/chats/${currentUser}`);
+        const chats = await res.json();
+        const list = document.getElementById('chats-list');
+        list.innerHTML = '';
+
+        chats.forEach(chat => {
+            const div = document.createElement('div');
+            div.className = `chat-item ${chat.id === activeChatId ? 'active' : ''}`;
+            div.innerText = chat.name;
+            div.onclick = () => openChat(chat.id);
+            list.appendChild(div);
+        });
+    }
+
+    async function openChat(chatId) {
+        activeChatId = chatId;
+        document.getElementById('msg-input').disabled = false;
+        document.getElementById('msg-input').placeholder = "Напишите сообщение...";
+        
+        loadChats();
+        
+        const res = await fetch(`/messages/${chatId}`);
+        const messages = await res.json();
+        
+        const box = document.getElementById('messages');
+        box.innerHTML = '';
+        messages.forEach(msg => renderMessage(msg));
+    }
+
     function renderMessage(data) {
         const box = document.getElementById('messages');
         const div = document.createElement('div');
@@ -141,7 +165,6 @@
         box.scrollTop = box.scrollHeight;
     }
 
-    // Отправка текста
     function sendText() {
         const input = document.getElementById('msg-input');
         if (!input.value || !activeChatId) return;
@@ -149,9 +172,8 @@
         input.value = '';
     }
 
-    // Запись голосового сообщения
     async function toggleVoice() {
-        if (!activeChatId) return alert("Сначала выберите или создайте чат!");
+        if (!activeChatId) return alert("Сначала выберите чат!");
         const btn = document.getElementById('voice-btn');
         
         if (!isRecordingVoice) {
@@ -179,9 +201,8 @@
         }
     }
 
-    // Запись видеокружочка
     async function toggleCircle() {
-        if (!activeChatId) return alert("Сначала выберите или создайте чат!");
+        if (!activeChatId) return alert("Сначала выберите чат!");
         const btn = document.getElementById('circle-btn');
         
         if (!isRecordingCircle) {
@@ -210,7 +231,6 @@
         }
     }
 
-    // Создание чатов
     async function createPrivate() {
         const target = prompt("Введите @username собеседника:");
         if (!target) return;
@@ -220,8 +240,7 @@
             body: JSON.stringify({sender_username: currentUser, target_username: target})
         });
         const data = await res.json();
-        activeChatId = data.chat_id;
-        alert(`Чат с ${target} создан! ID чата: ${data.chat_id}`);
+        openChat(data.chat_id);
     }
 
     async function createGroup() {
@@ -237,9 +256,9 @@
             body: JSON.stringify({name: name, members: members})
         });
         const data = await res.json();
-        activeChatId = data.chat_id;
-        alert(`Группа "${name}" создана! ID: ${data.chat_id}`);
+        openChat(data.chat_id);
     }
 </script>
 </body>
 </html>
+
