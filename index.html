@@ -3,109 +3,229 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Messenger</title>
+    <title>Танковый Радиоканал</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-        body { display: flex; height: 100vh; background: #0e1621; color: #fff; overflow: hidden; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Trebuchet MS', 'Arial Black', sans-serif; }
+        
+        html, body { height: 100%; width: 100%; overflow: hidden; background: #0f120f; color: #d1d5db; }
 
-        #auth-screen { position: fixed; inset: 0; background: #0e1621; display: flex; justify-content: center; align-items: center; z-index: 100; }
-        .auth-box { background: #17212b; padding: 25px; border-radius: 12px; display: flex; flex-direction: column; gap: 12px; width: 90%; max-width: 320px; }
-        input, button { padding: 12px; border-radius: 8px; border: none; font-size: 14px; outline: none; }
-        input { background: #242f3d; color: #fff; }
-        button { background: #5288c1; color: #fff; font-weight: bold; cursor: pointer; }
-        button.sec { background: #242f3d; }
+        /* Экран авторизации в стиле Бриффинга / КПP */
+        #auth-screen { position: fixed; inset: 0; background: rgba(10, 12, 10, 0.95); display: flex; justify-content: center; align-items: center; z-index: 100; border: 2px solid #3a423a; }
+        .auth-box { 
+            background: linear-gradient(180deg, #232823 0%, #171a17 100%); 
+            padding: 30px; 
+            border-radius: 4px; 
+            border: 2px solid #ff9800; 
+            box-shadow: 0 0 15px rgba(255, 152, 0, 0.3), inset 0 0 10px rgba(0,0,0,0.8); 
+            display: flex; 
+            flex-direction: column; 
+            gap: 15px; 
+            width: 90%; 
+            max-width: 340px; 
+        }
+        .auth-box h3 { color: #ff9800; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 5px rgba(255,152,0,0.5); }
+        
+        input { background: #0f120f; color: #ffb74d; padding: 12px; border: 1px solid #4a544a; border-radius: 2px; font-size: 14px; outline: none; }
+        input:focus { border-color: #ff9800; box-shadow: 0 0 5px rgba(255,152,0,0.5); }
+        
+        button { 
+            background: linear-gradient(180deg, #f57c00 0%, #e65100 100%); 
+            color: #fff; 
+            padding: 12px; 
+            border: 1px solid #ffb74d; 
+            font-weight: bold; 
+            font-size: 14px; 
+            text-transform: uppercase; 
+            cursor: pointer; 
+            letter-spacing: 1px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+        button:active { transform: translateY(1px); }
+        button.sec { background: linear-gradient(180deg, #374237 0%, #222922 100%); border-color: #5a6b5a; color: #b0bec5; }
 
         #app { display: flex; width: 100%; height: 100%; position: relative; }
-        #sidebar { width: 320px; border-right: 1px solid #242f3d; display: flex; flex-direction: column; padding: 15px; gap: 10px; background: #17212b; }
-        #chat-area { flex-grow: 1; display: flex; flex-direction: column; background: #0e1621; }
+        #sidebar { 
+            width: 320px; 
+            background: #171a17; 
+            border-right: 2px solid #2e362e; 
+            display: flex; 
+            flex-direction: column; 
+            padding: 15px; 
+            gap: 12px; 
+            height: 100%; 
+        }
+        #chat-area { flex-grow: 1; display: flex; flex-direction: column; background: #0f120f; height: 100%; position: relative; }
         
-        /* Мобильная адаптация */
+        /* Мобильный экран */
         @media (max-width: 768px) {
             #sidebar { width: 100%; position: absolute; inset: 0; z-index: 10; }
             #chat-area { width: 100%; position: absolute; inset: 0; z-index: 20; display: none; }
             #chat-area.active { display: flex; }
         }
 
-        .back-btn { display: none; background: #242f3d; padding: 6px 12px; border-radius: 6px; font-size: 14px; margin-right: 10px; cursor: pointer; }
+        .back-btn { 
+            display: none; 
+            background: #2b312b; 
+            border: 1px solid #ff9800; 
+            color: #ff9800; 
+            padding: 5px 10px; 
+            font-size: 12px; 
+            font-weight: bold;
+            cursor: pointer; 
+            margin-right: 10px;
+        }
         @media (max-width: 768px) { .back-btn { display: inline-block; } }
 
-        #chats-list, #friends-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; overflow-y: auto; }
-        .chat-item { padding: 12px; background: #242f3d; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-        .chat-item:hover, .chat-item.active { background: #2b5278; }
-        .del-btn { background: transparent; color: #ff5252; font-size: 16px; padding: 2px 6px; }
+        #chats-list, #friends-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; overflow-y: auto; flex-grow: 1; }
+        .chat-item { 
+            padding: 12px; 
+            background: #232823; 
+            border-left: 3px solid #4a544a; 
+            cursor: pointer; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            font-weight: bold;
+            color: #cfd8dc;
+        }
+        .chat-item:hover, .chat-item.active { 
+            background: #2e362e; 
+            border-left-color: #ff9800; 
+            color: #ffb74d;
+        }
+        .del-btn { background: transparent; border: none; color: #e53935; font-size: 16px; padding: 2px 6px; box-shadow: none; }
 
-        #messages { flex-grow: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
-        .msg { max-width: 80%; padding: 10px 14px; border-radius: 12px; background: #182533; align-self: flex-start; word-wrap: break-word; }
-        .msg.my { background: #2b5278; align-self: flex-end; }
+        .chat-header { 
+            padding: 12px 15px; 
+            background: #171a17; 
+            border-bottom: 2px solid #2e362e; 
+            display: flex; 
+            align-items: center; 
+            flex-shrink: 0; 
+            color: #ff9800;
+            letter-spacing: 1px;
+            text-shadow: 0 0 3px rgba(255, 152, 0, 0.4);
+        }
         
-        .circle-video { width: 160px; height: 160px; border-radius: 50%; object-fit: cover; border: 3px solid #5288c1; margin-top: 5px; }
-        audio { margin-top: 5px; max-width: 200px; }
+        #messages { 
+            flex-grow: 1; 
+            overflow-y: auto; 
+            padding: 15px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 12px; 
+            background-image: radial-gradient(#1f241f 1px, transparent 1px);
+            background-size: 16px 16px;
+        }
+        
+        .msg { 
+            max-width: 80%; 
+            padding: 10px 14px; 
+            border-radius: 2px; 
+            background: #1c221c; 
+            border: 1px solid #343d34; 
+            align-self: flex-start; 
+            word-wrap: break-word; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            color: #e0e0e0;
+        }
+        .msg.my { 
+            background: #2b332b; 
+            border-color: #ff9800; 
+            align-self: flex-end; 
+            color: #fff;
+        }
+        .msg b { color: #ffb74d; font-size: 13px; text-transform: uppercase; }
+        
+        .circle-video { width: 160px; height: 160px; border-radius: 50%; object-fit: cover; border: 3px solid #ff9800; margin-top: 5px; box-shadow: 0 0 10px rgba(255,152,0,0.4); }
+        audio { margin-top: 5px; max-width: 220px; filter: invert(0.8) hue-rotate(120deg); }
 
-        .chat-header { padding: 10px 15px; background: #17212b; border-bottom: 1px solid #242f3d; display: flex; align-items: center; }
-        .input-panel { padding: 10px 15px; background: #17212b; display: flex; gap: 8px; align-items: center; }
-        .input-panel input { flex-grow: 1; }
-        .icon-btn { background: #242f3d; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; flex-shrink: 0; }
-        .recording { background: #e53935 !important; animation: pulse 1s infinite; }
+        /* Панель рации / ввода сообщений */
+        .input-panel { 
+            padding: 10px 15px; 
+            background: #171a17; 
+            border-top: 2px solid #2e362e; 
+            display: flex; 
+            gap: 8px; 
+            align-items: center; 
+            flex-shrink: 0; 
+        }
+        .input-panel input { flex-grow: 1; min-width: 0; background: #0f120f; border-color: #374237; }
+        .icon-btn { 
+            background: #232823; 
+            border: 1px solid #4a544a; 
+            border-radius: 4px; 
+            width: 42px; 
+            height: 42px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            cursor: pointer; 
+            font-size: 18px; 
+            flex-shrink: 0; 
+        }
+        .icon-btn:hover { border-color: #ff9800; color: #ff9800; }
+        .recording { background: #b71c1c !important; border-color: #ff5252 !important; animation: pulse 1s infinite; }
 
-        .tabs { display: flex; gap: 10px; border-bottom: 1px solid #242f3d; padding-bottom: 10px; }
-        .tab { cursor: pointer; opacity: 0.6; padding: 4px 8px; }
-        .tab.active { opacity: 1; border-bottom: 2px solid #5288c1; }
+        .tabs { display: flex; gap: 5px; border-bottom: 2px solid #2e362e; padding-bottom: 8px; }
+        .tab { cursor: pointer; opacity: 0.5; padding: 6px 12px; font-size: 13px; text-transform: uppercase; font-weight: bold; background: #232823; }
+        .tab.active { opacity: 1; border: 1px solid #ff9800; border-bottom: none; color: #ff9800; background: #171a17; }
 
-        .user-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid #242f3d; }
-        .logout-btn { background: #e53935; padding: 5px 10px; font-size: 12px; }
+        .user-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 2px solid #2e362e; }
+        .logout-btn { background: #b71c1c; border-color: #ff5252; padding: 4px 8px; font-size: 11px; }
 
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
 
 <div id="auth-screen">
     <div class="auth-box">
-        <h3 style="text-align:center">Мессенджер</h3>
-        <input type="text" id="username" placeholder="Имя пользователя (@username)">
+        <h3 style="text-align:center">ВХОД В СВЯЗЬ</h3>
+        <input type="text" id="username" placeholder="Позывной (@username)">
         <input type="password" id="password" placeholder="Пароль">
-        <button onclick="auth('login')">Войти</button>
-        <button class="sec" onclick="auth('register')">Зарегистрироваться</button>
+        <button onclick="auth('login')">ВОЙТИ В СЕТЬ</button>
+        <button class="sec" onclick="auth('register')">РЕГИСТРАЦИЯ ПОЗЫВНОГО</button>
     </div>
 </div>
 
 <div id="app">
     <div id="sidebar">
         <div class="user-header">
-            <span id="my-name" style="font-weight:bold"></span>
-            <button class="logout-btn" onclick="logout()">Выйти</button>
+            <span id="my-name" style="font-weight:bold; color:#ff9800;"></span>
+            <button class="logout-btn" onclick="logout()">ВЫЙТИ</button>
         </div>
 
-        <div class="tabs" style="margin-top:10px">
+        <div class="tabs" style="margin-top:5px">
             <div class="tab active" id="tab-chats" onclick="switchTab('chats')">Чаты</div>
-            <div class="tab" id="tab-friends" onclick="switchTab('friends')">Друзья</div>
+            <div class="tab" id="tab-friends" onclick="switchTab('friends')">Союзники</div>
         </div>
 
-        <div id="chats-tab-content">
-            <button onclick="createPrivate()" style="width:100%; margin-bottom:5px; margin-top:10px">+ Написать в ЛС</button>
-            <button class="sec" onclick="createGroup()" style="width:100%">+ Создать группу</button>
+        <div id="chats-tab-content" style="display:flex; flex-direction:column; flex-grow:1; overflow:hidden;">
+            <button onclick="createPrivate()" style="width:100%; margin-bottom:5px; margin-top:10px">+ Запрос связи (ЛС)</button>
+            <button class="sec" onclick="createGroup()" style="width:100%">+ Создать взвод</button>
             <div id="chats-list"></div>
         </div>
 
-        <div id="friends-tab-content" style="display:none">
-            <button onclick="addFriendPrompt()" style="width:100%; margin-top:10px">+ Добавить друга</button>
+        <div id="friends-tab-content" style="display:none; flex-direction:column; flex-grow:1; overflow:hidden;">
+            <button onclick="addFriendPrompt()" style="width:100%; margin-top:10px">+ Добавить союзника</button>
             <div id="friends-list"></div>
         </div>
     </div>
     
     <div id="chat-area">
         <div class="chat-header">
-            <span class="back-btn" onclick="closeMobileChat()">⬅ Назад</span>
-            <span id="chat-title" style="font-weight:bold">Выберите чат</span>
+            <span class="back-btn" onclick="closeMobileChat()">⬅ КАНАЛЫ</span>
+            <span id="chat-title" style="font-weight:bold">ВЫБЕРИТЕ КАНАЛ СВЯЗИ</span>
         </div>
 
         <div id="messages"></div>
         
         <div class="input-panel">
-            <input type="text" id="msg-input" placeholder="Сообщение..." disabled onkeydown="if(event.key==='Enter') sendText()">
-            <button onclick="sendText()">➤</button>
-            <div class="icon-btn" id="voice-btn" onclick="toggleVoice()">🎤</div>
-            <div class="icon-btn" id="circle-btn" onclick="toggleCircle()">📷</div>
+            <input type="text" id="msg-input" placeholder="Введите передачу..." disabled onkeydown="if(event.key==='Enter') sendText()">
+            <button onclick="sendText()">В БОЙ</button>
+            <div class="icon-btn" id="voice-btn" title="Рация" onclick="toggleVoice()">🎙️</div>
+            <div class="icon-btn" id="circle-btn" title="Прицел/Камера" onclick="toggleCircle()">🎯</div>
         </div>
     </div>
 </div>
@@ -138,7 +258,6 @@
         connectWS();
         loadChats();
         loadFriends();
-        // Автоматическое обновление каждые 2 секунды (гарантия для мобилок)
         if (!pollInterval) {
             pollInterval = setInterval(() => {
                 if (activeChatId) fetchMessages(activeChatId, true);
@@ -150,7 +269,7 @@
     async function auth(type) {
         const u = document.getElementById('username').value.trim().toLowerCase();
         const p = document.getElementById('password').value.trim();
-        if(!u || !p) return alert("Заполните все поля");
+        if(!u || !p) return alert("Заполните позывной и пароль!");
 
         try {
             const res = await fetch(`/${type}`, {
@@ -167,10 +286,10 @@
                 document.getElementById('my-name').innerText = `@${currentUser}`;
                 startApp();
             } else {
-                alert(data.detail || "Ошибка");
+                alert(data.detail || "Ошибка доступа");
             }
         } catch (e) {
-            alert("Ошибка подключения к серверу");
+            alert("Нет связи с сервером");
         }
     }
 
@@ -198,8 +317,8 @@
     function switchTab(tab) {
         document.getElementById('tab-chats').classList.toggle('active', tab === 'chats');
         document.getElementById('tab-friends').classList.toggle('active', tab === 'friends');
-        document.getElementById('chats-tab-content').style.display = tab === 'chats' ? 'block' : 'none';
-        document.getElementById('friends-tab-content').style.display = tab === 'friends' ? 'block' : 'none';
+        document.getElementById('chats-tab-content').style.display = tab === 'chats' ? 'flex' : 'none';
+        document.getElementById('friends-tab-content').style.display = tab === 'friends' ? 'flex' : 'none';
     }
 
     async function loadChats() {
@@ -216,7 +335,7 @@
                 div.className = `chat-item ${chat.id === activeChatId ? 'active' : ''}`;
                 div.innerHTML = `
                     <span>${chat.name}</span>
-                    <button class="del-btn" onclick="deleteChat(event, ${chat.id})">🗑️</button>
+                    <button class="del-btn" onclick="deleteChat(event, ${chat.id})">✖</button>
                 `;
                 div.onclick = (e) => {
                     if(e.target.tagName !== 'BUTTON') openChat(chat.id, chat.name);
@@ -228,7 +347,7 @@
 
     async function deleteChat(event, chatId) {
         event.stopPropagation();
-        if(!confirm("Удалить этот чат?")) return;
+        if(!confirm("Уничтожить этот канал связи?")) return;
         await fetch(`/chats/${chatId}`, { method: 'DELETE' });
         if(activeChatId === chatId) {
             activeChatId = null;
@@ -257,7 +376,7 @@
     }
 
     async function addFriendPrompt() {
-        const target = prompt("Введите @username друга:");
+        const target = prompt("Введите позывной союзника (@username):");
         if (!target) return;
         const res = await fetch('/friends/add', {
             method: 'POST',
@@ -266,7 +385,7 @@
         });
         const data = await res.json();
         if(res.ok) {
-            alert("Друг добавлен!");
+            alert("Союзник добавлен в список!");
             loadFriends();
         } else {
             alert(data.detail);
@@ -281,10 +400,10 @@
         });
         const data = await res.json();
         switchTab('chats');
-        openChat(data.chat_id, `@${targetUsername}`);
+        openChat(data.chat_id, `👤 @${targetUsername}`);
     }
 
-    async function openChat(chatId, title = "Чат") {
+    async function openChat(chatId, title = "Канал") {
         activeChatId = chatId;
         document.getElementById('msg-input').disabled = false;
         document.getElementById('chat-title').innerText = title;
@@ -321,7 +440,7 @@
         const div = document.createElement('div');
         div.className = `msg ${data.sender === currentUser ? 'my' : ''}`;
         
-        let contentHTML = `<b>${data.sender}:</b><br>`;
+        let contentHTML = `<b>[${data.sender}]:</b><br>`;
         if (data.type === 'text') {
             contentHTML += data.content;
         } else if (data.type === 'voice') {
@@ -348,7 +467,7 @@
     }
 
     async function toggleVoice() {
-        if (!activeChatId) return alert("Сначала выберите чат!");
+        if (!activeChatId) return alert("Сначала выберите канал!");
         const btn = document.getElementById('voice-btn');
         
         if (!isRecordingVoice) {
@@ -370,7 +489,7 @@
                 mediaRecorder.start();
                 isRecordingVoice = true;
                 btn.classList.add('recording');
-            } catch(e) { alert("Ошибка доступа к микрофону"); }
+            } catch(e) { alert("Ошибка доступа к рации"); }
         } else {
             mediaRecorder.stop();
             isRecordingVoice = false;
@@ -379,7 +498,7 @@
     }
 
     async function toggleCircle() {
-        if (!activeChatId) return alert("Сначала выберите чат!");
+        if (!activeChatId) return alert("Сначала выберите канал!");
         const btn = document.getElementById('circle-btn');
         
         if (!isRecordingCircle) {
@@ -402,7 +521,7 @@
                 mediaRecorder.start();
                 isRecordingCircle = true;
                 btn.classList.add('recording');
-            } catch(e) { alert("Ошибка доступа к камере"); }
+            } catch(e) { alert("Ошибка доступа к оптике"); }
         } else {
             mediaRecorder.stop();
             isRecordingCircle = false;
@@ -411,14 +530,14 @@
     }
 
     async function createPrivate() {
-        const target = prompt("Введите @username собеседника:");
+        const target = prompt("Позывной собеседника:");
         if (!target) return;
         startPrivateWith(target.toLowerCase());
     }
 
     async function createGroup() {
-        const name = prompt("Название группы:");
-        const membersStr = prompt("Участники через запятую (например: alex, max):");
+        const name = prompt("Название взвода:");
+        const membersStr = prompt("Позывные бойцов через запятую:");
         if (!name || !membersStr) return;
         const members = membersStr.split(',').map(m => m.trim().toLowerCase());
         members.push(currentUser);
@@ -429,11 +548,12 @@
             body: JSON.stringify({name: name, members: members})
         });
         const data = await res.json();
-        openChat(data.chat_id, `👥 ${name}`);
+        openChat(data.chat_id, `👥 Взвод: ${name}`);
     }
 </script>
 </body>
 </html>
+
 
 
 
