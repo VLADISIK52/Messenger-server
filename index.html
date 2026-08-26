@@ -2,39 +2,49 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Messenger</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-        body { display: flex; height: 100vh; background: #0e1621; color: #fff; }
+        body { display: flex; height: 100vh; background: #0e1621; color: #fff; overflow: hidden; }
 
         #auth-screen { position: fixed; inset: 0; background: #0e1621; display: flex; justify-content: center; align-items: center; z-index: 100; }
-        .auth-box { background: #17212b; padding: 25px; border-radius: 12px; display: flex; flex-direction: column; gap: 12px; width: 320px; }
+        .auth-box { background: #17212b; padding: 25px; border-radius: 12px; display: flex; flex-direction: column; gap: 12px; width: 90%; max-width: 320px; }
         input, button { padding: 12px; border-radius: 8px; border: none; font-size: 14px; outline: none; }
         input { background: #242f3d; color: #fff; }
         button { background: #5288c1; color: #fff; font-weight: bold; cursor: pointer; }
         button.sec { background: #242f3d; }
 
-        #app { display: flex; width: 100%; height: 100%; }
+        #app { display: flex; width: 100%; height: 100%; position: relative; }
         #sidebar { width: 320px; border-right: 1px solid #242f3d; display: flex; flex-direction: column; padding: 15px; gap: 10px; background: #17212b; }
         #chat-area { flex-grow: 1; display: flex; flex-direction: column; background: #0e1621; }
         
-        #chats-list, #friends-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; overflow-y: auto; }
-        .chat-item { padding: 12px; background: #242f3d; border-radius: 8px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; }
-        .chat-item:hover, .chat-item.active { background: #2b5278; }
-        .del-btn { background: transparent; color: #ff5252; font-size: 16px; padding: 2px 6px; border-radius: 4px; }
-        .del-btn:hover { background: rgba(255,82,82,0.2); }
+        /* Мобильная адаптация */
+        @media (max-width: 768px) {
+            #sidebar { width: 100%; position: absolute; inset: 0; z-index: 10; }
+            #chat-area { width: 100%; position: absolute; inset: 0; z-index: 20; display: none; }
+            #chat-area.active { display: flex; }
+        }
 
-        #messages { flex-grow: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .msg { max-width: 65%; padding: 10px 14px; border-radius: 12px; background: #182533; align-self: flex-start; word-wrap: break-word; }
+        .back-btn { display: none; background: #242f3d; padding: 6px 12px; border-radius: 6px; font-size: 14px; margin-right: 10px; cursor: pointer; }
+        @media (max-width: 768px) { .back-btn { display: inline-block; } }
+
+        #chats-list, #friends-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; overflow-y: auto; }
+        .chat-item { padding: 12px; background: #242f3d; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .chat-item:hover, .chat-item.active { background: #2b5278; }
+        .del-btn { background: transparent; color: #ff5252; font-size: 16px; padding: 2px 6px; }
+
+        #messages { flex-grow: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .msg { max-width: 80%; padding: 10px 14px; border-radius: 12px; background: #182533; align-self: flex-start; word-wrap: break-word; }
         .msg.my { background: #2b5278; align-self: flex-end; }
         
-        .circle-video { width: 180px; height: 180px; border-radius: 50%; object-fit: cover; border: 3px solid #5288c1; margin-top: 5px; }
-        audio { margin-top: 5px; max-width: 250px; }
+        .circle-video { width: 160px; height: 160px; border-radius: 50%; object-fit: cover; border: 3px solid #5288c1; margin-top: 5px; }
+        audio { margin-top: 5px; max-width: 200px; }
 
-        .input-panel { padding: 15px; background: #17212b; display: flex; gap: 10px; align-items: center; }
+        .chat-header { padding: 10px 15px; background: #17212b; border-bottom: 1px solid #242f3d; display: flex; align-items: center; }
+        .input-panel { padding: 10px 15px; background: #17212b; display: flex; gap: 8px; align-items: center; }
         .input-panel input { flex-grow: 1; }
-        .icon-btn { background: #242f3d; border-radius: 50%; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; }
+        .icon-btn { background: #242f3d; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; flex-shrink: 0; }
         .recording { background: #e53935 !important; animation: pulse 1s infinite; }
 
         .tabs { display: flex; gap: 10px; border-bottom: 1px solid #242f3d; padding-bottom: 10px; }
@@ -84,21 +94,27 @@
     </div>
     
     <div id="chat-area">
+        <div class="chat-header">
+            <span class="back-btn" onclick="closeMobileChat()">⬅ Назад</span>
+            <span id="chat-title" style="font-weight:bold">Выберите чат</span>
+        </div>
+
         <div id="messages"></div>
         
         <div class="input-panel">
-            <input type="text" id="msg-input" placeholder="Выберите чат..." disabled onkeydown="if(event.key==='Enter') sendText()">
-            <button onclick="sendText()">Отправить</button>
-            <div class="icon-btn" id="voice-btn" title="Голосовое" onclick="toggleVoice()">🎤</div>
-            <div class="icon-btn" id="circle-btn" title="Кружочек" onclick="toggleCircle()">📷</div>
+            <input type="text" id="msg-input" placeholder="Сообщение..." disabled onkeydown="if(event.key==='Enter') sendText()">
+            <button onclick="sendText()">➤</button>
+            <div class="icon-btn" id="voice-btn" onclick="toggleVoice()">🎤</div>
+            <div class="icon-btn" id="circle-btn" onclick="toggleCircle()">📷</div>
         </div>
     </div>
 </div>
 
 <script>
-    let currentUser = localStorage.getItem('messenger_user') || "";
+    let currentUser = "";
     let ws = null;
     let activeChatId = null;
+    let pollInterval = null;
     
     let mediaRecorder = null;
     let audioChunks = [];
@@ -106,39 +122,55 @@
     let isRecordingVoice = false;
     let isRecordingCircle = false;
 
-    // Автоматическая проверка входа при загрузке страницы
-    window.onload = () => {
-        if (currentUser) {
+    document.addEventListener("DOMContentLoaded", () => {
+        const savedUser = localStorage.getItem('messenger_user');
+        if (savedUser) {
+            currentUser = savedUser.toLowerCase();
             document.getElementById('auth-screen').style.display = 'none';
             document.getElementById('my-name').innerText = `@${currentUser}`;
-            connectWS();
-            loadChats();
-            loadFriends();
+            startApp();
+        } else {
+            document.getElementById('auth-screen').style.display = 'flex';
         }
-    };
+    });
+
+    function startApp() {
+        connectWS();
+        loadChats();
+        loadFriends();
+        // Автоматическое обновление каждые 2 секунды (гарантия для мобилок)
+        if (!pollInterval) {
+            pollInterval = setInterval(() => {
+                if (activeChatId) fetchMessages(activeChatId, true);
+                loadChats();
+            }, 2000);
+        }
+    }
 
     async function auth(type) {
-        const u = document.getElementById('username').value.trim();
+        const u = document.getElementById('username').value.trim().toLowerCase();
         const p = document.getElementById('password').value.trim();
         if(!u || !p) return alert("Заполните все поля");
 
-        const res = await fetch(`/${type}`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({username: u, password: p})
-        });
-        const data = await res.json();
-        
-        if (res.ok) {
-            currentUser = u;
-            localStorage.setItem('messenger_user', u); // Сохраняем логин
-            document.getElementById('auth-screen').style.display = 'none';
-            document.getElementById('my-name').innerText = `@${currentUser}`;
-            connectWS();
-            loadChats();
-            loadFriends();
-        } else {
-            alert(data.detail || "Ошибка входа");
+        try {
+            const res = await fetch(`/${type}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username: u, password: p})
+            });
+            const data = await res.json();
+            
+            if (res.ok) {
+                currentUser = u;
+                localStorage.setItem('messenger_user', u);
+                document.getElementById('auth-screen').style.display = 'none';
+                document.getElementById('my-name').innerText = `@${currentUser}`;
+                startApp();
+            } else {
+                alert(data.detail || "Ошибка");
+            }
+        } catch (e) {
+            alert("Ошибка подключения к серверу");
         }
     }
 
@@ -148,23 +180,19 @@
     }
 
     function connectWS() {
-        if (ws) ws.close();
+        if (!currentUser) return;
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
         ws = new WebSocket(`${protocol}//${location.host}/ws/${currentUser}`);
         
         ws.onmessage = (e) => {
             const data = JSON.parse(e.data);
-            // Если сообщение пришло в открытый чат — рисуем его СРАЗУ
-            if (parseInt(data.chat_id) === parseInt(activeChatId)) {
+            if (activeChatId && parseInt(data.chat_id) === parseInt(activeChatId)) {
                 renderMessage(data);
             }
-            loadChats(); // Обновляем список чатов
+            loadChats();
         };
 
-        ws.onclose = () => {
-            // Переподключение при обрыве соединения через 2 секунды
-            setTimeout(connectWS, 2000);
-        };
+        ws.onclose = () => setTimeout(connectWS, 3000);
     }
 
     function switchTab(tab) {
@@ -175,24 +203,27 @@
     }
 
     async function loadChats() {
-        if(!currentUser) return;
-        const res = await fetch(`/chats/${currentUser}`);
-        const chats = await res.json();
-        const list = document.getElementById('chats-list');
-        list.innerHTML = '';
+        if (!currentUser) return;
+        try {
+            const res = await fetch(`/chats/${currentUser}`);
+            if (!res.ok) return;
+            const chats = await res.json();
+            const list = document.getElementById('chats-list');
+            list.innerHTML = '';
 
-        chats.forEach(chat => {
-            const div = document.createElement('div');
-            div.className = `chat-item ${chat.id === activeChatId ? 'active' : ''}`;
-            div.innerHTML = `
-                <span>${chat.name}</span>
-                <button class="del-btn" onclick="deleteChat(event, ${chat.id})">🗑️</button>
-            `;
-            div.onclick = (e) => {
-                if(e.target.tagName !== 'BUTTON') openChat(chat.id);
-            };
-            list.appendChild(div);
-        });
+            chats.forEach(chat => {
+                const div = document.createElement('div');
+                div.className = `chat-item ${chat.id === activeChatId ? 'active' : ''}`;
+                div.innerHTML = `
+                    <span>${chat.name}</span>
+                    <button class="del-btn" onclick="deleteChat(event, ${chat.id})">🗑️</button>
+                `;
+                div.onclick = (e) => {
+                    if(e.target.tagName !== 'BUTTON') openChat(chat.id, chat.name);
+                };
+                list.appendChild(div);
+            });
+        } catch (e) {}
     }
 
     async function deleteChat(event, chatId) {
@@ -201,26 +232,28 @@
         await fetch(`/chats/${chatId}`, { method: 'DELETE' });
         if(activeChatId === chatId) {
             activeChatId = null;
-            document.getElementById('messages').innerHTML = '';
-            document.getElementById('msg-input').disabled = true;
+            closeMobileChat();
         }
         loadChats();
     }
 
     async function loadFriends() {
-        if(!currentUser) return;
-        const res = await fetch(`/friends/${currentUser}`);
-        const friends = await res.json();
-        const list = document.getElementById('friends-list');
-        list.innerHTML = '';
+        if (!currentUser) return;
+        try {
+            const res = await fetch(`/friends/${currentUser}`);
+            if (!res.ok) return;
+            const friends = await res.json();
+            const list = document.getElementById('friends-list');
+            list.innerHTML = '';
 
-        friends.forEach(friend => {
-            const div = document.createElement('div');
-            div.className = 'chat-item';
-            div.innerText = `@${friend}`;
-            div.onclick = () => startPrivateWith(friend);
-            list.appendChild(div);
-        });
+            friends.forEach(friend => {
+                const div = document.createElement('div');
+                div.className = 'chat-item';
+                div.innerText = `@${friend}`;
+                div.onclick = () => startPrivateWith(friend);
+                list.appendChild(div);
+            });
+        } catch (e) {}
     }
 
     async function addFriendPrompt() {
@@ -248,22 +281,39 @@
         });
         const data = await res.json();
         switchTab('chats');
-        openChat(data.chat_id);
+        openChat(data.chat_id, `@${targetUsername}`);
     }
 
-    async function openChat(chatId) {
+    async function openChat(chatId, title = "Чат") {
         activeChatId = chatId;
         document.getElementById('msg-input').disabled = false;
-        document.getElementById('msg-input').placeholder = "Напишите сообщение...";
+        document.getElementById('chat-title').innerText = title;
+        document.getElementById('chat-area').classList.add('active');
         
         loadChats();
-        
-        const res = await fetch(`/messages/${chatId}`);
-        const messages = await res.json();
-        
-        const box = document.getElementById('messages');
-        box.innerHTML = '';
-        messages.forEach(msg => renderMessage(msg));
+        fetchMessages(chatId, false);
+    }
+
+    function closeMobileChat() {
+        activeChatId = null;
+        document.getElementById('chat-area').classList.remove('active');
+        document.getElementById('messages').innerHTML = '';
+        document.getElementById('msg-input').disabled = true;
+    }
+
+    let lastMessagesCount = 0;
+    async function fetchMessages(chatId, isBackground = false) {
+        try {
+            const res = await fetch(`/messages/${chatId}`);
+            const messages = await res.json();
+            
+            if (isBackground && messages.length === lastMessagesCount) return;
+            lastMessagesCount = messages.length;
+
+            const box = document.getElementById('messages');
+            box.innerHTML = '';
+            messages.forEach(msg => renderMessage(msg));
+        } catch(e) {}
     }
 
     function renderMessage(data) {
@@ -289,13 +339,12 @@
         const input = document.getElementById('msg-input');
         if (!input.value.trim() || !activeChatId) return;
         
-        ws.send(JSON.stringify({ 
-            chat_id: activeChatId, 
-            type: 'text', 
-            content: input.value.trim() 
-        }));
-        
+        const text = input.value.trim();
         input.value = '';
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ chat_id: activeChatId, type: 'text', content: text }));
+        }
     }
 
     async function toggleVoice() {
@@ -303,23 +352,25 @@
         const btn = document.getElementById('voice-btn');
         
         if (!isRecordingVoice) {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-            audioChunks = [];
-            
-            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-            mediaRecorder.onstop = async () => {
-                const blob = new Blob(audioChunks, { type: 'audio/webm' });
-                const reader = new FileReader();
-                reader.readAsDataURL(blob);
-                reader.onloadend = () => {
-                    ws.send(JSON.stringify({ chat_id: activeChatId, type: 'voice', content: reader.result }));
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const reader = new FileReader();
+                    reader.readAsDataURL(blob);
+                    reader.onloadend = () => {
+                        ws.send(JSON.stringify({ chat_id: activeChatId, type: 'voice', content: reader.result }));
+                    };
                 };
-            };
-            
-            mediaRecorder.start();
-            isRecordingVoice = true;
-            btn.classList.add('recording');
+                
+                mediaRecorder.start();
+                isRecordingVoice = true;
+                btn.classList.add('recording');
+            } catch(e) { alert("Ошибка доступа к микрофону"); }
         } else {
             mediaRecorder.stop();
             isRecordingVoice = false;
@@ -332,28 +383,26 @@
         const btn = document.getElementById('circle-btn');
         
         if (!isRecordingCircle) {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { width: 200, height: 200 }, 
-                audio: true 
-            });
-            
-            mediaRecorder = new MediaRecorder(stream);
-            videoChunks = [];
-            
-            mediaRecorder.ondataavailable = e => videoChunks.push(e.data);
-            mediaRecorder.onstop = async () => {
-                const blob = new Blob(videoChunks, { type: 'video/webm' });
-                const reader = new FileReader();
-                reader.readAsDataURL(blob);
-                reader.onloadend = () => {
-                    ws.send(JSON.stringify({ chat_id: activeChatId, type: 'circle', content: reader.result }));
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 200, height: 200 }, audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                videoChunks = [];
+                
+                mediaRecorder.ondataavailable = e => videoChunks.push(e.data);
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(videoChunks, { type: 'video/webm' });
+                    const reader = new FileReader();
+                    reader.readAsDataURL(blob);
+                    reader.onloadend = () => {
+                        ws.send(JSON.stringify({ chat_id: activeChatId, type: 'circle', content: reader.result }));
+                    };
+                    stream.getTracks().forEach(track => track.stop());
                 };
-                stream.getTracks().forEach(track => track.stop());
-            };
-            
-            mediaRecorder.start();
-            isRecordingCircle = true;
-            btn.classList.add('recording');
+                
+                mediaRecorder.start();
+                isRecordingCircle = true;
+                btn.classList.add('recording');
+            } catch(e) { alert("Ошибка доступа к камере"); }
         } else {
             mediaRecorder.stop();
             isRecordingCircle = false;
@@ -364,14 +413,14 @@
     async function createPrivate() {
         const target = prompt("Введите @username собеседника:");
         if (!target) return;
-        startPrivateWith(target);
+        startPrivateWith(target.toLowerCase());
     }
 
     async function createGroup() {
         const name = prompt("Название группы:");
         const membersStr = prompt("Участники через запятую (например: alex, max):");
         if (!name || !membersStr) return;
-        const members = membersStr.split(',').map(m => m.trim());
+        const members = membersStr.split(',').map(m => m.trim().toLowerCase());
         members.push(currentUser);
         
         const res = await fetch('/chats/group', {
@@ -380,7 +429,7 @@
             body: JSON.stringify({name: name, members: members})
         });
         const data = await res.json();
-        openChat(data.chat_id);
+        openChat(data.chat_id, `👥 ${name}`);
     }
 </script>
 </body>
