@@ -3,7 +3,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import sqlite3
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 app = FastAPI()
 
@@ -18,6 +18,14 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL
+        )
+    """)
+    # Таблица друзей
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS friends (
+            user1 TEXT,
+            user2 TEXT,
+            PRIMARY KEY (user1, user2)
         )
     """)
     cursor.execute("""
@@ -53,6 +61,10 @@ class UserAuth(BaseModel):
     username: str
     password: str
 
+class AddFriend(BaseModel):
+    username: str
+    friend_username: str
+
 class CreateGroup(BaseModel):
     name: str
     members: List[str]
@@ -87,9 +99,37 @@ def login(user: UserAuth):
     conn.close()
     if res:
         return {"message": "Успешно", "username": user.username}
-    raise HTTPException(status_code=400, detail="Неверное имя пользователя или пароль")
+    raise HTTPException(status_code=400, detail="Неверные данные")
 
-# Получение списка чатов пользователя
+# --- Друзья ---
+@app.post("/friends/add")
+def add_friend(data: AddFriend):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE username = ?", (data.friend_username,))
+    if not cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    
+    try:
+        cursor.execute("INSERT INTO friends VALUES (?, ?)", (data.username, data.friend_username))
+        cursor.execute("INSERT INTO friends VALUES (?, ?)", (data.friend_username, data.username))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        pass
+    conn.close()
+    return {"message": "Друг добавлен!"}
+
+@app.get("/friends/{username}")
+def get_friends(username: str):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT user2 FROM friends WHERE user1 = ?", (username,))
+    friends = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return friends
+
+# --- Чаты ---
 @app.get("/chats/{username}")
 def get_user_chats(username: str):
     conn = get_db()
@@ -105,11 +145,10 @@ def get_user_chats(username: str):
     chats = []
     for row in rows:
         chat_id, chat_type, chat_name = row
-        # Если личка, в качестве названия показываем собеседника
         if chat_type == 'private':
             cursor.execute("SELECT username FROM chat_members WHERE chat_id = ? AND username != ?", (chat_id, username))
             other_user = cursor.fetchone()
-            display_name = f"ЛС с @{other_user[0]}" if other_user else "Личные сообщения"
+            display_name = f"👤 @{other_user[0]}" if other_user else "Личные сообщения"
         else:
             display_name = f"👥 {chat_name}"
         
@@ -118,7 +157,17 @@ def get_user_chats(username: str):
     conn.close()
     return chats
 
-# Получение истории сообщений конкретного чата
+@app.delete("/chats/{chat_id}")
+def delete_chat(chat_id: int):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM chat_members WHERE chat_id = ?", (chat_id,))
+    cursor.execute("DELETE FROM messages WHERE chat_id = ?", (chat_id,))
+    cursor.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
+    conn.commit()
+    conn.close()
+    return {"message": "Чат удален"}
+
 @app.get("/messages/{chat_id}")
 def get_chat_messages(chat_id: int):
     conn = get_db()
@@ -127,15 +176,24 @@ def get_chat_messages(chat_id: int):
     rows = cursor.fetchall()
     conn.close()
     
-    messages = []
-    for row in rows:
-        messages.append({"sender": row[0], "type": row[1], "content": row[2], "timestamp": row[3]})
-    return messages
+    return [{"sender": r[0], "type": r[1], "content": r[2], "timestamp": r[3]} for r in rows]
 
 @app.post("/chats/private")
 def create_private_chat(data: CreatePrivateChat):
     conn = get_db()
     cursor = conn.cursor()
+    # Проверяем, существует ли уже чат между ними
+    cursor.execute("""
+        SELECT cm1.chat_id FROM chat_members cm1
+        JOIN chat_members cm2 ON cm1.chat_id = cm2.chat_id
+        JOIN chats c ON c.id = cm1.chat_id
+        WHERE cm1.username = ? AND cm2.username = ? AND c.type = 'private'
+    """, (data.sender_username, data.target_username))
+    existing = cursor.fetchone()
+    if existing:
+        conn.close()
+        return {"chat_id": existing[0]}
+
     cursor.execute("INSERT INTO chats (type) VALUES ('private')")
     chat_id = cursor.lastrowid
     cursor.execute("INSERT INTO chat_members VALUES (?, ?)", (chat_id, data.sender_username))
@@ -150,12 +208,13 @@ def create_group_chat(data: CreateGroup):
     cursor = conn.cursor()
     cursor.execute("INSERT INTO chats (type, name) VALUES ('group', ?)", (data.name,))
     chat_id = cursor.lastrowid
-    for member in data.members:
+    for member in set(data.members):
         cursor.execute("INSERT INTO chat_members VALUES (?, ?)", (chat_id, member))
     conn.commit()
     conn.close()
     return {"chat_id": chat_id}
 
+# WebSocket Менеджер
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}
@@ -190,7 +249,10 @@ class ConnectionManager:
 
         for member in members:
             if member in self.active_connections:
-                await self.active_connections[member].send_text(payload)
+                try:
+                    await self.active_connections[member].send_text(payload)
+                except:
+                    pass
 
 manager = ConnectionManager()
 
@@ -205,5 +267,6 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
             await manager.send_to_chat(data["chat_id"], username, msg_type, data["content"])
     except WebSocketDisconnect:
         manager.disconnect(username)
+
 
 
