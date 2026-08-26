@@ -13,7 +13,6 @@ def get_db():
 def init_db():
     conn = get_db()
     cursor = conn.cursor()
-    # Таблица пользователей
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,7 +20,6 @@ def init_db():
             password TEXT NOT NULL
         )
     """)
-    # Таблица чатов (private или group)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS chats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,7 +27,6 @@ def init_db():
             name TEXT
         )
     """)
-    # Участники чатов
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS chat_members (
             chat_id INTEGER,
@@ -37,7 +34,6 @@ def init_db():
             FOREIGN KEY(chat_id) REFERENCES chats(id)
         )
     """)
-    # Таблица сообщений с поддержкой медиафайлов (text, voice, circle)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,7 +65,6 @@ class CreatePrivateChat(BaseModel):
 def home():
     return FileResponse("index.html")
 
-# Регистрация и авторизация
 @app.post("/register")
 def register(user: UserAuth):
     conn = get_db()
@@ -94,7 +89,49 @@ def login(user: UserAuth):
         return {"message": "Успешно", "username": user.username}
     raise HTTPException(status_code=400, detail="Неверное имя пользователя или пароль")
 
-# Создание ЛС
+# Получение списка чатов пользователя
+@app.get("/chats/{username}")
+def get_user_chats(username: str):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT c.id, c.type, c.name 
+        FROM chats c
+        JOIN chat_members cm ON c.id = cm.chat_id
+        WHERE cm.username = ?
+    """, (username,))
+    rows = cursor.fetchall()
+    
+    chats = []
+    for row in rows:
+        chat_id, chat_type, chat_name = row
+        # Если личка, в качестве названия показываем собеседника
+        if chat_type == 'private':
+            cursor.execute("SELECT username FROM chat_members WHERE chat_id = ? AND username != ?", (chat_id, username))
+            other_user = cursor.fetchone()
+            display_name = f"ЛС с @{other_user[0]}" if other_user else "Личные сообщения"
+        else:
+            display_name = f"👥 {chat_name}"
+        
+        chats.append({"id": chat_id, "type": chat_type, "name": display_name})
+    
+    conn.close()
+    return chats
+
+# Получение истории сообщений конкретного чата
+@app.get("/messages/{chat_id}")
+def get_chat_messages(chat_id: int):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT sender, type, content, timestamp FROM messages WHERE chat_id = ? ORDER BY id ASC", (chat_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    
+    messages = []
+    for row in rows:
+        messages.append({"sender": row[0], "type": row[1], "content": row[2], "timestamp": row[3]})
+    return messages
+
 @app.post("/chats/private")
 def create_private_chat(data: CreatePrivateChat):
     conn = get_db()
@@ -107,7 +144,6 @@ def create_private_chat(data: CreatePrivateChat):
     conn.close()
     return {"chat_id": chat_id}
 
-# Создание группы
 @app.post("/chats/group")
 def create_group_chat(data: CreateGroup):
     conn = get_db()
@@ -120,7 +156,6 @@ def create_group_chat(data: CreateGroup):
     conn.close()
     return {"chat_id": chat_id}
 
-# Менеджер WebSocket-соединений
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}
@@ -170,4 +205,5 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
             await manager.send_to_chat(data["chat_id"], username, msg_type, data["content"])
     except WebSocketDisconnect:
         manager.disconnect(username)
+
 
