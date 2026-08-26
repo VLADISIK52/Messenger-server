@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Clone</title>
+    <title>Messenger</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
         body { display: flex; height: 100vh; background: #0e1621; color: #fff; }
@@ -29,10 +29,7 @@
         .msg { max-width: 65%; padding: 10px 14px; border-radius: 12px; background: #182533; align-self: flex-start; word-wrap: break-word; }
         .msg.my { background: #2b5278; align-self: flex-end; }
         
-        /* Видеокружочки */
-        .circle-container { position: relative; width: 200px; height: 200px; margin-top: 5px; }
-        .circle-video { width: 200px; height: 200px; border-radius: 50%; object-fit: cover; border: 3px solid #5288c1; cursor: pointer; }
-        
+        .circle-video { width: 180px; height: 180px; border-radius: 50%; object-fit: cover; border: 3px solid #5288c1; margin-top: 5px; }
         audio { margin-top: 5px; max-width: 250px; }
 
         .input-panel { padding: 15px; background: #17212b; display: flex; gap: 10px; align-items: center; }
@@ -43,6 +40,9 @@
         .tabs { display: flex; gap: 10px; border-bottom: 1px solid #242f3d; padding-bottom: 10px; }
         .tab { cursor: pointer; opacity: 0.6; padding: 4px 8px; }
         .tab.active { opacity: 1; border-bottom: 2px solid #5288c1; }
+
+        .user-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid #242f3d; }
+        .logout-btn { background: #e53935; padding: 5px 10px; font-size: 12px; }
 
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
@@ -61,19 +61,24 @@
 
 <div id="app">
     <div id="sidebar">
-        <div class="tabs">
+        <div class="user-header">
+            <span id="my-name" style="font-weight:bold"></span>
+            <button class="logout-btn" onclick="logout()">Выйти</button>
+        </div>
+
+        <div class="tabs" style="margin-top:10px">
             <div class="tab active" id="tab-chats" onclick="switchTab('chats')">Чаты</div>
             <div class="tab" id="tab-friends" onclick="switchTab('friends')">Друзья</div>
         </div>
 
         <div id="chats-tab-content">
-            <button onclick="createPrivate()" style="width:100%; margin-bottom:5px">+ Написать в ЛС</button>
+            <button onclick="createPrivate()" style="width:100%; margin-bottom:5px; margin-top:10px">+ Написать в ЛС</button>
             <button class="sec" onclick="createGroup()" style="width:100%">+ Создать группу</button>
             <div id="chats-list"></div>
         </div>
 
         <div id="friends-tab-content" style="display:none">
-            <button onclick="addFriendPrompt()" style="width:100%">+ Добавить друга</button>
+            <button onclick="addFriendPrompt()" style="width:100%; margin-top:10px">+ Добавить друга</button>
             <div id="friends-list"></div>
         </div>
     </div>
@@ -82,7 +87,7 @@
         <div id="messages"></div>
         
         <div class="input-panel">
-            <input type="text" id="msg-input" placeholder="Выберите чат..." disabled>
+            <input type="text" id="msg-input" placeholder="Выберите чат..." disabled onkeydown="if(event.key==='Enter') sendText()">
             <button onclick="sendText()">Отправить</button>
             <div class="icon-btn" id="voice-btn" title="Голосовое" onclick="toggleVoice()">🎤</div>
             <div class="icon-btn" id="circle-btn" title="Кружочек" onclick="toggleCircle()">📷</div>
@@ -91,7 +96,7 @@
 </div>
 
 <script>
-    let currentUser = "";
+    let currentUser = localStorage.getItem('messenger_user') || "";
     let ws = null;
     let activeChatId = null;
     
@@ -100,6 +105,17 @@
     let videoChunks = [];
     let isRecordingVoice = false;
     let isRecordingCircle = false;
+
+    // Автоматическая проверка входа при загрузке страницы
+    window.onload = () => {
+        if (currentUser) {
+            document.getElementById('auth-screen').style.display = 'none';
+            document.getElementById('my-name').innerText = `@${currentUser}`;
+            connectWS();
+            loadChats();
+            loadFriends();
+        }
+    };
 
     async function auth(type) {
         const u = document.getElementById('username').value.trim();
@@ -115,7 +131,9 @@
         
         if (res.ok) {
             currentUser = u;
+            localStorage.setItem('messenger_user', u); // Сохраняем логин
             document.getElementById('auth-screen').style.display = 'none';
+            document.getElementById('my-name').innerText = `@${currentUser}`;
             connectWS();
             loadChats();
             loadFriends();
@@ -124,17 +142,28 @@
         }
     }
 
+    function logout() {
+        localStorage.removeItem('messenger_user');
+        location.reload();
+    }
+
     function connectWS() {
+        if (ws) ws.close();
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
         ws = new WebSocket(`${protocol}//${location.host}/ws/${currentUser}`);
         
         ws.onmessage = (e) => {
             const data = JSON.parse(e.data);
-            // Автоматическое обновление сообщений в реальном времени!
-            if (data.chat_id === activeChatId) {
+            // Если сообщение пришло в открытый чат — рисуем его СРАЗУ
+            if (parseInt(data.chat_id) === parseInt(activeChatId)) {
                 renderMessage(data);
             }
-            loadChats();
+            loadChats(); // Обновляем список чатов
+        };
+
+        ws.onclose = () => {
+            // Переподключение при обрыве соединения через 2 секунды
+            setTimeout(connectWS, 2000);
         };
     }
 
@@ -146,6 +175,7 @@
     }
 
     async function loadChats() {
+        if(!currentUser) return;
         const res = await fetch(`/chats/${currentUser}`);
         const chats = await res.json();
         const list = document.getElementById('chats-list');
@@ -178,6 +208,7 @@
     }
 
     async function loadFriends() {
+        if(!currentUser) return;
         const res = await fetch(`/friends/${currentUser}`);
         const friends = await res.json();
         const list = document.getElementById('friends-list');
@@ -246,11 +277,7 @@
         } else if (data.type === 'voice') {
             contentHTML += `<audio controls src="${data.content}"></audio>`;
         } else if (data.type === 'circle') {
-            // Включаем звук по клику (чтобы обходить автоплей-блокировки браузера)
-            contentHTML += `
-                <div class="circle-container">
-                    <video class="circle-video" src="${data.content}" autoplay loop playsinline onclick="this.muted = !this.muted; alert(this.muted ? 'Звук выключен' : 'Звук включен');"></video>
-                </div>`;
+            contentHTML += `<video class="circle-video" src="${data.content}" autoplay loop muted playsinline></video>`;
         }
         
         div.innerHTML = contentHTML;
@@ -260,8 +287,14 @@
 
     function sendText() {
         const input = document.getElementById('msg-input');
-        if (!input.value || !activeChatId) return;
-        ws.send(JSON.stringify({ chat_id: activeChatId, type: 'text', content: input.value }));
+        if (!input.value.trim() || !activeChatId) return;
+        
+        ws.send(JSON.stringify({ 
+            chat_id: activeChatId, 
+            type: 'text', 
+            content: input.value.trim() 
+        }));
+        
         input.value = '';
     }
 
@@ -300,17 +333,11 @@
         
         if (!isRecordingCircle) {
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { width: 250, height: 250 }, 
+                video: { width: 200, height: 200 }, 
                 audio: true 
             });
             
-            // Используем оптимизированные кодеки
-            let options = { mimeType: 'video/webm;codecs=vp8,opus' };
-            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                options = { mimeType: 'video/webm' };
-            }
-            
-            mediaRecorder = new MediaRecorder(stream, options);
+            mediaRecorder = new MediaRecorder(stream);
             videoChunks = [];
             
             mediaRecorder.ondataavailable = e => videoChunks.push(e.data);
@@ -358,5 +385,6 @@
 </script>
 </body>
 </html>
+
 
 
