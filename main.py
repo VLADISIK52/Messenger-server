@@ -3,7 +3,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import sqlite3
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 app = FastAPI()
 
@@ -17,8 +17,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            status_text TEXT DEFAULT 'В ангаре'
+            password TEXT NOT NULL
         )
     """)
     cursor.execute("""
@@ -61,11 +60,6 @@ init_db()
 class UserAuth(BaseModel):
     username: str
     password: str
-
-class ProfileUpdate(BaseModel):
-    username: str
-    new_username: str
-    status_text: Optional[str] = 'В ангаре'
 
 class AddFriend(BaseModel):
     username: str
@@ -136,59 +130,24 @@ def register(user: UserAuth):
     conn = get_db()
     cursor = conn.cursor()
     try:
-        cursor.execute("INSERT INTO users (username, password, status_text) VALUES (?, ?, ?)", (user.username.lower(), user.password, "В ангаре"))
+        cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (user.username.lower(), user.password))
         conn.commit()
         conn.close()
-        return {"message": "Регистрация успешна!"}
+        return {"message": "Успешная регистрация!"}
     except sqlite3.IntegrityError:
         conn.close()
-        raise HTTPException(status_code=400, detail="Позывной уже занят")
+        raise HTTPException(status_code=400, detail="Имя пользователя уже занято")
 
 @app.post("/login")
 def login(user: UserAuth):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT username, status_text FROM users WHERE username = ? AND password = ?", (user.username.lower(), user.password))
+    cursor.execute("SELECT username FROM users WHERE username = ? AND password = ?", (user.username.lower(), user.password))
     res = cursor.fetchone()
     conn.close()
     if res:
-        return {"message": "Успешно", "username": res[0], "status_text": res[1]}
-    raise HTTPException(status_code=400, detail="Неверные данные")
-
-@app.get("/user/profile/{username}")
-def get_profile(username: str):
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT username, status_text FROM users WHERE username = ?", (username.lower(),))
-    res = cursor.fetchone()
-    conn.close()
-    if res:
-        return {"username": res[0], "status_text": res[1], "online": manager.is_online(res[0])}
-    raise HTTPException(status_code=404, detail="Пользователь не найден")
-
-@app.post("/user/profile/update")
-def update_profile(data: ProfileUpdate):
-    conn = get_db()
-    cursor = conn.cursor()
-    old_u = data.username.lower()
-    new_u = data.new_username.lower()
-    
-    if old_u != new_u:
-        cursor.execute("SELECT id FROM users WHERE username = ?", (new_u,))
-        if cursor.fetchone():
-            conn.close()
-            raise HTTPException(status_code=400, detail="Новый позывной занят")
-        
-        cursor.execute("UPDATE users SET username = ? WHERE username = ?", (new_u, old_u))
-        cursor.execute("UPDATE friends SET user1 = ? WHERE user1 = ?", (new_u, old_u))
-        cursor.execute("UPDATE friends SET user2 = ? WHERE user2 = ?", (new_u, old_u))
-        cursor.execute("UPDATE chat_members SET username = ? WHERE username = ?", (new_u, old_u))
-        cursor.execute("UPDATE messages SET sender = ? WHERE sender = ?", (new_u, old_u))
-
-    cursor.execute("UPDATE users SET status_text = ? WHERE username = ?", (data.status_text, new_u))
-    conn.commit()
-    conn.close()
-    return {"message": "Профиль обновлен", "new_username": new_u, "status_text": data.status_text}
+        return {"message": "Успешно", "username": res[0]}
+    raise HTTPException(status_code=400, detail="Неверный логин или пароль")
 
 @app.post("/friends/add")
 def add_friend(data: AddFriend):
@@ -198,7 +157,7 @@ def add_friend(data: AddFriend):
     cursor.execute("SELECT * FROM users WHERE username = ?", (u2,))
     if not cursor.fetchone():
         conn.close()
-        raise HTTPException(status_code=404, detail="Боец не найден")
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
     
     try:
         cursor.execute("INSERT INTO friends VALUES (?, ?)", (u1, u2))
@@ -207,7 +166,7 @@ def add_friend(data: AddFriend):
     except sqlite3.IntegrityError:
         pass
     conn.close()
-    return {"message": "Союзник добавлен!"}
+    return {"message": "Друг добавлен!"}
 
 @app.get("/friends/{username}")
 def get_friends(username: str):
@@ -215,17 +174,7 @@ def get_friends(username: str):
     cursor = conn.cursor()
     cursor.execute("SELECT user2 FROM friends WHERE user1 = ?", (username.lower(),))
     rows = cursor.fetchall()
-    
-    friends = []
-    for r in rows:
-        f_name = r[0]
-        cursor.execute("SELECT status_text FROM users WHERE username = ?", (f_name,))
-        st = cursor.fetchone()
-        friends.append({
-            "username": f_name,
-            "status_text": st[0] if st else "В ангаре",
-            "online": manager.is_online(f_name)
-        })
+    friends = [{"username": r[0], "online": manager.is_online(r[0])} for r in rows]
     conn.close()
     return friends
 
@@ -249,10 +198,10 @@ def get_user_chats(username: str):
             cursor.execute("SELECT username FROM chat_members WHERE chat_id = ? AND username != ?", (chat_id, username.lower()))
             other_user = cursor.fetchone()
             if other_user:
-                display_name = f"👤 @{other_user[0]}"
+                display_name = f"@{other_user[0]}"
                 is_online = manager.is_online(other_user[0])
             else:
-                display_name = "Связь"
+                display_name = "Чат"
         else:
             display_name = f"👥 {chat_name}"
         
@@ -270,14 +219,12 @@ def delete_chat(chat_id: int):
     cursor.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
     conn.commit()
     conn.close()
-    return {"message": "Канал уничтожен"}
+    return {"message": "Чат удален"}
 
 @app.get("/messages/{chat_id}/{username}")
 def get_chat_messages(chat_id: int, username: str):
     conn = get_db()
     cursor = conn.cursor()
-    
-    # Отмечаем чужие сообщения как прочитанные
     cursor.execute("UPDATE messages SET is_read = 1 WHERE chat_id = ? AND sender != ?", (chat_id, username.lower()))
     conn.commit()
     
