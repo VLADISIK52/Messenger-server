@@ -6,154 +6,111 @@
     <title>Web Messenger</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f0f0f; color: #fff; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        body { font-family: sans-serif; background: #f0f2f5; color: #000; height: 100vh; display: flex; justify-content: center; align-items: center; }
         
-        /* Модалка регистрации */
-        #auth-modal { position: fixed; inset: 0; background: #0f0f0f; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 15px; z-index: 100; }
-        #auth-modal input, #auth-modal button { padding: 12px 16px; border-radius: 8px; border: 1px solid #333; background: #1e1e1e; color: #fff; font-size: 16px; width: 280px; }
-        #auth-modal button { background: #0084ff; border: none; font-weight: bold; cursor: pointer; }
+        #auth-screen { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 10px; width: 300px; text-align: center; }
+        #auth-screen input, #auth-screen button { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px; }
+        #auth-screen button { background: #0084ff; color: white; border: none; font-weight: bold; cursor: pointer; }
 
-        /* Главный контейнер */
-        .app-container { width: 100%; max-width: 500px; height: 100vh; display: flex; flex-direction: column; background: #181818; }
+        .chat-app { display: none; width: 100%; max-width: 480px; height: 100vh; background: #fff; flex-direction: column; border-left: 1px solid #ddd; border-right: 1px solid #ddd; }
         
-        /* Шляпка чата */
-        .header { padding: 12px 16px; background: #212121; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #2a2a2a; }
-        .avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; cursor: pointer; }
-        .chat-info { display: flex; flex-direction: column; }
-        .chat-title { font-weight: bold; font-size: 16px; }
-        .typing-status { font-size: 12px; color: #0084ff; height: 14px; font-style: italic; }
+        .chat-header { padding: 15px; background: #0084ff; color: white; font-weight: bold; display: flex; align-items: center; gap: 10px; }
+        .chat-header img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: #fff; }
 
-        /* Сообщения */
-        .messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-        .msg { max-width: 80%; background: #262626; padding: 8px 12px; border-radius: 12px; align-self: flex-start; word-break: break-word; position: relative; }
-        .msg.my { align-self: flex-end; background: #0084ff; }
-        .msg-sender { font-size: 11px; color: #aaa; margin-bottom: 4px; font-weight: bold; }
-        .msg.my .msg-sender { color: #e0e0e0; }
-        .msg-img { max-width: 100%; border-radius: 8px; margin-top: 4px; cursor: pointer; }
-        .msg-audio { width: 200px; margin-top: 4px; }
+        .messages-container { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; background: #e5ddd5; }
         
-        /* Реакции */
-        .reactions { display: flex; gap: 4px; margin-top: 6px; }
-        .react-btn { background: rgba(255,255,255,0.1); border: none; border-radius: 10px; padding: 2px 6px; font-size: 12px; cursor: pointer; color: #fff; }
+        .message { max-width: 75%; padding: 8px 12px; border-radius: 8px; background: #fff; align-self: flex-start; font-size: 14px; word-break: break-word; box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+        .message.mine { align-self: flex-end; background: #dcf8c6; }
+        .message-sender { font-size: 11px; font-weight: bold; color: #555; margin-bottom: 3px; }
+        .message-media { max-width: 100%; border-radius: 6px; margin-top: 5px; }
 
-        /* Поле ввода */
-        .input-area { padding: 12px; background: #212121; display: flex; gap: 8px; align-items: center; border-top: 1px solid #2a2a2a; }
-        .input-area input[type="text"] { flex: 1; padding: 10px 14px; border-radius: 20px; border: 1px solid #333; background: #181818; color: #fff; outline: none; }
-        .btn-icon { background: none; border: none; font-size: 20px; cursor: pointer; color: #aaa; padding: 5px; }
-        .btn-send { background: #0084ff; color: #fff; border: none; padding: 8px 16px; border-radius: 20px; font-weight: bold; cursor: pointer; }
-
-        /* Lightbox (Просмотр фото) */
-        #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); justify-content: center; align-items: center; z-index: 1000; }
-        #lightbox img { max-width: 90%; max-height: 90%; border-radius: 8px; }
+        .input-bar { padding: 10px; background: #f0f0f0; display: flex; gap: 8px; align-items: center; }
+        .input-bar input[type="text"] { flex: 1; padding: 10px; border-radius: 20px; border: 1px solid #ccc; outline: none; }
+        .input-bar button { padding: 8px 14px; border-radius: 20px; border: none; background: #0084ff; color: white; font-weight: bold; cursor: pointer; }
+        .file-label { cursor: pointer; font-size: 20px; }
     </style>
 </head>
 <body>
 
-<!-- Экран входа -->
-<div id="auth-modal">
-    <h3>Вход в чат</h3>
-    <input type="text" id="username-input" placeholder="Ваш логин">
-    <input type="file" id="avatar-input" accept="image/*">
+<div id="auth-screen">
+    <h3>Вход</h3>
+    <input type="text" id="username" placeholder="Ваше имя">
+    <input type="file" id="avatar-file" accept="image/*">
     <button onclick="login()">Войти</button>
 </div>
 
-<!-- Главное окно чата -->
-<div class="app-container">
-    <div class="header">
-        <img src="/uploads/default.png" id="my-avatar" class="avatar" onclick="openLightbox(this.src)">
-        <div class="chat-info">
-            <div class="chat-title" id="chat-title">Общий чат</div>
-            <div class="typing-status" id="typing-status"></div>
-        </div>
+<div class="chat-app" id="chat-app">
+    <div class="chat-header">
+        <img src="/uploads/default.png" id="user-avatar-img">
+        <span id="user-display-name">Чат</span>
     </div>
 
-    <div class="messages" id="messages-box"></div>
+    <div class="messages-container" id="messages-list"></div>
 
-    <div class="input-area">
-        <input type="file" id="file-input" style="display:none" onchange="sendFile(this)">
-        <button class="btn-icon" onclick="document.getElementById('file-input').click()">📁</button>
-        <input type="text" id="msg-input" placeholder="Сообщение..." onkeypress="if(event.key==='Enter') sendMessage()">
-        <button class="btn-send" onclick="sendMessage()">Отправить</button>
+    <div class="input-bar">
+        <label class="file-label" for="attachment">📎</label>
+        <input type="file" id="attachment" style="display:none" onchange="uploadAttachment(this)">
+        <input type="text" id="msg-text" placeholder="Сообщение..." onkeypress="if(event.key==='Enter') sendTextMessage()">
+        <button onclick="sendTextMessage()">Отправить</button>
     </div>
-</div>
-
-<!-- Модалка просмотра фото -->
-<div id="lightbox" onclick="this.style.display='none'">
-    <img id="lightbox-img" src="">
 </div>
 
 <script>
     let ws;
-    let currentUser = "";
-    let currentAvatar = "";
-    let activeChatId = "global";
-    let typingTimeout;
+    let myUsername = "";
+    let myAvatar = "";
 
     async function login() {
-        const username = document.getElementById('username-input').value.trim();
-        const avatarFile = document.getElementById('avatar-input').files[0];
-        if (!username) return alert("Введите имя!");
+        const usernameInput = document.getElementById('username').value.trim();
+        const avatarInput = document.getElementById('avatar-file').files[0];
+        if (!usernameInput) return alert("Введите логин");
 
         const formData = new FormData();
-        formData.append("username", username);
-        if (avatarFile) formData.append("avatar", avatarFile);
+        formData.append("username", usernameInput);
+        if (avatarInput) formData.append("avatar", avatarInput);
 
         const res = await fetch("/register", { method: "POST", body: formData });
         const data = await res.json();
 
-        currentUser = data.username;
-        currentAvatar = data.avatar_url;
-        document.getElementById('my-avatar').src = currentAvatar;
-        document.getElementById('auth-modal').style.display = 'none';
+        myUsername = data.username;
+        myAvatar = data.avatar_url;
 
-        loadHistory();
-        initWS();
+        document.getElementById('user-avatar-img').src = myAvatar;
+        document.getElementById('user-display-name').innerText = myUsername;
+        document.getElementById('auth-screen').style.display = 'none';
+        document.getElementById('chat-app').style.display = 'flex';
+
+        connectWebSocket();
+        loadMessages();
     }
 
-    function initWS() {
+    function connectWebSocket() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        ws = new WebSocket(`${protocol}//${window.location.host}/ws/${currentUser}`);
+        ws = new WebSocket(`${protocol}//${window.location.host}/ws/${myUsername}`);
 
         ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-
-            if (data.type === 'typing' && data.sender !== currentUser) {
-                document.getElementById('typing-status').innerText = `@${data.sender} печатает...`;
-            } else if (data.type === 'stop_typing' && data.sender !== currentUser) {
-                document.getElementById('typing-status').innerText = '';
-            } else if (data.type === 'message') {
-                document.getElementById('typing-status').innerText = '';
-                appendMessage(data);
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'message') {
+                renderSingleMessage(msg);
             }
         };
     }
 
-    async function loadHistory() {
-        const res = await fetch(`/messages/${activeChatId}`);
+    async function loadMessages() {
+        const res = await fetch("/messages/global");
         const messages = await res.json();
-        document.getElementById('messages-box').innerHTML = '';
-        messages.forEach(msg => appendMessage(msg));
+        document.getElementById('messages-list').innerHTML = '';
+        messages.forEach(msg => renderSingleMessage(msg));
     }
 
-    // Индикатор "печатает..."
-    document.getElementById('msg-input').addEventListener('input', () => {
-        if (!ws) return;
-        ws.send(JSON.stringify({ type: 'typing', chat_id: activeChatId }));
-
-        clearTimeout(typingTimeout);
-        typingTimeout = setTimeout(() => {
-            ws.send(JSON.stringify({ type: 'stop_typing', chat_id: activeChatId }));
-        }, 1500);
-    });
-
-    function sendMessage() {
-        const input = document.getElementById('msg-input');
+    function sendTextMessage() {
+        const input = document.getElementById('msg-text');
         const text = input.value.trim();
         if (!text || !ws) return;
 
         ws.send(JSON.stringify({
             type: 'message',
-            chat_id: activeChatId,
+            chat_id: 'global',
             content: text,
             msg_type: 'text'
         }));
@@ -161,7 +118,7 @@
         input.value = '';
     }
 
-    async function sendFile(input) {
+    async function uploadAttachment(input) {
         const file = input.files[0];
         if (!file) return;
 
@@ -171,55 +128,31 @@
         const res = await fetch("/upload", { method: "POST", body: formData });
         const data = await res.json();
 
-        const isImage = file.type.startsWith("image/");
+        const isImg = file.type.startsWith("image/");
         ws.send(JSON.stringify({
             type: 'message',
-            chat_id: activeChatId,
+            chat_id: 'global',
             content: data.file_url,
-            msg_type: isImage ? 'image' : 'file'
+            msg_type: isImg ? 'image' : 'file'
         }));
     }
 
-    function appendMessage(msg) {
-        const box = document.getElementById('messages-box');
+    function renderSingleMessage(msg) {
+        const list = document.getElementById('messages-list');
         const div = document.createElement('div');
-        const isMy = msg.sender === currentUser;
-        div.className = `msg ${isMy ? 'my' : ''}`;
+        const isMine = msg.sender === myUsername;
+        div.className = `message ${isMine ? 'mine' : ''}`;
 
-        let contentHtml = '';
-        if (msg.msg_type === 'text') {
-            contentHtml = `<div>${msg.content}</div>`;
-        } else if (msg.msg_type === 'image') {
-            contentHtml = `<img src="${msg.content}" class="msg-img" onclick="openLightbox(this.src)">`;
+        let body = `<div>${msg.content}</div>`;
+        if (msg.msg_type === 'image') {
+            body = `<img src="${msg.content}" class="message-media">`;
         } else if (msg.msg_type === 'file') {
-            contentHtml = `<a href="${msg.content}" target="_blank" style="color:#fff">📁 Файл</a>`;
+            body = `<a href="${msg.content}" target="_blank">Прикрепленный файл</a>`;
         }
 
-        div.innerHTML = `
-            <div class="msg-sender">${msg.sender}</div>
-            ${contentHtml}
-            <div class="reactions">
-                <button class="react-btn" onclick="sendReaction(${msg.id}, '👍')">👍</button>
-                <button class="react-btn" onclick="sendReaction(${msg.id}, '❤️')">❤️</button>
-                <button class="react-btn" onclick="sendReaction(${msg.id}, '🔥')">🔥</button>
-            </div>
-        `;
-
-        box.appendChild(div);
-        box.scrollTop = box.scrollHeight;
-    }
-
-    async function sendReaction(msgId, emoji) {
-        if (!msgId) return;
-        const formData = new FormData();
-        formData.append("username", currentUser);
-        formData.append("emoji", emoji);
-        await fetch(`/messages/${msgId}/react`, { method: "POST", body: formData });
-    }
-
-    function openLightbox(src) {
-        document.getElementById('lightbox-img').src = src;
-        document.getElementById('lightbox').style.display = 'flex';
+        div.innerHTML = `<div class="message-sender">${msg.sender}</div>${body}`;
+        list.appendChild(div);
+        list.scrollTop = list.scrollHeight;
     }
 </script>
 
