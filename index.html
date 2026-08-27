@@ -9,8 +9,7 @@
         
         html, body { height: 100%; width: 100%; overflow: hidden; background: #0f120f; color: #d1d5db; }
 
-        /* Экран авторизации в стиле Бриффинга / КПP */
-        #auth-screen { position: fixed; inset: 0; background: rgba(10, 12, 10, 0.95); display: flex; justify-content: center; align-items: center; z-index: 100; border: 2px solid #3a423a; }
+        #auth-screen, #profile-modal { position: fixed; inset: 0; background: rgba(10, 12, 10, 0.95); display: flex; justify-content: center; align-items: center; z-index: 100; border: 2px solid #3a423a; }
         .auth-box { 
             background: linear-gradient(180deg, #232823 0%, #171a17 100%); 
             padding: 30px; 
@@ -56,7 +55,6 @@
         }
         #chat-area { flex-grow: 1; display: flex; flex-direction: column; background: #0f120f; height: 100%; position: relative; }
         
-        /* Мобильный экран */
         @media (max-width: 768px) {
             #sidebar { width: 100%; position: absolute; inset: 0; z-index: 10; }
             #chat-area { width: 100%; position: absolute; inset: 0; z-index: 20; display: none; }
@@ -95,6 +93,10 @@
         }
         .del-btn { background: transparent; border: none; color: #e53935; font-size: 16px; padding: 2px 6px; box-shadow: none; }
 
+        .online-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+        .online-dot.on { background: #4caf50; box-shadow: 0 0 6px #4caf50; }
+        .online-dot.off { background: #757575; }
+
         .chat-header { 
             padding: 12px 15px; 
             background: #171a17; 
@@ -128,6 +130,7 @@
             word-wrap: break-word; 
             box-shadow: 0 2px 4px rgba(0,0,0,0.5);
             color: #e0e0e0;
+            position: relative;
         }
         .msg.my { 
             background: #2b332b; 
@@ -136,11 +139,13 @@
             color: #fff;
         }
         .msg b { color: #ffb74d; font-size: 13px; text-transform: uppercase; }
-        
+        .msg-meta { display: flex; justify-content: flex-end; align-items: center; gap: 4px; font-size: 10px; opacity: 0.7; margin-top: 4px; color: #b0bec5; }
+
+        .chat-img { max-width: 100%; border-radius: 4px; border: 1px solid #ff9800; margin-top: 5px; cursor: pointer; }
+
         .circle-video { width: 160px; height: 160px; border-radius: 50%; object-fit: cover; border: 3px solid #ff9800; margin-top: 5px; box-shadow: 0 0 10px rgba(255,152,0,0.4); }
         audio { margin-top: 5px; max-width: 220px; filter: invert(0.8) hue-rotate(120deg); }
 
-        /* Панель рации / ввода сообщений */
         .input-panel { 
             padding: 10px 15px; 
             background: #171a17; 
@@ -189,10 +194,25 @@
     </div>
 </div>
 
+<div id="profile-modal" style="display:none">
+    <div class="auth-box">
+        <h3 style="text-align:center">ЛИЧНОЕ ДЕЛО БОЙЦА</h3>
+        <label style="font-size:12px; color:#ff9800">Позывной:</label>
+        <input type="text" id="edit-username">
+        <label style="font-size:12px; color:#ff9800">Статус (техника / состояние):</label>
+        <input type="text" id="edit-status" placeholder="Например: На Т-62 в бою">
+        <button onclick="saveProfile()">СОХРАНИТЬ ДАННЫЕ</button>
+        <button class="sec" onclick="document.getElementById('profile-modal').style.display='none'">ОТМЕНА</button>
+    </div>
+</div>
+
 <div id="app">
     <div id="sidebar">
         <div class="user-header">
-            <span id="my-name" style="font-weight:bold; color:#ff9800;"></span>
+            <div>
+                <span id="my-name" style="font-weight:bold; color:#ff9800; cursor:pointer;" onclick="openProfileModal()" title="Редактировать профиль"></span>
+                <div id="my-status" style="font-size:11px; color:#808e9b"></div>
+            </div>
             <button class="logout-btn" onclick="logout()">ВЫЙТИ</button>
         </div>
 
@@ -224,6 +244,8 @@
         <div class="input-panel">
             <input type="text" id="msg-input" placeholder="Введите передачу..." disabled onkeydown="if(event.key==='Enter') sendText()">
             <button onclick="sendText()">В БОЙ</button>
+            <div class="icon-btn" onclick="document.getElementById('file-input').click()" title="Разведданные (Файл/Скрин)">📁</div>
+            <input type="file" id="file-input" style="display:none" onchange="sendFile(this)" accept="image/*">
             <div class="icon-btn" id="voice-btn" title="Рация" onclick="toggleVoice()">🎙️</div>
             <div class="icon-btn" id="circle-btn" title="Прицел/Камера" onclick="toggleCircle()">🎯</div>
         </div>
@@ -232,6 +254,7 @@
 
 <script>
     let currentUser = "";
+    let currentStatus = "В ангаре";
     let ws = null;
     let activeChatId = null;
     let pollInterval = null;
@@ -247,12 +270,55 @@
         if (savedUser) {
             currentUser = savedUser.toLowerCase();
             document.getElementById('auth-screen').style.display = 'none';
-            document.getElementById('my-name').innerText = `@${currentUser}`;
+            loadMyProfile();
             startApp();
         } else {
             document.getElementById('auth-screen').style.display = 'flex';
         }
     });
+
+    async function loadMyProfile() {
+        try {
+            const res = await fetch(`/user/profile/${currentUser}`);
+            const data = await res.json();
+            currentUser = data.username;
+            currentStatus = data.status_text || "В ангаре";
+            document.getElementById('my-name').innerText = `@${currentUser} ⚙️`;
+            document.getElementById('my-status').innerText = currentStatus;
+        } catch(e) {}
+    }
+
+    function openProfileModal() {
+        document.getElementById('edit-username').value = currentUser;
+        document.getElementById('edit-status').value = currentStatus;
+        document.getElementById('profile-modal').style.display = 'flex';
+    }
+
+    async function saveProfile() {
+        const newU = document.getElementById('edit-username').value.trim().toLowerCase();
+        const newSt = document.getElementById('edit-status').value.trim();
+        if(!newU) return alert("Позывной не может быть пустым!");
+
+        try {
+            const res = await fetch('/user/profile/update', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username: currentUser, new_username: newU, status_text: newSt})
+            });
+            const data = await res.json();
+            if(res.ok) {
+                currentUser = data.new_username;
+                currentStatus = data.status_text;
+                localStorage.setItem('messenger_user', currentUser);
+                document.getElementById('my-name').innerText = `@${currentUser} ⚙️`;
+                document.getElementById('my-status').innerText = currentStatus;
+                document.getElementById('profile-modal').style.display = 'none';
+                connectWS();
+            } else {
+                alert(data.detail);
+            }
+        } catch(e) { alert("Ошибка сохранения"); }
+    }
 
     function startApp() {
         connectWS();
@@ -262,6 +328,7 @@
             pollInterval = setInterval(() => {
                 if (activeChatId) fetchMessages(activeChatId, true);
                 loadChats();
+                loadFriends();
             }, 2000);
         }
     }
@@ -283,14 +350,12 @@
                 currentUser = u;
                 localStorage.setItem('messenger_user', u);
                 document.getElementById('auth-screen').style.display = 'none';
-                document.getElementById('my-name').innerText = `@${currentUser}`;
+                loadMyProfile();
                 startApp();
             } else {
                 alert(data.detail || "Ошибка доступа");
             }
-        } catch (e) {
-            alert("Нет связи с сервером");
-        }
+        } catch (e) { alert("Нет связи с сервером"); }
     }
 
     function logout() {
@@ -333,8 +398,12 @@
             chats.forEach(chat => {
                 const div = document.createElement('div');
                 div.className = `chat-item ${chat.id === activeChatId ? 'active' : ''}`;
+                
+                const dotClass = chat.online ? 'on' : 'off';
+                const dotHtml = chat.type === 'private' ? `<span class="online-dot ${dotClass}"></span>` : '';
+                
                 div.innerHTML = `
-                    <span>${chat.name}</span>
+                    <span>${dotHtml}${chat.name}</span>
                     <button class="del-btn" onclick="deleteChat(event, ${chat.id})">✖</button>
                 `;
                 div.onclick = (e) => {
@@ -368,8 +437,15 @@
             friends.forEach(friend => {
                 const div = document.createElement('div');
                 div.className = 'chat-item';
-                div.innerText = `@${friend}`;
-                div.onclick = () => startPrivateWith(friend);
+                const dotClass = friend.online ? 'on' : 'off';
+                div.innerHTML = `
+                    <div>
+                        <span class="online-dot ${dotClass}"></span>
+                        <span>@${friend.username}</span>
+                        <div style="font-size:10px; color:#808e9b; margin-left:16px;">${friend.status_text}</div>
+                    </div>
+                `;
+                div.onclick = () => startPrivateWith(friend.username);
                 list.appendChild(div);
             });
         } catch (e) {}
@@ -385,11 +461,9 @@
         });
         const data = await res.json();
         if(res.ok) {
-            alert("Союзник добавлен в список!");
+            alert("Союзник добавлен!");
             loadFriends();
-        } else {
-            alert(data.detail);
-        }
+        } else { alert(data.detail); }
     }
 
     async function startPrivateWith(targetUsername) {
@@ -420,14 +494,15 @@
         document.getElementById('msg-input').disabled = true;
     }
 
-    let lastMessagesCount = 0;
+    let lastMessagesHash = "";
     async function fetchMessages(chatId, isBackground = false) {
         try {
-            const res = await fetch(`/messages/${chatId}`);
+            const res = await fetch(`/messages/${chatId}/${currentUser}`);
             const messages = await res.json();
             
-            if (isBackground && messages.length === lastMessagesCount) return;
-            lastMessagesCount = messages.length;
+            const currentHash = JSON.stringify(messages);
+            if (isBackground && currentHash === lastMessagesHash) return;
+            lastMessagesHash = currentHash;
 
             const box = document.getElementById('messages');
             box.innerHTML = '';
@@ -443,11 +518,21 @@
         let contentHTML = `<b>[${data.sender}]:</b><br>`;
         if (data.type === 'text') {
             contentHTML += data.content;
+        } else if (data.type === 'image') {
+            contentHTML += `<img src="${data.content}" class="chat-img" onclick="window.open(this.src)">`;
         } else if (data.type === 'voice') {
             contentHTML += `<audio controls src="${data.content}"></audio>`;
         } else if (data.type === 'circle') {
             contentHTML += `<video class="circle-video" src="${data.content}" autoplay loop muted playsinline></video>`;
         }
+        
+        // Статус прочтения
+        let statusTag = '';
+        if (data.sender === currentUser) {
+            statusTag = data.is_read ? '🎯 <span style="color:#ffb74d">ПРОЧИТАНО</span>' : '⏱️ ОТПРАВЛЕНО';
+        }
+        
+        contentHTML += `<div class="msg-meta">${statusTag}</div>`;
         
         div.innerHTML = contentHTML;
         box.appendChild(div);
@@ -464,6 +549,19 @@
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ chat_id: activeChatId, type: 'text', content: text }));
         }
+    }
+
+    function sendFile(input) {
+        if (!input.files || !input.files[0] || !activeChatId) return;
+        const file = input.files[0];
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ chat_id: activeChatId, type: 'image', content: e.target.result }));
+            }
+        };
+        reader.readAsDataURL(file);
+        input.value = '';
     }
 
     async function toggleVoice() {
@@ -553,6 +651,7 @@
 </script>
 </body>
 </html>
+
 
 
 
