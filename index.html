@@ -6,155 +6,83 @@
     <title>Messenger</title>
     <style>
         :root {
-            --bg-primary: #0a0e1a;
-            --bg-secondary: #0f1525;
-            --bg-tertiary: #141b2d;
-            --bg-card: #1a2236;
-            --bg-hover: #1e2a42;
-            --accent: #6366f1;
-            --accent-2: #8b5cf6;
-            --accent-3: #a78bfa;
+            --bg-primary: #0a0e1a; --bg-secondary: #0f1525; --bg-tertiary: #141b2d;
+            --bg-card: #1a2236; --bg-hover: #1e2a42;
+            --accent: #6366f1; --accent-2: #8b5cf6; --accent-3: #a78bfa;
             --accent-soft: rgba(99,102,241,0.12);
-            --text-primary: #e2e8f0;
-            --text-secondary: #94a3b8;
-            --text-muted: #475569;
+            --text-primary: #e2e8f0; --text-secondary: #94a3b8; --text-muted: #475569;
             --border: rgba(99,102,241,0.12);
-            --msg-in: #1a2236;
-            --msg-out-start: #6366f1;
-            --msg-out-end: #8b5cf6;
-            --radius-sm: 10px;
-            --radius-md: 16px;
-            --radius-lg: 22px;
-            --radius-xl: 28px;
+            --msg-in: #1a2236; --msg-out-start: #6366f1; --msg-out-end: #8b5cf6;
+            --radius-sm: 10px; --radius-md: 16px; --radius-xl: 28px;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, sans-serif; }
-
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }
         ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.3); border-radius: 4px; }
 
-        body, html {
-            height: 100%; height: 100dvh; 
-            width: 100vw; overflow: hidden;
-            background: var(--bg-primary); color: var(--text-primary);
-        }
+        body, html { height: 100%; height: 100dvh; width: 100vw; overflow: hidden; background: var(--bg-primary); color: var(--text-primary); }
 
-        /* SPLASH SCREEN */
-        #splash-screen {
-            position: fixed; inset: 0; background: var(--bg-primary);
-            z-index: 1000; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; gap: 32px;
-            transition: opacity 0.8s ease, visibility 0.8s ease;
-        }
-        #splash-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+        /* SPLASH & AUTH */
+        #splash-screen { position: fixed; inset: 0; background: var(--bg-primary); z-index: 1000; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.8s ease, visibility 0.8s; }
+        #splash-screen.hidden { opacity: 0; visibility: hidden; }
+        .splash-icon { width: 96px; height: 96px; border-radius: 28px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: flex; align-items: center; justify-content: center; font-size: 44px; animation: floatUp 2s ease-in-out infinite; }
+        @keyframes floatUp { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
 
-        .splash-icon {
-            width: 96px; height: 96px; border-radius: 28px;
-            background: linear-gradient(135deg, var(--accent), var(--accent-2));
-            display: flex; align-items: center; justify-content: center;
-            font-size: 44px; box-shadow: 0 0 40px rgba(99,102,241,0.5);
-            animation: floatUp 2s ease-in-out infinite;
-        }
-        .splash-title {
-            font-size: 36px; font-weight: 800; letter-spacing: -1px;
-            background: linear-gradient(135deg, #fff 0%, var(--accent-3) 100%);
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        }
-        @keyframes floatUp { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-8px) scale(1.03); } }
-        @keyframes msgPop { from { opacity:0; transform:scale(0.9) translateY(4px); } to { opacity:1; transform:scale(1) translateY(0); } }
-
-        /* AUTH SCREEN */
-        #auth-screen {
-            position: fixed; inset: 0; z-index: 100;
-            background: radial-gradient(ellipse at 30% 20%, rgba(99,102,241,0.1) 0%, transparent 60%), var(--bg-primary);
-            display: flex; justify-content: center; align-items: center;
-        }
-        .auth-box {
-            background: var(--bg-card); padding: 36px 32px; border-radius: var(--radius-xl);
-            border: 1px solid var(--border); display: flex; flex-direction: column; gap: 14px;
-            width: 90%; max-width: 400px;
-        }
+        #auth-screen { display: none; position: fixed; inset: 0; z-index: 100; background: radial-gradient(ellipse at 30% 20%, rgba(99,102,241,0.1) 0%, transparent 60%), var(--bg-primary); justify-content: center; align-items: center; }
+        .auth-box { background: var(--bg-card); padding: 36px 32px; border-radius: var(--radius-xl); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 14px; width: 90%; max-width: 400px; }
         .auth-title { font-size: 26px; font-weight: 800; text-align: center; }
-        input[type="text"], input[type="password"] {
-            background: rgba(10,14,26,0.8); color: var(--text-primary);
-            padding: 14px 18px; border: 1.5px solid var(--border); border-radius: var(--radius-md);
-            font-size: 15px; outline: none; width: 100%; transition: border-color 0.2s;
-        }
+        input[type="text"], input[type="password"] { background: rgba(10,14,26,0.8); color: var(--text-primary); padding: 14px 18px; border: 1.5px solid var(--border); border-radius: var(--radius-md); font-size: 15px; outline: none; width: 100%; }
         input:focus { border-color: var(--accent); }
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent), var(--accent-2));
-            color: #fff; padding: 14px; border: none; border-radius: var(--radius-md);
-            font-weight: 700; font-size: 15px; cursor: pointer;
-        }
+        .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; padding: 14px; border: none; border-radius: var(--radius-md); font-weight: 700; cursor: pointer; }
 
-        /* MAIN APP */
-        #app { display: flex; width: 100%; height: 100%; position: relative; overflow: hidden; }
-
-        /* SIDEBAR */
-        #sidebar {
-            width: 320px; min-width: 320px; background: var(--bg-secondary);
-            border-right: 1px solid var(--border); display: flex; flex-direction: column;
-            z-index: 2; transition: transform 0.3s ease;
-        }
-        .sidebar-header { padding: 16px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; align-items: center; }
+        /* APP */
+        #app { display: flex; width: 100%; height: 100%; position: relative; }
         
-        .avatar {
-            width: 42px; height: 42px; border-radius: 50%;
-            background: linear-gradient(135deg, var(--accent), var(--accent-2));
-            display: flex; align-items: center; justify-content: center;
-            font-weight: 800; color: #fff; font-size: 16px; flex-shrink: 0;
-        }
-
+        #sidebar { width: 320px; min-width: 320px; background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 2; }
+        .sidebar-header { padding: 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .user-header-left { display: flex; align-items: center; gap: 12px; }
+        .avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; flex-shrink: 0; }
         .user-info { flex-grow: 1; }
-        .user-name { font-weight: 700; font-size: 15px; color: var(--text-primary); }
+        .user-name { font-weight: 700; font-size: 15px; }
         
-        /* СТАТУСЫ */
-        .status-dot {
-            width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px;
-        }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
         .online-dot { background: #10b981; box-shadow: 0 0 8px rgba(16,185,129,0.5); }
         .offline-dot { background: #64748b; }
         .user-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; display: flex; align-items: center; }
         
-        .add-user-bar { padding: 12px 16px; display: flex; gap: 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-        .add-user-bar input { flex: 1; padding: 10px 14px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); outline: none; font-size: 13px; }
+        .btn-logout { background: transparent; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); }
+        
+        .add-user-bar { padding: 12px 16px; display: flex; gap: 8px; border-bottom: 1px solid var(--border); }
+        .add-user-bar input { flex: 1; padding: 10px 14px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); outline: none; }
         .add-user-bar button { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border: none; border-radius: var(--radius-sm); padding: 0 16px; font-weight: bold; cursor: pointer; }
 
         .list-wrapper { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-        .chat-item {
-            padding: 12px; background: var(--bg-tertiary); border-radius: var(--radius-md);
-            cursor: pointer; display: flex; align-items: center; gap: 12px; border: 1px solid var(--border);
-        }
+        .chat-item { padding: 12px; background: var(--bg-tertiary); border-radius: var(--radius-md); cursor: pointer; display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); }
         .chat-item.active { background: var(--accent-soft); border-color: var(--accent); }
+        .chat-item-left { display: flex; align-items: center; gap: 12px; }
+        
+        /* Кнопка удаления чата */
+        .btn-delete-chat { background: transparent; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; padding: 4px; border-radius: 4px; }
+        .btn-delete-chat:hover { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
 
         /* CHAT AREA */
-        #chat-area { flex-grow: 1; display: flex; flex-direction: column; background: var(--bg-primary); position: relative; z-index: 1; overflow: hidden; }
-        .chat-header {
-            padding: 12px 16px; padding-top: max(12px, env(safe-area-inset-top));
-            background: rgba(15,21,37,0.95); border-bottom: 1px solid var(--border);
-            display: flex; align-items: center; gap: 14px; flex-shrink: 0;
-        }
+        #chat-area { flex-grow: 1; display: flex; flex-direction: column; background: var(--bg-primary); }
+        .chat-header { padding: 12px 16px; padding-top: max(12px, env(safe-area-inset-top)); background: rgba(15,21,37,0.95); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
         .btn-back { display: none; background: transparent; border: none; color: var(--accent-3); font-size: 22px; cursor: pointer; padding: 4px 8px 4px 0; }
         
         #messages { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 10px; }
-        
-        .msg-wrapper { display: flex; flex-direction: column; max-width: 85%; animation: msgPop 0.2s ease; }
+        .msg-wrapper { display: flex; flex-direction: column; max-width: 85%; }
         .msg-wrapper.my { align-self: flex-end; }
         .msg-wrapper.other { align-self: flex-start; }
         .msg-bubble { padding: 10px 14px; border-radius: var(--radius-md); font-size: 14px; line-height: 1.4; word-break: break-word; }
         .msg-wrapper.my .msg-bubble { background: linear-gradient(135deg, var(--msg-out-start), var(--msg-out-end)); color: #fff; }
-        .msg-wrapper.other .msg-bubble { background: var(--msg-in); color: var(--text-primary); border: 1px solid var(--border); }
+        .msg-wrapper.other .msg-bubble { background: var(--msg-in); border: 1px solid var(--border); }
         .msg-sender { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; }
         .msg-img { max-width: 240px; border-radius: 8px; margin-top: 4px; cursor: pointer; }
 
-        .input-container {
-            padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom));
-            background: var(--bg-secondary); border-top: 1px solid var(--border);
-            display: flex; gap: 10px; align-items: center; flex-shrink: 0;
-        }
-        .input-container input[type="text"] { flex: 1; padding: 12px 16px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); outline: none; min-width: 0; }
-        .btn-icon, .btn-send { height: 42px; border-radius: var(--radius-md); border: none; cursor: pointer; flex-shrink: 0; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+        .input-container { padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom)); background: var(--bg-secondary); border-top: 1px solid var(--border); display: flex; gap: 10px; flex-shrink: 0; }
+        .input-container input[type="text"] { flex: 1; padding: 12px 16px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); outline: none; }
+        .btn-icon, .btn-send { height: 42px; border-radius: var(--radius-md); border: none; cursor: pointer; font-weight: 700; }
         .btn-icon { background: var(--accent-soft); color: var(--accent-3); width: 42px; font-size: 18px; border: 1px solid var(--border); }
         .btn-send { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; padding: 0 16px; }
 
@@ -162,7 +90,7 @@
         #lightbox img { max-width: 90%; max-height: 90%; border-radius: 12px; }
 
         @media (max-width: 768px) {
-            #sidebar { width: 100%; min-width: 100%; position: absolute; inset: 0; }
+            #sidebar { width: 100%; position: absolute; inset: 0; }
             #chat-area { width: 100%; position: absolute; inset: 0; display: none; }
             #app.mobile-chat-active #sidebar { display: none; }
             #app.mobile-chat-active #chat-area { display: flex; }
@@ -174,7 +102,7 @@
 
 <div id="splash-screen">
     <div class="splash-icon">💬</div>
-    <div class="splash-title">Messenger</div>
+    <div style="font-size:36px;font-weight:800;color:#fff;">Messenger</div>
 </div>
 
 <div id="auth-screen">
@@ -189,11 +117,14 @@
 <div id="app">
     <div id="sidebar">
         <div class="sidebar-header">
-            <div class="avatar" id="my-avatar-letter">?</div>
-            <div class="user-info">
-                <div class="user-name" id="my-username">@Гость</div>
-                <div class="user-sub"><span class="status-dot online-dot"></span>В сети</div>
+            <div class="user-header-left">
+                <div class="avatar" id="my-avatar-letter">?</div>
+                <div class="user-info">
+                    <div class="user-name" id="my-username">@Гость</div>
+                    <div class="user-sub"><span class="status-dot online-dot"></span>В сети</div>
+                </div>
             </div>
+            <button class="btn-logout" onclick="logout()" title="Выйти">🚪</button>
         </div>
         <div class="add-user-bar">
             <input type="text" id="new-chat-input" placeholder="Логин друга (без @)..." onkeypress="if(event.key==='Enter') startNewChat()">
@@ -207,8 +138,8 @@
             <button class="btn-back" onclick="closeChat()">←</button>
             <div class="avatar" id="target-avatar-letter">?</div>
             <div>
-                <div class="chat-header-name" id="target-username">@Имя</div>
-                <div class="user-sub" id="target-status"><span class="status-dot offline-dot"></span>Был(а) недавно</div>
+                <div class="user-name" id="target-username">@Имя</div>
+                <div class="user-sub" id="target-status">Был(а) недавно</div>
             </div>
         </div>
         <div id="messages"></div>
@@ -221,9 +152,7 @@
     </div>
 </div>
 
-<div id="lightbox" onclick="this.style.display='none'">
-    <img id="lightbox-img" src="">
-</div>
+<div id="lightbox" onclick="this.style.display='none'"><img id="lightbox-img" src=""></div>
 
 <script>
     let ws;
@@ -232,60 +161,56 @@
     let knownUsers = []; 
     let onlineUsers = [];
 
-    setTimeout(() => document.getElementById('splash-screen').classList.add('hidden'), 800);
+    document.addEventListener("DOMContentLoaded", () => {
+        let savedUser = localStorage.getItem('messenger_currentUser');
+        setTimeout(() => {
+            document.getElementById('splash-screen').classList.add('hidden');
+            if (savedUser) { currentUser = savedUser; setupUserInterface(); } 
+            else { document.getElementById('auth-screen').style.display = 'flex'; }
+        }, 800);
+    });
 
     async function login() {
-        let username = document.getElementById('username-input').value.trim();
+        let username = document.getElementById('username-input').value.trim().replace('@', '');
         if (!username) return alert("Введите имя!");
-        username = username.replace('@', ''); // Убираем @ если пользователь ввел случайно
-
-        const formData = new FormData();
-        formData.append("username", username);
-
+        const formData = new FormData(); formData.append("username", username);
         try {
             const res = await fetch("/register", { method: "POST", body: formData });
             const data = await res.json();
             currentUser = data.username || username;
-        } catch (e) {
-            currentUser = username; 
-        }
+        } catch (e) { currentUser = username; }
+        localStorage.setItem('messenger_currentUser', currentUser);
+        setupUserInterface();
+    }
 
+    function logout() { localStorage.removeItem('messenger_currentUser'); location.reload(); }
+
+    function setupUserInterface() {
         document.getElementById('my-username').innerText = '@' + currentUser;
         document.getElementById('my-avatar-letter').innerText = currentUser.charAt(0).toUpperCase();
         document.getElementById('auth-screen').style.display = 'none';
-
-        // Загружаем список старых чатов из памяти
-        knownUsers = JSON.parse(localStorage.getItem('chats_' + currentUser) || '[]');
         
+        knownUsers = JSON.parse(localStorage.getItem('chats_' + currentUser) || '[]');
         initWS();
         updateOnlineStatus();
-        setInterval(updateOnlineStatus, 5000); // Обновляем статусы каждые 5 сек
+        setInterval(updateOnlineStatus, 5000); 
     }
 
     function initWS() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         try {
             ws = new WebSocket(`${protocol}//${window.location.host}/ws/${currentUser}`);
-
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.type === 'message') {
-                    // Если сообщение нам или от нас
-                    if (data.sender === activeChatUser || data.target === currentUser || data.sender === currentUser) {
-                        saveMessageLocally(data.sender === currentUser ? data.target : data.sender, data);
-                        if (activeChatUser === (data.sender === currentUser ? data.target : data.sender)) {
-                            appendMessageToUI(data);
-                        }
-                    }
-                    
-                    // Добавляем отправителя в список чатов если его там нет
-                    let chatPartner = data.sender === currentUser ? data.target : data.sender;
+                    // Обработка сообщения от собеседника
+                    let chatPartner = data.sender;
+                    saveMessageLocally(chatPartner, data);
+                    if (activeChatUser === chatPartner) appendMessageToUI(data);
                     addKnownUser(chatPartner);
                 }
             };
-        } catch (e) {
-            console.log("WebSocket не подключен");
-        }
+        } catch (e) { console.log("WebSocket не подключен"); }
     }
 
     async function updateOnlineStatus() {
@@ -294,11 +219,7 @@
             onlineUsers = await res.json();
         } catch (e) {}
         
-        // Добавляем всех, кто онлайн, в список известных контактов
-        onlineUsers.forEach(u => {
-            if(u !== currentUser) addKnownUser(u);
-        });
-
+        onlineUsers.forEach(u => { if(u !== currentUser) addKnownUser(u); });
         renderUserList();
         updateHeaderStatus();
     }
@@ -313,41 +234,55 @@
     }
 
     function startNewChat() {
-        let user = document.getElementById('new-chat-input').value.trim();
-        user = user.replace('@', ''); // чистим @
-        if (user && user !== currentUser) {
-            addKnownUser(user);
-            selectUser(user);
-            document.getElementById('new-chat-input').value = '';
-        }
+        let user = document.getElementById('new-chat-input').value.trim().replace('@', '');
+        if (user && user !== currentUser) { addKnownUser(user); selectUser(user); document.getElementById('new-chat-input').value = ''; }
+    }
+
+    // Удаление чата
+    async function deleteChat(event, targetUser) {
+        event.stopPropagation(); // Чтобы не открывался чат при клике на корзину
+        if(!confirm(`Удалить переписку с @${targetUser}?`)) return;
+
+        // Удаляем локально
+        knownUsers = knownUsers.filter(u => u !== targetUser);
+        localStorage.setItem('chats_' + currentUser, JSON.stringify(knownUsers));
+        localStorage.removeItem(getHistoryKey(targetUser));
+        
+        // Отправляем запрос на сервер (удалит чат в БД)
+        try {
+            await fetch(`/messages/${currentUser}/${targetUser}`, { method: 'DELETE' });
+        } catch(e) {}
+
+        if(activeChatUser === targetUser) closeChat();
+        renderUserList();
     }
 
     function renderUserList() {
         const container = document.getElementById('users-list');
         container.innerHTML = '';
         
-        // Сортируем: сначала те кто онлайн
         let sortedUsers = [...knownUsers].sort((a, b) => {
-            let aOn = onlineUsers.includes(a);
-            let bOn = onlineUsers.includes(b);
+            let aOn = onlineUsers.includes(a); let bOn = onlineUsers.includes(b);
             return (aOn === bOn) ? 0 : aOn ? -1 : 1;
         });
 
         sortedUsers.forEach(user => {
             let isOnline = onlineUsers.includes(user);
-            let statusHtml = isOnline 
-                ? `<span class="status-dot online-dot"></span><span style="color:#10b981">В сети</span>` 
-                : `<span class="status-dot offline-dot"></span><span style="color:var(--text-muted)">Был(а) недавно</span>`;
-
+            let statusHtml = isOnline ? `<span class="status-dot online-dot"></span>В сети` : `<span class="status-dot offline-dot"></span>Был(а) недавно`;
+            
             const item = document.createElement('div');
             item.className = `chat-item ${user === activeChatUser ? 'active' : ''}`;
             item.onclick = () => selectUser(user);
+            
             item.innerHTML = `
-                <div class="avatar">${user.charAt(0).toUpperCase()}</div>
-                <div>
-                    <div class="user-name">@${user}</div>
-                    <div class="user-sub">${statusHtml}</div>
+                <div class="chat-item-left">
+                    <div class="avatar">${user.charAt(0).toUpperCase()}</div>
+                    <div>
+                        <div class="user-name">@${user}</div>
+                        <div class="user-sub">${statusHtml}</div>
+                    </div>
                 </div>
+                <button class="btn-delete-chat" onclick="deleteChat(event, '${user}')" title="Удалить чат">🗑️</button>
             `;
             container.appendChild(item);
         });
@@ -358,21 +293,15 @@
         document.getElementById('target-username').innerText = '@' + user;
         document.getElementById('target-avatar-letter').innerText = user.charAt(0).toUpperCase();
         document.getElementById('app').classList.add('mobile-chat-active');
-        
-        updateHeaderStatus();
-        renderUserList(); // обновить выделение
-        loadHistory();
+        updateHeaderStatus(); renderUserList(); loadHistory();
     }
 
     function updateHeaderStatus() {
         if (!activeChatUser) return;
         let isOnline = onlineUsers.includes(activeChatUser);
-        let targetStatus = document.getElementById('target-status');
-        if (isOnline) {
-            targetStatus.innerHTML = `<span class="status-dot online-dot"></span><span style="color:#10b981">В сети</span>`;
-        } else {
-            targetStatus.innerHTML = `<span class="status-dot offline-dot"></span><span>Был(а) недавно</span>`;
-        }
+        document.getElementById('target-status').innerHTML = isOnline 
+            ? `<span class="status-dot online-dot"></span>В сети` 
+            : `<span class="status-dot offline-dot"></span>Был(а) недавно`;
     }
 
     function closeChat() {
@@ -380,20 +309,13 @@
         activeChatUser = "";
     }
 
-    // --- ЛОКАЛЬНАЯ ИСТОРИЯ (чтобы не пропадало) ---
-    function getHistoryKey(chatUser) {
-        return `history_${currentUser}_${chatUser}`;
-    }
+    function getHistoryKey(chatUser) { return `history_${currentUser}_${chatUser}`; }
 
     function saveMessageLocally(chatUser, msg) {
         let key = getHistoryKey(chatUser);
         let history = JSON.parse(localStorage.getItem(key) || '[]');
-        // Простая защита от дублей по тексту и времени (если бы оно было)
-        let isDuplicate = history.some(m => m.content === msg.content && m.sender === msg.sender);
-        if (!isDuplicate) {
-            history.push(msg);
-            localStorage.setItem(key, JSON.stringify(history));
-        }
+        let isDup = history.some(m => m.content === msg.content && m.sender === msg.sender && m.timestamp === msg.timestamp);
+        if (!isDup) { history.push(msg); localStorage.setItem(key, JSON.stringify(history)); }
     }
 
     async function loadHistory() {
@@ -403,22 +325,18 @@
         
         let key = getHistoryKey(activeChatUser);
         let localMsgs = JSON.parse(localStorage.getItem(key) || '[]');
-        
-        // Сначала грузим из памяти телефона
         localMsgs.forEach(msg => appendMessageToUI(msg));
 
-        // Потом пробуем стянуть с сервера (и объединяем)
         try {
-            const res = await fetch(`/messages/${activeChatUser}`);
+            // Новый URL для получения конкретного чата
+            const res = await fetch(`/messages/${currentUser}/${activeChatUser}`);
             const serverMsgs = await res.json();
             
             if (serverMsgs && serverMsgs.length > 0) {
-                // Если сервер вернул историю, сохраняем её локально (чтобы обновить)
+                localStorage.setItem(key, '[]'); // Сбрасываем старый кэш
                 serverMsgs.forEach(msg => saveMessageLocally(activeChatUser, msg));
-                // Перерисовываем полностью обновленный кэш
                 box.innerHTML = '';
-                let updatedLocal = JSON.parse(localStorage.getItem(key) || '[]');
-                updatedLocal.forEach(msg => appendMessageToUI(msg));
+                JSON.parse(localStorage.getItem(key)).forEach(msg => appendMessageToUI(msg));
             }
         } catch(e) {}
     }
@@ -431,51 +349,39 @@
         let msgObj = {
             type: 'message',
             target: activeChatUser,
-            receiver: activeChatUser, // Добавил оба поля на всякий случай для сервера
             sender: currentUser,
             content: text,
             msg_type: 'text'
         };
 
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(msgObj));
-        }
+        if (ws && ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify(msgObj)); }
         
-        // Сразу отображаем у себя и сохраняем в историю
         saveMessageLocally(activeChatUser, msgObj);
         appendMessageToUI(msgObj);
-        
         input.value = '';
     }
 
     async function sendFile(input) {
         const file = input.files[0];
         if (!file || !activeChatUser) return;
-
-        const formData = new FormData();
-        formData.append("file", file);
+        const formData = new FormData(); formData.append("file", file);
 
         try {
             const res = await fetch("/upload", { method: "POST", body: formData });
             const data = await res.json();
-            const isImage = file.type.startsWith("image/");
             
             let msgObj = {
                 type: 'message',
                 target: activeChatUser,
-                receiver: activeChatUser,
                 sender: currentUser,
                 content: data.file_url,
-                msg_type: isImage ? 'image' : 'file'
+                msg_type: file.type.startsWith("image/") ? 'image' : 'file'
             };
             
             ws.send(JSON.stringify(msgObj));
             saveMessageLocally(activeChatUser, msgObj);
             appendMessageToUI(msgObj);
-            
-        } catch(e) {
-            alert("Ошибка загрузки файла");
-        }
+        } catch(e) { alert("Ошибка загрузки файла"); }
     }
 
     function appendMessageToUI(msg) {
@@ -485,30 +391,16 @@
         const wrapper = document.createElement('div');
         wrapper.className = `msg-wrapper ${isMy ? 'my' : 'other'}`;
 
-        let contentHtml = '';
-        if (msg.msg_type === 'text') {
-            contentHtml = `<div>${msg.content}</div>`;
-        } else if (msg.msg_type === 'image') {
-            contentHtml = `<img src="${msg.content}" class="msg-img" onclick="openLightbox(this.src)">`;
-        } else if (msg.msg_type === 'file') {
-            contentHtml = `<a href="${msg.content}" target="_blank" style="color:var(--accent-3)">📁 Файл</a>`;
-        }
+        let contentHtml = msg.msg_type === 'text' ? `<div>${msg.content}</div>` 
+            : msg.msg_type === 'image' ? `<img src="${msg.content}" class="msg-img" onclick="document.getElementById('lightbox-img').src=this.src; document.getElementById('lightbox').style.display='flex'">` 
+            : `<a href="${msg.content}" target="_blank" style="color:var(--accent-3)">📁 Файл</a>`;
 
-        // Показываем ник с @ в сообщениях
-        wrapper.innerHTML = `
-            <div class="msg-sender">@${msg.sender}</div>
-            <div class="msg-bubble">${contentHtml}</div>
-        `;
-
+        wrapper.innerHTML = `<div class="msg-sender">@${msg.sender}</div><div class="msg-bubble">${contentHtml}</div>`;
         box.appendChild(wrapper);
         box.scrollTop = box.scrollHeight;
-    }
-
-    function openLightbox(src) {
-        document.getElementById('lightbox-img').src = src;
-        document.getElementById('lightbox').style.display = 'flex';
     }
 </script>
 
 </body>
 </html>
+
