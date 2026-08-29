@@ -81,7 +81,6 @@
         @keyframes loadBar { 0% { width: 0%; } 100% { width: 100%; } }
         @keyframes floatUp { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-8px) scale(1.03); } }
         @keyframes fadeInUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes slideIn { from { opacity:0; transform:translateX(-12px); } to { opacity:1; transform:translateX(0); } }
         @keyframes msgPop { from { opacity:0; transform:scale(0.9) translateY(4px); } to { opacity:1; transform:scale(1) translateY(0); } }
 
         /* AUTH SCREEN */
@@ -121,7 +120,7 @@
         .input-group { display: flex; flex-direction: column; gap: 6px; }
         .input-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; padding-left: 4px; }
 
-        input[type="text"], input[type="file"] {
+        input[type="text"], input[type="password"] {
             background: rgba(10,14,26,0.8);
             color: var(--text-primary);
             padding: 14px 18px;
@@ -130,7 +129,7 @@
             font-size: 15px; outline: none; width: 100%;
             transition: border-color 0.2s;
         }
-        input[type="text"]:focus { border-color: var(--accent); }
+        input[type="text"]:focus, input[type="password"]:focus { border-color: var(--accent); }
 
         .btn-primary {
             background: linear-gradient(135deg, var(--accent), var(--accent-2));
@@ -242,8 +241,8 @@
                 <input type="text" id="username-input" placeholder="Введите логин...">
             </div>
             <div class="input-group">
-                <div class="input-label">Аватар</div>
-                <input type="file" id="avatar-input" accept="image/*">
+                <div class="input-label">Пароль</div>
+                <input type="password" id="password-input" placeholder="Введите пароль...">
             </div>
             <button class="btn-primary" onclick="login()">Войти</button>
         </div>
@@ -304,26 +303,24 @@
     let activeChatId = "global";
     let typingTimeout;
 
-    // Автоматическое скрытие сплэшскрина
     setTimeout(() => {
         document.getElementById('splash-screen').classList.add('hidden');
     }, 1200);
 
     async function login() {
         const username = document.getElementById('username-input').value.trim();
-        const avatarFile = document.getElementById('avatar-input').files[0];
+        const password = document.getElementById('password-input').value.trim();
         if (!username) return alert("Введите имя!");
 
         const formData = new FormData();
         formData.append("username", username);
-        if (avatarFile) formData.append("avatar", avatarFile);
 
         const res = await fetch("/register", { method: "POST", body: formData });
         const data = await res.json();
 
         currentUser = data.username;
         document.getElementById('my-username').innerText = currentUser;
-        document.getElementById('my-avatar').src = data.avatar_url;
+        document.getElementById('my-avatar').src = data.avatar_url || "/uploads/default.png";
         document.getElementById('auth-screen').style.display = 'none';
 
         loadHistory();
@@ -355,7 +352,6 @@
         messages.forEach(msg => appendMessage(msg));
     }
 
-    // Обработка ввода и отправки статуса "печатает..."
     document.getElementById('msg-input').addEventListener('input', () => {
         if (!ws) return;
         ws.send(JSON.stringify({ type: 'typing', chat_id: activeChatId }));
