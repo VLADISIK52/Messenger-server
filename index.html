@@ -162,6 +162,19 @@
         .user-name { font-weight: 700; font-size: 14px; color: var(--text-primary); }
         .user-sub { font-size: 11px; color: var(--accent-3); margin-top: 2px; }
 
+        /* ADD USER BAR */
+        .add-user-bar {
+            padding: 12px 16px; display: flex; gap: 8px; border-bottom: 1px solid var(--border);
+        }
+        .add-user-bar input {
+            flex: 1; padding: 10px 14px; background: var(--bg-tertiary);
+            border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); outline: none; font-size: 13px;
+        }
+        .add-user-bar button {
+            background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff;
+            border: none; border-radius: var(--radius-sm); padding: 0 16px; font-weight: bold; cursor: pointer;
+        }
+
         .list-wrapper { flex-grow: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
         .chat-item {
             padding: 12px; background: var(--bg-tertiary); border-radius: var(--radius-md);
@@ -189,7 +202,7 @@
 
         #messages { flex-grow: 1; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 10px; }
 
-        .msg-wrapper { display: flex; flex-direction: column; max-width: 75%; animation: msgPop 0.2s ease; }
+        .msg-wrapper { display: flex; flex-direction: column; max-width: 85%; animation: msgPop 0.2s ease; }
         .msg-wrapper.my { align-self: flex-end; }
         .msg-wrapper.other { align-self: flex-start; }
 
@@ -273,6 +286,13 @@
                 </div>
             </div>
         </div>
+        
+        <!-- НОВОЕ: Блок ручного добавления собеседника -->
+        <div class="add-user-bar">
+            <input type="text" id="new-chat-input" placeholder="Логин друга..." onkeypress="if(event.key==='Enter') startNewChat()">
+            <button onclick="startNewChat()">+</button>
+        </div>
+
         <div class="list-wrapper" id="users-list">
             <!-- Список пользователей будет грузиться сюда -->
         </div>
@@ -321,10 +341,15 @@
         const formData = new FormData();
         formData.append("username", username);
 
-        const res = await fetch("/register", { method: "POST", body: formData });
-        const data = await res.json();
+        try {
+            const res = await fetch("/register", { method: "POST", body: formData });
+            const data = await res.json();
+            currentUser = data.username;
+        } catch (e) {
+            // Если бэкенд отвалился, все равно пускаем локально для теста интерфейса
+            currentUser = username; 
+        }
 
-        currentUser = data.username;
         document.getElementById('my-username').innerText = currentUser;
         document.getElementById('my-avatar-letter').innerText = currentUser.charAt(0).toUpperCase();
         document.getElementById('auth-screen').style.display = 'none';
@@ -335,56 +360,84 @@
 
     function initWS() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        ws = new WebSocket(`${protocol}//${window.location.host}/ws/${currentUser}`);
+        try {
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws/${currentUser}`);
 
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
 
-            if (data.type === 'typing' && data.sender === activeChatUser) {
-                document.getElementById('typing-status').innerText = `@${data.sender} печатает...`;
-            } else if (data.type === 'stop_typing' && data.sender === activeChatUser) {
-                document.getElementById('typing-status').innerText = '';
-            } else if (data.type === 'message') {
-                if (data.sender === activeChatUser || data.sender === currentUser) {
+                if (data.type === 'typing' && data.sender === activeChatUser) {
+                    document.getElementById('typing-status').innerText = `@${data.sender} печатает...`;
+                } else if (data.type === 'stop_typing' && data.sender === activeChatUser) {
                     document.getElementById('typing-status').innerText = '';
-                    appendMessage(data);
+                } else if (data.type === 'message') {
+                    if (data.sender === activeChatUser || data.sender === currentUser) {
+                        document.getElementById('typing-status').innerText = '';
+                        appendMessage(data);
+                    }
                 }
-            }
-        };
+            };
+        } catch (e) {
+            console.log("WebSocket не подключен, сервер недоступен");
+        }
     }
 
+    // Загрузка юзеров с сервера
     async function loadUsers() {
         try {
             const res = await fetch('/users');
             const users = await res.json();
-            const container = document.getElementById('users-list');
-            container.innerHTML = '';
-
             users.filter(u => u !== currentUser).forEach(user => {
-                const item = document.createElement('div');
-                item.className = `chat-item ${user === activeChatUser ? 'active' : ''}`;
-                item.onclick = () => selectUser(user);
-                item.innerHTML = `
-                    <div class="avatar">${user.charAt(0).toUpperCase()}</div>
-                    <div>
-                        <div style="font-weight:700">${user}</div>
-                        <div style="font-size:12px; color:var(--text-muted)">Нажмите, чтобы открыть диалог</div>
-                    </div>
-                `;
-                container.appendChild(item);
+                addUserToList(user);
             });
         } catch (e) {
-            console.error("Ошибка загрузки пользователей", e);
+            console.log("Не удалось загрузить список юзеров с сервера");
         }
     }
 
+    // Ручное добавление чата через форму
+    function startNewChat() {
+        const input = document.getElementById('new-chat-input');
+        const user = input.value.trim();
+        if (user && user !== currentUser) {
+            addUserToList(user);
+            selectUser(user);
+            input.value = '';
+        }
+    }
+
+    // Добавление карточки чата в левое меню
+    function addUserToList(user) {
+        if (document.getElementById('chat-item-' + user)) return; // Уже есть
+
+        const container = document.getElementById('users-list');
+        const item = document.createElement('div');
+        item.id = 'chat-item-' + user;
+        item.className = `chat-item ${user === activeChatUser ? 'active' : ''}`;
+        item.onclick = () => selectUser(user);
+        item.innerHTML = `
+            <div class="avatar">${user.charAt(0).toUpperCase()}</div>
+            <div>
+                <div style="font-weight:700">${user}</div>
+                <div style="font-size:12px; color:var(--text-muted)">Личный чат</div>
+            </div>
+        `;
+        container.prepend(item);
+    }
+
+    // Переключение чатов
     function selectUser(user) {
         activeChatUser = user;
         document.getElementById('target-username').innerText = user;
         document.getElementById('target-avatar-letter').innerText = user.charAt(0).toUpperCase();
         document.getElementById('app').classList.add('mobile-chat-active');
         
-        loadUsers();
+        // Подсветка активного чата
+        document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+        if (document.getElementById('chat-item-' + user)) {
+            document.getElementById('chat-item-' + user).classList.add('active');
+        }
+        
         loadHistory();
     }
 
@@ -394,33 +447,43 @@
 
     async function loadHistory() {
         if (!activeChatUser) return;
-        const res = await fetch(`/messages/${activeChatUser}`);
-        const messages = await res.json();
-        document.getElementById('messages').innerHTML = '';
-        messages.forEach(msg => appendMessage(msg));
+        try {
+            const res = await fetch(`/messages/${activeChatUser}`);
+            const messages = await res.json();
+            document.getElementById('messages').innerHTML = '';
+            messages.forEach(msg => appendMessage(msg));
+        } catch(e) {
+            document.getElementById('messages').innerHTML = '';
+        }
     }
 
     document.getElementById('msg-input').addEventListener('input', () => {
         if (!ws || !activeChatUser) return;
-        ws.send(JSON.stringify({ type: 'typing', target: activeChatUser }));
-
-        clearTimeout(typingTimeout);
-        typingTimeout = setTimeout(() => {
-            ws.send(JSON.stringify({ type: 'stop_typing', target: activeChatUser }));
-        }, 1500);
+        try {
+            ws.send(JSON.stringify({ type: 'typing', target: activeChatUser }));
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+                ws.send(JSON.stringify({ type: 'stop_typing', target: activeChatUser }));
+            }, 1500);
+        } catch(e) {}
     });
 
     function sendMessage() {
         const input = document.getElementById('msg-input');
         const text = input.value.trim();
-        if (!text || !ws || !activeChatUser) return;
+        if (!text || !activeChatUser) return;
 
-        ws.send(JSON.stringify({
-            type: 'message',
-            target: activeChatUser,
-            content: text,
-            msg_type: 'text'
-        }));
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'message',
+                target: activeChatUser,
+                content: text,
+                msg_type: 'text'
+            }));
+        } else {
+            // Фейковая отправка если сервер оффлайн (чтобы видеть свой текст)
+            appendMessage({sender: currentUser, content: text, msg_type: 'text'});
+        }
 
         input.value = '';
     }
@@ -432,16 +495,19 @@
         const formData = new FormData();
         formData.append("file", file);
 
-        const res = await fetch("/upload", { method: "POST", body: formData });
-        const data = await res.json();
-
-        const isImage = file.type.startsWith("image/");
-        ws.send(JSON.stringify({
-            type: 'message',
-            target: activeChatUser,
-            content: data.file_url,
-            msg_type: isImage ? 'image' : 'file'
-        }));
+        try {
+            const res = await fetch("/upload", { method: "POST", body: formData });
+            const data = await res.json();
+            const isImage = file.type.startsWith("image/");
+            ws.send(JSON.stringify({
+                type: 'message',
+                target: activeChatUser,
+                content: data.file_url,
+                msg_type: isImage ? 'image' : 'file'
+            }));
+        } catch(e) {
+            alert("Ошибка загрузки файла");
+        }
     }
 
     function appendMessage(msg) {
