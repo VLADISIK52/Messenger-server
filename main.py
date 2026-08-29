@@ -17,16 +17,12 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    
-    # Таблица пользователей
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
             avatar_url TEXT
         )
     ''')
-    
-    # Таблица сообщений
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,8 +33,6 @@ def init_db():
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
-    # Таблица реакций (эмодзи)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS reactions (
             message_id INTEGER,
@@ -47,16 +41,19 @@ def init_db():
             PRIMARY KEY (message_id, username)
         )
     ''')
-    
     conn.commit()
     conn.close()
 
 init_db()
 
+# Утилита для создания уникального ID чата между двумя людьми
+def get_chat_id(user1: str, user2: str) -> str:
+    # Сортируем имена по алфавиту, чтобы ID всегда был одинаковым независимо от того, кто пишет
+    return "_".join(sorted([user1, user2]))
+
 # --- МЕНЕДЖЕР WEBSOCKET СЕДНЕНИЙ ---
 class ConnectionManager:
     def __init__(self):
-        # Храним активные соединения: {username: WebSocket}
         self.active_connections: Dict[str, WebSocket] = {}
 
     async def connect(self, username: str, websocket: WebSocket):
@@ -67,13 +64,10 @@ class ConnectionManager:
         if username in self.active_connections:
             del self.active_connections[username]
 
-    async def send_personal_message(self, message: dict, websocket: WebSocket):
-        await websocket.send_json(message)
-
-    async def broadcast(self, data: dict):
-        for connection in self.active_connections.values():
+    async def send_personal_message(self, message: dict, target_user: str):
+        if target_user in self.active_connections:
             try:
-                await connection.send_json(data)
+                await self.active_connections[target_user].send_json(message)
             except Exception:
                 pass
 
@@ -85,7 +79,6 @@ manager = ConnectionManager()
 def get_index():
     return FileResponse("index.html")
 
-# Регистрация и загрузка аватарки
 @app.post("/register")
 async def register(username: str = Form(...), avatar: UploadFile = File(None)):
     avatar_url = "/uploads/default.png"
@@ -103,7 +96,6 @@ async def register(username: str = Form(...), avatar: UploadFile = File(None)):
     
     return {"status": "ok", "username": username, "avatar_url": avatar_url}
 
-# Загрузка медиафайлов (голосовые, кружочки, картинки)
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     file_path = os.path.join(UPLOAD_DIR, file.filename)
@@ -111,9 +103,15 @@ async def upload_file(file: UploadFile = File(...)):
         f.write(await file.read())
     return {"file_url": f"/uploads/{file.filename}"}
 
-# Получение истории сообщений чата
-@app.get("/messages/{chat_id}")
-def get_messages(chat_id: str):
+# Получение списка пользователей онлайн
+@app.get("/users")
+def get_online_users():
+    return list(manager.active_connections.keys())
+
+# Получение истории личной переписки
+@app.get("/messages/{user1}/{user2}")
+def get_messages(user1: str, user2: str):
+    chat_id = get_chat_id(user1, user2)
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute(
@@ -130,21 +128,21 @@ def get_messages(chat_id: str):
             "chat_id": r[1],
             "sender": r[2],
             "content": r[3],
-            "type": r[4],
+            "msg_type": r[4],  # исправлено с type на msg_type для фронтенда
             "timestamp": r[5]
         })
     return messages
 
-# Добавление реакции на сообщение
-@app.post("/messages/{msg_id}/react")
-def add_reaction(msg_id: int, username: str = Form(...), emoji: str = Form(...)):
+# Удаление чата
+@app.delete("/messages/{user1}/{user2}")
+def delete_chat(user1: str, user2: str):
+    chat_id = get_chat_id(user1, user2)
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("REPLACE INTO reactions (message_id, username, emoji) VALUES (?, ?, ?)", 
-                   (msg_id, username, emoji))
+    cursor.execute("DELETE FROM messages WHERE chat_id = ?", (chat_id,))
     conn.commit()
     conn.close()
-    return {"status": "ok"}
+    return {"status": "deleted"}
 
 # --- WEBSOCKET ЧАТА ---
 
@@ -155,14 +153,14 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
         while True:
             data = await websocket.receive_json()
             msg_type = data.get("type", "message")
+            target = data.get("target")
             
-            # 1. Обработка обычной отправки сообщений / голосовых / файлов
-            if msg_type == "message":
-                chat_id = data.get("chat_id", "global")
+            if msg_type == "message" and target:
+                chat_id = get_chat_id(username, target)
                 content = data.get("content", "")
                 content_type = data.get("msg_type", "text")
                 
-                # Сохраняем в базу данных
+                # Сохраняем в БД
                 conn = sqlite3.connect(DB_FILE)
                 cursor = conn.cursor()
                 cursor.execute(
@@ -173,24 +171,24 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
                 msg_id = cursor.lastrowid
                 conn.close()
                 
-                # Рассылаем всем подключенным пользователям
-                broadcast_data = {
+                msg_data = {
                     "type": "message",
                     "id": msg_id,
-                    "chat_id": chat_id,
+                    "target": target,
                     "sender": username,
                     "content": content,
                     "msg_type": content_type
                 }
-                await manager.broadcast(broadcast_data)
                 
-            # 2. Обработка статусов "печатает..." / "перестал печатать"
-            elif msg_type in ["typing", "stop_typing"]:
-                await manager.broadcast({
+                # Отправляем сообщение ТОЛЬКО получателю
+                await manager.send_personal_message(msg_data, target)
+                
+            elif msg_type in ["typing", "stop_typing"] and target:
+                # Статус печатает - тоже отправляем только собеседнику
+                await manager.send_personal_message({
                     "type": msg_type,
-                    "sender": username,
-                    "chat_id": data.get("chat_id", "global")
-                })
+                    "sender": username
+                }, target)
                 
     except WebSocketDisconnect:
         manager.disconnect(username)
