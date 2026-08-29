@@ -25,7 +25,7 @@ def init_db():
         )
     ''')
     
-    # Добавлено поле status (sent / delivered / read)
+    # Поле status (sent / delivered / read)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -131,7 +131,6 @@ def get_online_users():
 
 @app.post("/groups/create")
 async def create_group(title: str = Form(...), owner: str = Form(...), members: str = Form(...)):
-    # members передаются через запятую: "user1,user2,user3"
     member_list = [m.strip() for m in members.split(",") if m.strip()]
     if owner not in member_list:
         member_list.append(owner)
@@ -161,6 +160,31 @@ def get_user_groups(username: str):
     rows = cursor.fetchall()
     conn.close()
     return [{"group_id": r[0], "title": r[1], "owner": r[2]} for r in rows]
+
+@app.delete("/groups/{group_id}")
+def delete_group(group_id: str, owner: str):
+    """Удаление группы, состава её участников и всей истории сообщений чата"""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT owner FROM groups WHERE group_id = ?", (group_id,))
+    row = cursor.fetchone()
+    
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Группа не найдена")
+        
+    if row[0] != owner:
+        conn.close()
+        raise HTTPException(status_code=403, detail="Только создатель может удалить группу")
+        
+    cursor.execute("DELETE FROM groups WHERE group_id = ?", (group_id,))
+    cursor.execute("DELETE FROM group_members WHERE group_id = ?", (group_id,))
+    cursor.execute("DELETE FROM messages WHERE chat_id = ?", (group_id,))
+    
+    conn.commit()
+    conn.close()
+    return {"status": "deleted"}
 
 # --- СООБЩЕНИЯ И ИСТОРИЯ ---
 
@@ -229,10 +253,7 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
                 
                 chat_id = target if is_group else get_chat_id(username, target)
                 
-                # По умолчанию статус 'sent'
                 initial_status = "sent"
-                
-                # Проверяем, в сети ли получатель (для лички)
                 if not is_group and manager.is_online(target):
                     initial_status = "delivered"
                 
@@ -258,11 +279,11 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
                     "is_group": is_group
                 }
 
-                # Подтверждаем отправителю отправку (и статус доставлено, если онлайн)
+                # Отправляем подтверждение и копию сообщения автору
                 await manager.send_personal_message(msg_payload, username)
 
                 if is_group:
-                    # Рассылка всем участникам группы
+                    # Рассылка всем остальным участникам группы
                     conn = sqlite3.connect(DB_FILE)
                     cursor = conn.cursor()
                     cursor.execute("SELECT username FROM group_members WHERE group_id = ?", (target,))
@@ -273,13 +294,14 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
                         if member_user != username:
                             await manager.send_personal_message(msg_payload, member_user)
                 else:
-                    # Отправляем личное сообщение
-                    await manager.send_personal_message(msg_payload, target)
+                    # Отправляем сообщение собеседнику (только если это не отправка самому себе)
+                    if target != username:
+                        await manager.send_personal_message(msg_payload, target)
 
             # 2. ОТМЕТКА О ПРОЧТЕНИИ (READ RECEIPT)
             elif msg_type == "read_receipt":
                 chat_id = data.get("chat_id")
-                sender_to_notify = data.get("sender") # кому вернуть статус
+                sender_to_notify = data.get("sender")
                 
                 conn = sqlite3.connect(DB_FILE)
                 cursor = conn.cursor()
@@ -287,7 +309,6 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
                 conn.commit()
                 conn.close()
 
-                # Уведомляем автора сообщения, что его прочитали
                 await manager.send_personal_message({
                     "type": "status_update",
                     "chat_id": chat_id,
