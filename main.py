@@ -1,6 +1,6 @@
 import os
 import sqlite3
-from typing import Dict, List, Set
+from typing import Dict
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -13,19 +13,29 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-# --- БАЗА ДАННЫХ ---
+
+# ==========================================================
+#                        БАЗА ДАННЫХ
+# ==========================================================
+
+def get_db():
+    # check_same_thread=False нужен, потому что FastAPI может
+    # обращаться к базе из разных потоков
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    return conn
+
+
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db()
     cursor = conn.cursor()
-    
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
             avatar_url TEXT
         )
     ''')
-    
-    # Поле status (sent / delivered / read)
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,8 +47,7 @@ def init_db():
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
-    # Таблицы для групп
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS groups (
             group_id TEXT PRIMARY KEY,
@@ -47,7 +56,7 @@ def init_db():
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS group_members (
             group_id TEXT,
@@ -59,12 +68,19 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 init_db()
 
+
 def get_chat_id(user1: str, user2: str) -> str:
+    """Всегда одинаковый id чата между двумя юзерами, независимо от порядка"""
     return "_".join(sorted([user1, user2]))
 
-# --- МЕНЕДЖЕР WEBSOCKET СОЕДИНЕНИЙ ---
+
+# ==========================================================
+#              МЕНЕДЖЕР WEBSOCKET-СОЕДИНЕНИЙ
+# ==========================================================
+
 class ConnectionManager:
     def __init__(self):
         # username -> WebSocket
@@ -73,31 +89,42 @@ class ConnectionManager:
     async def connect(self, username: str, websocket: WebSocket):
         await websocket.accept()
         self.active_connections[username] = websocket
+        print(f"[WS] {username} подключился. Сейчас онлайн: {list(self.active_connections.keys())}")
 
     def disconnect(self, username: str):
         if username in self.active_connections:
             del self.active_connections[username]
+        print(f"[WS] {username} отключился. Сейчас онлайн: {list(self.active_connections.keys())}")
 
     def is_online(self, username: str) -> bool:
         return username in self.active_connections
 
-    async def send_personal_message(self, message: dict, target_user: str) -> bool:
-        """Возвращает True, если сообщение было доставлено (юзер онлайн)"""
-        if target_user in self.active_connections:
-            try:
-                await self.active_connections[target_user].send_json(message)
-                return True
-            except Exception:
-                pass
-        return False
+    async def send_to_user(self, message: dict, target_user: str) -> bool:
+        """Отправляет message конкретному юзеру, если он онлайн. True если получилось."""
+        ws = self.active_connections.get(target_user)
+        if ws is None:
+            print(f"[WS] Не отправлено '{target_user}': пользователь оффлайн")
+            return False
+        try:
+            await ws.send_json(message)
+            print(f"[WS] Отправлено пользователю '{target_user}': {message.get('type')}")
+            return True
+        except Exception as e:
+            print(f"[WS] Ошибка отправки '{target_user}': {e}")
+            return False
+
 
 manager = ConnectionManager()
 
-# --- ЭНДПОИНТЫ API ---
+
+# ==========================================================
+#                      ОБЫЧНЫЕ ЭНДПОИНТЫ
+# ==========================================================
 
 @app.get("/")
 def get_index():
     return FileResponse("index.html")
+
 
 @app.post("/register")
 async def register(username: str = Form(...), avatar: UploadFile = File(None)):
@@ -108,13 +135,14 @@ async def register(username: str = Form(...), avatar: UploadFile = File(None)):
             f.write(await avatar.read())
         avatar_url = f"/uploads/{avatar.filename}"
 
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute("REPLACE INTO users (username, avatar_url) VALUES (?, ?)", (username, avatar_url))
     conn.commit()
     conn.close()
-    
+
     return {"status": "ok", "username": username, "avatar_url": avatar_url}
+
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
@@ -123,36 +151,41 @@ async def upload_file(file: UploadFile = File(...)):
         f.write(await file.read())
     return {"file_url": f"/uploads/{file.filename}"}
 
+
 @app.get("/users")
 def get_online_users():
     return list(manager.active_connections.keys())
 
-# --- РАБОТА С ГРУППАМИ ---
+
+# ==========================================================
+#                     РАБОТА С ГРУППАМИ
+# ==========================================================
 
 @app.post("/groups/create")
 async def create_group(title: str = Form(...), owner: str = Form(...), members: str = Form(...)):
     member_list = [m.strip() for m in members.split(",") if m.strip()]
     if owner not in member_list:
         member_list.append(owner)
-        
+
     group_id = f"group_{os.urandom(6).hex()}"
-    
-    conn = sqlite3.connect(DB_FILE)
+
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute("INSERT INTO groups (group_id, title, owner) VALUES (?, ?, ?)", (group_id, title, owner))
     for m in member_list:
         cursor.execute("INSERT INTO group_members (group_id, username) VALUES (?, ?)", (group_id, m))
     conn.commit()
     conn.close()
-    
+
     return {"status": "ok", "group_id": group_id, "title": title, "members": member_list}
+
 
 @app.get("/groups/my/{username}")
 def get_user_groups(username: str):
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT g.group_id, g.title, g.owner 
+        SELECT g.group_id, g.title, g.owner
         FROM groups g
         JOIN group_members gm ON g.group_id = gm.group_id
         WHERE gm.username = ?
@@ -161,37 +194,40 @@ def get_user_groups(username: str):
     conn.close()
     return [{"group_id": r[0], "title": r[1], "owner": r[2]} for r in rows]
 
+
 @app.delete("/groups/{group_id}")
 def delete_group(group_id: str, owner: str):
-    """Удаление группы, состава её участников и всей истории сообщений чата"""
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db()
     cursor = conn.cursor()
-    
+
     cursor.execute("SELECT owner FROM groups WHERE group_id = ?", (group_id,))
     row = cursor.fetchone()
-    
+
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="Группа не найдена")
-        
+
     if row[0] != owner:
         conn.close()
         raise HTTPException(status_code=403, detail="Только создатель может удалить группу")
-        
+
     cursor.execute("DELETE FROM groups WHERE group_id = ?", (group_id,))
     cursor.execute("DELETE FROM group_members WHERE group_id = ?", (group_id,))
     cursor.execute("DELETE FROM messages WHERE chat_id = ?", (group_id,))
-    
+
     conn.commit()
     conn.close()
     return {"status": "deleted"}
 
-# --- СООБЩЕНИЯ И ИСТОРИЯ ---
+
+# ==========================================================
+#                 СООБЩЕНИЯ И ИСТОРИЯ ЧАТОВ
+# ==========================================================
 
 @app.get("/messages/{user1}/{user2}")
 def get_messages(user1: str, user2: str):
     chat_id = get_chat_id(user1, user2)
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
         "SELECT id, chat_id, sender, content, msg_type, status, timestamp FROM messages WHERE chat_id = ? ORDER BY timestamp ASC",
@@ -199,15 +235,16 @@ def get_messages(user1: str, user2: str):
     )
     rows = cursor.fetchall()
     conn.close()
-    
+
     return [{
-        "id": r[0], "chat_id": r[1], "sender": r[2], 
+        "id": r[0], "chat_id": r[1], "sender": r[2],
         "content": r[3], "msg_type": r[4], "status": r[5], "timestamp": r[6]
     } for r in rows]
 
+
 @app.get("/group-messages/{group_id}")
 def get_group_messages(group_id: str):
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
         "SELECT id, chat_id, sender, content, msg_type, status, timestamp FROM messages WHERE chat_id = ? ORDER BY timestamp ASC",
@@ -215,23 +252,27 @@ def get_group_messages(group_id: str):
     )
     rows = cursor.fetchall()
     conn.close()
-    
+
     return [{
-        "id": r[0], "chat_id": r[1], "sender": r[2], 
+        "id": r[0], "chat_id": r[1], "sender": r[2],
         "content": r[3], "msg_type": r[4], "status": r[5], "timestamp": r[6]
     } for r in rows]
+
 
 @app.delete("/messages/{user1}/{user2}")
 def delete_chat(user1: str, user2: str):
     chat_id = get_chat_id(user1, user2)
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM messages WHERE chat_id = ?", (chat_id,))
     conn.commit()
     conn.close()
     return {"status": "deleted"}
 
-# --- WEBSOCKET LOGIC ---
+
+# ==========================================================
+#                     WEBSOCKET: ГЛАВНАЯ ЛОГИКА
+# ==========================================================
 
 @app.websocket("/ws/{username}")
 async def websocket_endpoint(websocket: WebSocket, username: str):
@@ -240,24 +281,28 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
         while True:
             data = await websocket.receive_json()
             msg_type = data.get("type", "message")
-            
-            # 1. ОБРАБОТКА ЛИЧНЫХ И ГРУППОВЫХ СООБЩЕНИЙ
+            print(f"[WS] Получено от '{username}': {data}")
+
+            # ------------------------------------------------
+            # 1. НОВОЕ СООБЩЕНИЕ (личное или групповое)
+            # ------------------------------------------------
             if msg_type == "message":
-                is_group = data.get("is_group", False)
+                is_group = bool(data.get("is_group", False))
                 target = data.get("target")
                 content = data.get("content", "")
                 content_type = data.get("msg_type", "text")
-                
-                if not target:
+
+                if not target or not content:
                     continue
-                
+
                 chat_id = target if is_group else get_chat_id(username, target)
-                
+
                 initial_status = "sent"
                 if not is_group and manager.is_online(target):
                     initial_status = "delivered"
-                
-                conn = sqlite3.connect(DB_FILE)
+
+                # Сохраняем сообщение в базу
+                conn = get_db()
                 cursor = conn.cursor()
                 cursor.execute(
                     "INSERT INTO messages (chat_id, sender, content, msg_type, status) VALUES (?, ?, ?, ?, ?)",
@@ -266,7 +311,7 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
                 conn.commit()
                 msg_id = cursor.lastrowid
                 conn.close()
-                
+
                 msg_payload = {
                     "type": "message",
                     "id": msg_id,
@@ -279,41 +324,50 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
                     "is_group": is_group
                 }
 
-                # Отправляем подтверждение и копию сообщения автору
-                await manager.send_personal_message(msg_payload, username)
-
                 if is_group:
-                    # Рассылка всем остальным участникам группы
-                    conn = sqlite3.connect(DB_FILE)
+                    # Собираем участников группы и рассылаем ВСЕМ, включая автора
+                    conn = get_db()
                     cursor = conn.cursor()
                     cursor.execute("SELECT username FROM group_members WHERE group_id = ?", (target,))
-                    members = cursor.fetchall()
+                    members = [row[0] for row in cursor.fetchall()]
                     conn.close()
-                    for m in members:
-                        member_user = m[0]
-                        if member_user != username:
-                            await manager.send_personal_message(msg_payload, member_user)
-                else:
-                    # Отправляем сообщение собеседнику (только если это не отправка самому себе)
-                    if target != username:
-                        await manager.send_personal_message(msg_payload, target)
 
-            # 2. ОТМЕТКА О ПРОЧТЕНИИ (READ RECEIPT)
+                    for member_user in members:
+                        await manager.send_to_user(msg_payload, member_user)
+                else:
+                    # Личное сообщение: отправляем и автору (чтобы он увидел своё
+                    # сообщение в чате), и получателю
+                    await manager.send_to_user(msg_payload, username)
+                    if target != username:
+                        await manager.send_to_user(msg_payload, target)
+
+            # ------------------------------------------------
+            # 2. ОТМЕТКА "ПРОЧИТАНО"
+            # ------------------------------------------------
             elif msg_type == "read_receipt":
                 chat_id = data.get("chat_id")
                 sender_to_notify = data.get("sender")
-                
-                conn = sqlite3.connect(DB_FILE)
+
+                if not chat_id or not sender_to_notify:
+                    continue
+
+                conn = get_db()
                 cursor = conn.cursor()
-                cursor.execute("UPDATE messages SET status = 'read' WHERE chat_id = ? AND sender = ?", (chat_id, sender_to_notify))
+                cursor.execute(
+                    "UPDATE messages SET status = 'read' WHERE chat_id = ? AND sender = ?",
+                    (chat_id, sender_to_notify)
+                )
                 conn.commit()
                 conn.close()
 
-                await manager.send_personal_message({
+                await manager.send_to_user({
                     "type": "status_update",
                     "chat_id": chat_id,
                     "status": "read"
                 }, sender_to_notify)
 
     except WebSocketDisconnect:
+        manager.disconnect(username)
+    except Exception as e:
+        print(f"[WS] Неожиданная ошибка у '{username}': {e}")
         manager.disconnect(username)
