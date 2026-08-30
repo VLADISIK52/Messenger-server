@@ -14,7 +14,7 @@
             --border: rgba(99,102,241,0.12);
             --msg-in: #1a2236; --msg-out-start: #6366f1; --msg-out-end: #8b5cf6;
             --radius-sm: 10px; --radius-md: 16px; --radius-xl: 28px;
-            --check-read: #38bdf8; /* Синий цвет прочитанных галочек */
+            --check-read: #38bdf8;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }
@@ -58,7 +58,6 @@
         .chat-item-left { display: flex; align-items: center; gap: 12px; }
         .btn-delete-chat { background: transparent; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; padding: 4px; }
 
-        /* CHAT AREA */
         #chat-area { flex-grow: 1; display: flex; flex-direction: column; background: var(--bg-primary); }
         .chat-header { padding: 12px 16px; background: rgba(15,21,37,0.95); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
         .btn-back { display: none; background: transparent; border: none; color: var(--accent-3); font-size: 22px; cursor: pointer; }
@@ -72,8 +71,7 @@
         .msg-wrapper.other .msg-bubble { background: var(--msg-in); border: 1px solid var(--border); }
         .msg-sender { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; }
         .msg-img { max-width: 240px; border-radius: 8px; margin-top: 4px; cursor: pointer; }
-        
-        /* СТИЛИ ГАЛОЧЕК СТАТУСА */
+
         .msg-footer { display: flex; align-items: center; justify-content: flex-end; gap: 4px; font-size: 11px; margin-top: 4px; opacity: 0.8; }
         .status-checks { font-weight: bold; font-size: 12px; }
         .status-checks.read { color: var(--check-read); }
@@ -86,12 +84,17 @@
         .btn-icon { background: var(--accent-soft); color: var(--accent-3); width: 42px; font-size: 18px; border: 1px solid var(--border); }
         .btn-send { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; padding: 0 16px; }
 
-        /* MODAL CREATE GROUP */
         #modal-group { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1500; }
         .modal-box { background: var(--bg-card); padding: 24px; border-radius: var(--radius-xl); border: 1px solid var(--border); width: 90%; max-width: 360px; display: flex; flex-direction: column; gap: 12px; }
 
         #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); justify-content: center; align-items: center; z-index: 2000; }
         #lightbox img { max-width: 90%; max-height: 90%; border-radius: 12px; }
+
+        #conn-indicator {
+            position: fixed; bottom: 8px; right: 8px; z-index: 3000;
+            font-size: 11px; padding: 4px 10px; border-radius: 20px;
+            background: rgba(0,0,0,0.6); color: #fff; opacity: 0.85;
+        }
 
         @media (max-width: 768px) {
             #sidebar { width: 100%; position: absolute; inset: 0; }
@@ -139,7 +142,7 @@
             </div>
             <button class="btn-logout" onclick="logout()" title="Выйти">🚪</button>
         </div>
-        
+
         <div class="add-user-bar">
             <input type="text" id="new-chat-input" placeholder="Логин друга..." onkeypress="if(event.key==='Enter') startNewChat()">
             <button onclick="startNewChat()">+</button>
@@ -169,14 +172,15 @@
 </div>
 
 <div id="lightbox" onclick="this.style.display='none'"><img id="lightbox-img" src=""></div>
+<div id="conn-indicator">⏳ подключение...</div>
 
 <script>
     let ws;
     let currentUser = "";
-    let activeChatTarget = ""; // Может быть username или group_id
+    let activeChatTarget = ""; // username собеседника или group_id
     let isCurrentGroup = false;
-    
-    let knownUsers = []; 
+
+    let knownUsers = [];
     let userGroups = [];
     let onlineUsers = [];
 
@@ -184,7 +188,7 @@
         let savedUser = localStorage.getItem('messenger_currentUser');
         setTimeout(() => {
             document.getElementById('splash-screen').classList.add('hidden');
-            if (savedUser) { currentUser = savedUser; setupUserInterface(); } 
+            if (savedUser) { currentUser = savedUser; setupUserInterface(); }
             else { document.getElementById('auth-screen').style.display = 'flex'; }
         }, 800);
     });
@@ -208,63 +212,88 @@
         document.getElementById('my-username').innerText = '@' + currentUser;
         document.getElementById('my-avatar-letter').innerText = currentUser.charAt(0).toUpperCase();
         document.getElementById('auth-screen').style.display = 'none';
-        
+
         knownUsers = JSON.parse(localStorage.getItem('chats_' + currentUser) || '[]');
         initWS();
         await fetchUserGroups();
         updateOnlineStatus();
-        setInterval(updateOnlineStatus, 5000); 
+        setInterval(updateOnlineStatus, 5000);
+    }
+
+    // ==========================================================
+    //                    WEBSOCKET-СОЕДИНЕНИЕ
+    // ==========================================================
+
+    function setConnIndicator(text, color) {
+        const el = document.getElementById('conn-indicator');
+        el.innerText = text;
+        el.style.background = color || 'rgba(0,0,0,0.6)';
     }
 
     function initWS() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        try {
-            ws = new WebSocket(`${protocol}//${window.location.host}/ws/${currentUser}`);
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
+        const url = `${protocol}//${window.location.host}/ws/${encodeURIComponent(currentUser)}`;
+        console.log("[WS] Подключаюсь к", url);
+        setConnIndicator('⏳ подключение...');
 
-                if (data.type === 'message') {
-                    let chatTarget;
+        ws = new WebSocket(url);
 
-                    if (data.is_group) {
-                        // Для групп у всех (и у отправителя, и у получателей)
-                        // "чат" — это id группы (data.target)
-                        chatTarget = data.target;
-                    } else {
-                        // Для личных сообщений сервер шлёт одну и ту же копию
-                        // и отправителю, и получателю.
-                        // Если это ЭХО моего сообщения (data.sender === я) —
-                        // собеседник это data.target.
-                        // Если это входящее сообщение мне — собеседник это data.sender.
-                        if (data.sender === currentUser) {
-                            chatTarget = data.target;
-                        } else {
-                            chatTarget = data.sender;
-                            addKnownUser(data.sender);
-                        }
-                    }
+        ws.onopen = () => {
+            console.log("[WS] Соединение открыто");
+            setConnIndicator('🟢 онлайн', 'rgba(16,185,129,0.6)');
+        };
 
-                    if (activeChatTarget === chatTarget) {
-                        appendMessageToUI(data);
+        ws.onclose = (e) => {
+            console.log("[WS] Соединение закрыто, код:", e.code, "причина:", e.reason);
+            setConnIndicator('🔴 нет соединения, переподключение...', 'rgba(239,68,68,0.6)');
+            setTimeout(initWS, 2000);
+        };
 
-                        // Отправляем "прочитано" только на входящие сообщения
-                        // от собеседника, не на собственное эхо
-                        if (!data.is_group && data.sender !== currentUser) {
-                            sendReadReceipt(getChatId(currentUser, data.sender), data.sender);
-                        }
-                    } else if (!data.is_group && data.sender !== currentUser) {
-                        // Сообщение пришло не в открытый сейчас чат —
-                        // всё равно обновим список чатов слева
-                        renderUserList();
-                    }
-                } 
-                else if (data.type === 'status_update') {
-                    // Обновляем галочки статуса
-                    updateMessagesStatusUI(data.status);
-                }
-            };
-        } catch (e) { console.log("WebSocket не подключен"); }
+        ws.onerror = (e) => {
+            console.error("[WS] Ошибка соединения:", e);
+        };
+
+        ws.onmessage = (event) => {
+            let data;
+            try {
+                data = JSON.parse(event.data);
+            } catch (e) {
+                console.error("[WS] Не удалось разобрать сообщение:", event.data);
+                return;
+            }
+            console.log("[WS] Получено сообщение:", data);
+
+            if (data.type === 'message') {
+                handleIncomingMessage(data);
+            } else if (data.type === 'status_update') {
+                updateMessagesStatusUI(data.status);
+            }
+        };
     }
+
+    function handleIncomingMessage(data) {
+        let chatTarget;
+
+        if (data.is_group) {
+            chatTarget = data.target;
+        } else if (data.sender === currentUser) {
+            chatTarget = data.target;
+        } else {
+            chatTarget = data.sender;
+            addKnownUser(data.sender);
+        }
+
+        if (activeChatTarget === chatTarget) {
+            appendMessageToUI(data);
+            if (!data.is_group && data.sender !== currentUser) {
+                sendReadReceipt(getChatId(currentUser, data.sender), data.sender);
+            }
+        } else {
+            renderUserList();
+        }
+    }
+
+    // ==========================================================
 
     async function fetchUserGroups() {
         try {
@@ -278,7 +307,7 @@
             const res = await fetch('/users');
             onlineUsers = await res.json();
         } catch (e) {}
-        
+
         onlineUsers.forEach(u => { if(u !== currentUser) addKnownUser(u); });
         renderUserList();
         updateHeaderStatus();
@@ -295,22 +324,21 @@
 
     function startNewChat() {
         let user = document.getElementById('new-chat-input').value.trim().replace('@', '');
-        if (user && user !== currentUser) { 
-            addKnownUser(user); 
-            selectChat(user, false); 
-            document.getElementById('new-chat-input').value = ''; 
+        if (user && user !== currentUser) {
+            addKnownUser(user);
+            selectChat(user, false);
+            document.getElementById('new-chat-input').value = '';
         }
     }
 
-    /* МОДАЛКА ГРУПП */
     function openGroupModal() { document.getElementById('modal-group').style.display = 'flex'; }
     function closeGroupModal() { document.getElementById('modal-group').style.display = 'none'; }
-    
+
     async function submitCreateGroup() {
         let title = document.getElementById('group-title-input').value.trim();
         let members = document.getElementById('group-members-input').value.trim();
         if (!title) return alert("Введите название группы");
-        
+
         const formData = new FormData();
         formData.append("title", title);
         formData.append("owner", currentUser);
@@ -329,8 +357,7 @@
     function renderUserList() {
         const container = document.getElementById('users-list');
         container.innerHTML = '';
-        
-        // 1. Отрисовка Групп
+
         if (userGroups.length > 0) {
             const groupTitle = document.createElement('div');
             groupTitle.className = 'section-title';
@@ -354,7 +381,6 @@
             });
         }
 
-        // 2. Отрисовка Личных Чатов
         const usersTitle = document.createElement('div');
         usersTitle.className = 'section-title';
         usersTitle.innerText = 'Личные сообщения';
@@ -368,7 +394,7 @@
         sortedUsers.forEach(user => {
             let isOnline = onlineUsers.includes(user);
             let statusHtml = isOnline ? `<span class="status-dot online-dot"></span>В сети` : `<span class="status-dot offline-dot"></span>Был(а) недавно`;
-            
+
             const item = document.createElement('div');
             item.className = `chat-item ${user === activeChatTarget ? 'active' : ''}`;
             item.onclick = () => selectChat(user, false);
@@ -401,15 +427,15 @@
         }
 
         document.getElementById('app').classList.add('mobile-chat-active');
-        renderUserList(); 
+        renderUserList();
         loadHistory();
     }
 
     function updateHeaderStatus() {
         if (!activeChatTarget || isCurrentGroup) return;
         let isOnline = onlineUsers.includes(activeChatTarget);
-        document.getElementById('target-status').innerHTML = isOnline 
-            ? `<span class="status-dot online-dot"></span>В сети` 
+        document.getElementById('target-status').innerHTML = isOnline
+            ? `<span class="status-dot online-dot"></span>В сети`
             : `<span class="status-dot offline-dot"></span>Был(а) недавно`;
     }
 
@@ -422,19 +448,18 @@
         if (!activeChatTarget) return;
         const box = document.getElementById('messages');
         box.innerHTML = '';
-        
+
         const url = isCurrentGroup ? `/group-messages/${activeChatTarget}` : `/messages/${currentUser}/${activeChatTarget}`;
-        
+
         try {
             const res = await fetch(url);
             const serverMsgs = await res.json();
             serverMsgs.forEach(msg => appendMessageToUI(msg));
-            
-            // Отправляем уведомление о прочтении для личных чатов
+
             if (!isCurrentGroup && serverMsgs.length > 0) {
                 sendReadReceipt(getChatId(currentUser, activeChatTarget), activeChatTarget);
             }
-        } catch(e) {}
+        } catch(e) { console.error("[HTTP] Не удалось загрузить историю:", e); }
     }
 
     function sendReadReceipt(chatId, senderToNotify) {
@@ -456,6 +481,11 @@
         const text = input.value.trim();
         if (!text || !activeChatTarget) return;
 
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            alert("Нет соединения с сервером. Подождите переподключения (смотрите индикатор внизу справа) и попробуйте снова.");
+            return;
+        }
+
         let msgObj = {
             type: 'message',
             target: activeChatTarget,
@@ -465,9 +495,8 @@
             is_group: isCurrentGroup
         };
 
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(msgObj));
-        }
+        console.log("[WS] Отправляю сообщение:", msgObj);
+        ws.send(JSON.stringify(msgObj));
         input.value = '';
     }
 
@@ -479,7 +508,12 @@
         try {
             const res = await fetch("/upload", { method: "POST", body: formData });
             const data = await res.json();
-            
+
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert("Нет соединения с сервером.");
+                return;
+            }
+
             let msgObj = {
                 type: 'message',
                 target: activeChatTarget,
@@ -488,12 +522,11 @@
                 msg_type: file.type.startsWith("image/") ? 'image' : 'file',
                 is_group: isCurrentGroup
             };
-            
+
             ws.send(JSON.stringify(msgObj));
         } catch(e) { alert("Ошибка загрузки файла"); }
     }
 
-    // РЕНДЕР ГАЛОЧЕК СТАТУСА
     function getStatusIconHtml(status) {
         if (status === 'read') return `<span class="status-checks read" title="Прочитано">✓✓</span>`;
         if (status === 'delivered') return `<span class="status-checks delivered" title="Доставлено">✓✓</span>`;
@@ -503,12 +536,12 @@
     function appendMessageToUI(msg) {
         const box = document.getElementById('messages');
         const isMy = msg.sender === currentUser;
-        
+
         const wrapper = document.createElement('div');
         wrapper.className = `msg-wrapper ${isMy ? 'my' : 'other'}`;
 
-        let contentHtml = msg.msg_type === 'text' ? `<div>${msg.content}</div>` 
-            : msg.msg_type === 'image' ? `<img src="${msg.content}" class="msg-img" onclick="document.getElementById('lightbox-img').src=this.src; document.getElementById('lightbox').style.display='flex'">` 
+        let contentHtml = msg.msg_type === 'text' ? `<div>${escapeHtml(msg.content)}</div>`
+            : msg.msg_type === 'image' ? `<img src="${msg.content}" class="msg-img" onclick="document.getElementById('lightbox-img').src=this.src; document.getElementById('lightbox').style.display='flex'">`
             : `<a href="${msg.content}" target="_blank" style="color:var(--accent-3)">📁 Файл</a>`;
 
         let statusHtml = isMy && !isCurrentGroup ? getStatusIconHtml(msg.status || 'sent') : '';
@@ -522,6 +555,12 @@
         `;
         box.appendChild(wrapper);
         box.scrollTop = box.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.innerText = text;
+        return div.innerHTML;
     }
 
     function updateMessagesStatusUI(newStatus) {
