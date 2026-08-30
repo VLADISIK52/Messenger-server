@@ -427,6 +427,7 @@
         }
 
         document.getElementById('app').classList.add('mobile-chat-active');
+        document.getElementById('conn-indicator').style.display = 'none';
         renderUserList();
         loadHistory();
     }
@@ -441,6 +442,7 @@
 
     function closeChat() {
         document.getElementById('app').classList.remove('mobile-chat-active');
+        document.getElementById('conn-indicator').style.display = 'block';
         activeChatTarget = "";
     }
 
