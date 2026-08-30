@@ -222,19 +222,44 @@
             ws = new WebSocket(`${protocol}//${window.location.host}/ws/${currentUser}`);
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-                
+
                 if (data.type === 'message') {
-                    let chatTarget = data.is_group ? data.target : data.sender;
-                    
-                    if (!data.is_group) addKnownUser(data.sender);
+                    let chatTarget;
+
+                    if (data.is_group) {
+                        // Для групп у всех (и у отправителя, и у получателей)
+                        // "чат" — это id группы (data.target)
+                        chatTarget = data.target;
+                    } else {
+                        // Для личных сообщений сервер шлёт одну и ту же копию
+                        // и отправителю, и получателю.
+                        // Если это ЭХО моего сообщения (data.sender === я) —
+                        // собеседник это data.target.
+                        // Если это входящее сообщение мне — собеседник это data.sender.
+                        if (data.sender === currentUser) {
+                            chatTarget = data.target;
+                        } else {
+                            chatTarget = data.sender;
+                            addKnownUser(data.sender);
+                        }
+                    }
 
                     if (activeChatTarget === chatTarget) {
                         appendMessageToUI(data);
-                        sendReadReceipt(chatTarget, data.sender);
+
+                        // Отправляем "прочитано" только на входящие сообщения
+                        // от собеседника, не на собственное эхо
+                        if (!data.is_group && data.sender !== currentUser) {
+                            sendReadReceipt(getChatId(currentUser, data.sender), data.sender);
+                        }
+                    } else if (!data.is_group && data.sender !== currentUser) {
+                        // Сообщение пришло не в открытый сейчас чат —
+                        // всё равно обновим список чатов слева
+                        renderUserList();
                     }
                 } 
                 else if (data.type === 'status_update') {
-                    // Обновляем галочки статуса на клиринге
+                    // Обновляем галочки статуса
                     updateMessagesStatusUI(data.status);
                 }
             };
