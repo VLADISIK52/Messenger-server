@@ -19,8 +19,6 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 # ==========================================================
 
 def get_db():
-    # check_same_thread=False нужен, потому что FastAPI может
-    # обращаться к базе из разных потоков
     conn = sqlite3.connect(DB_FILE, check_same_thread=False)
     return conn
 
@@ -32,9 +30,16 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
-            avatar_url TEXT
+            avatar_url TEXT DEFAULT '/uploads/default.png',
+            bio TEXT DEFAULT ''
         )
     ''')
+
+    # На случай, если таблица users уже существовала раньше без колонки bio
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # колонка уже есть
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS messages (
@@ -73,7 +78,6 @@ init_db()
 
 
 def get_chat_id(user1: str, user2: str) -> str:
-    """Всегда одинаковый id чата между двумя юзерами, независимо от порядка"""
     return "_".join(sorted([user1, user2]))
 
 
@@ -83,31 +87,27 @@ def get_chat_id(user1: str, user2: str) -> str:
 
 class ConnectionManager:
     def __init__(self):
-        # username -> WebSocket
         self.active_connections: Dict[str, WebSocket] = {}
 
     async def connect(self, username: str, websocket: WebSocket):
         await websocket.accept()
         self.active_connections[username] = websocket
-        print(f"[WS] {username} подключился. Сейчас онлайн: {list(self.active_connections.keys())}")
+        print(f"[WS] {username} подключился. Онлайн: {list(self.active_connections.keys())}")
 
     def disconnect(self, username: str):
         if username in self.active_connections:
             del self.active_connections[username]
-        print(f"[WS] {username} отключился. Сейчас онлайн: {list(self.active_connections.keys())}")
+        print(f"[WS] {username} отключился. Онлайн: {list(self.active_connections.keys())}")
 
     def is_online(self, username: str) -> bool:
         return username in self.active_connections
 
     async def send_to_user(self, message: dict, target_user: str) -> bool:
-        """Отправляет message конкретному юзеру, если он онлайн. True если получилось."""
         ws = self.active_connections.get(target_user)
         if ws is None:
-            print(f"[WS] Не отправлено '{target_user}': пользователь оффлайн")
             return False
         try:
             await ws.send_json(message)
-            print(f"[WS] Отправлено пользователю '{target_user}': {message.get('type')}")
             return True
         except Exception as e:
             print(f"[WS] Ошибка отправки '{target_user}': {e}")
@@ -128,20 +128,73 @@ def get_index():
 
 @app.post("/register")
 async def register(username: str = Form(...), avatar: UploadFile = File(None)):
-    avatar_url = "/uploads/default.png"
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Если юзер уже существует - не затираем его аватар/био
+    cursor.execute("SELECT avatar_url, bio FROM users WHERE username = ?", (username,))
+    existing = cursor.fetchone()
+
+    avatar_url = existing[0] if existing else "/uploads/default.png"
+    bio = existing[1] if existing else ""
+
     if avatar:
         file_path = os.path.join(UPLOAD_DIR, avatar.filename)
         with open(file_path, "wb") as f:
             f.write(await avatar.read())
         avatar_url = f"/uploads/{avatar.filename}"
 
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("REPLACE INTO users (username, avatar_url) VALUES (?, ?)", (username, avatar_url))
+    cursor.execute(
+        "REPLACE INTO users (username, avatar_url, bio) VALUES (?, ?, ?)",
+        (username, avatar_url, bio)
+    )
     conn.commit()
     conn.close()
 
-    return {"status": "ok", "username": username, "avatar_url": avatar_url}
+    return {"status": "ok", "username": username, "avatar_url": avatar_url, "bio": bio}
+
+
+@app.get("/profile/{username}")
+def get_profile(username: str):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT avatar_url, bio FROM users WHERE username = ?", (username,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return {"username": username, "avatar_url": "/uploads/default.png", "bio": ""}
+
+    return {"username": username, "avatar_url": row[0] or "/uploads/default.png", "bio": row[1] or ""}
+
+
+@app.post("/profile/update")
+async def update_profile(
+    username: str = Form(...),
+    bio: str = Form(""),
+    avatar: UploadFile = File(None)
+):
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT avatar_url FROM users WHERE username = ?", (username,))
+    row = cursor.fetchone()
+    avatar_url = row[0] if row else "/uploads/default.png"
+
+    if avatar:
+        file_path = os.path.join(UPLOAD_DIR, avatar.filename)
+        with open(file_path, "wb") as f:
+            f.write(await avatar.read())
+        avatar_url = f"/uploads/{avatar.filename}"
+
+    cursor.execute(
+        "REPLACE INTO users (username, avatar_url, bio) VALUES (?, ?, ?)",
+        (username, avatar_url, bio)
+    )
+    conn.commit()
+    conn.close()
+
+    return {"status": "ok", "username": username, "avatar_url": avatar_url, "bio": bio}
 
 
 @app.post("/upload")
@@ -281,16 +334,17 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
         while True:
             data = await websocket.receive_json()
             msg_type = data.get("type", "message")
-            print(f"[WS] Получено от '{username}': {data}")
 
             # ------------------------------------------------
-            # 1. НОВОЕ СООБЩЕНИЕ (личное или групповое)
+            # 1. НОВОЕ СООБЩЕНИЕ (текст, картинка, файл, голосовое)
             # ------------------------------------------------
             if msg_type == "message":
                 is_group = bool(data.get("is_group", False))
                 target = data.get("target")
                 content = data.get("content", "")
                 content_type = data.get("msg_type", "text")
+                # длительность голосового сообщения в секундах (опционально)
+                duration = data.get("duration")
 
                 if not target or not content:
                     continue
@@ -301,7 +355,6 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
                 if not is_group and manager.is_online(target):
                     initial_status = "delivered"
 
-                # Сохраняем сообщение в базу
                 conn = get_db()
                 cursor = conn.cursor()
                 cursor.execute(
@@ -321,11 +374,11 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
                     "content": content,
                     "msg_type": content_type,
                     "status": initial_status,
-                    "is_group": is_group
+                    "is_group": is_group,
+                    "duration": duration
                 }
 
                 if is_group:
-                    # Собираем участников группы и рассылаем ВСЕМ, включая автора
                     conn = get_db()
                     cursor = conn.cursor()
                     cursor.execute("SELECT username FROM group_members WHERE group_id = ?", (target,))
@@ -335,8 +388,6 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
                     for member_user in members:
                         await manager.send_to_user(msg_payload, member_user)
                 else:
-                    # Личное сообщение: отправляем и автору (чтобы он увидел своё
-                    # сообщение в чате), и получателю
                     await manager.send_to_user(msg_payload, username)
                     if target != username:
                         await manager.send_to_user(msg_payload, target)
