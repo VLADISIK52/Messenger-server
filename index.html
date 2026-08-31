@@ -95,6 +95,12 @@
         .btn-icon.recording { background: var(--danger); color: #fff; border-color: var(--danger); }
         .btn-send { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; padding: 0 16px; }
 
+        .sticker-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-height: 300px; overflow-y: auto; }
+        .sticker-item { font-size: 32px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 8px 0; text-align: center; transition: transform 0.1s; }
+        .sticker-item:active { transform: scale(0.9); background: var(--accent-soft); }
+        .msg-wrapper.sticker .msg-bubble { background: none !important; border: none !important; padding: 0 !important; }
+        .msg-sticker-emoji { font-size: 64px; line-height: 1; }
+
         #recording-bar { display: none; flex: 1; align-items: center; gap: 10px; }
         #recording-bar.active { display: flex; }
         .rec-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); animation: pulse 1s infinite; }
@@ -187,6 +193,15 @@
     </div>
 </div>
 
+<!-- МОДАЛКА ВЫБОРА СТИКЕРА -->
+<div class="modal-overlay" id="modal-stickers">
+    <div class="modal-box">
+        <h3 style="text-align:center;">Стикеры</h3>
+        <div class="sticker-grid" id="sticker-grid"></div>
+        <button class="btn-secondary" onclick="closeModal('modal-stickers')">Закрыть</button>
+    </div>
+</div>
+
 <div id="app">
     <div id="sidebar">
         <div class="sidebar-header">
@@ -222,6 +237,7 @@
         <div class="input-container">
             <input type="file" id="file-input" style="display:none" onchange="sendFile(this)">
             <button class="btn-icon" id="btn-attach" onclick="document.getElementById('file-input').click()">📁</button>
+            <button class="btn-icon" id="btn-sticker" onclick="openStickerPicker()">😊</button>
 
             <input type="text" id="msg-input" placeholder="Сообщение..." onkeypress="if(event.key==='Enter') sendMessage()">
 
@@ -330,6 +346,7 @@
         let previewText = data.msg_type === 'text' ? data.content
             : data.msg_type === 'image' ? '📷 Фото'
             : data.msg_type === 'voice' ? '🎤 Голосовое сообщение'
+            : data.msg_type === 'sticker' ? `Стикер ${data.content}`
             : '📁 Файл';
 
         // Тост внутри страницы (виден всегда, пока открыта вкладка)
@@ -763,6 +780,43 @@
     }
 
     // ==========================================================
+    //                          СТИКЕРЫ
+    // ==========================================================
+
+    const STICKERS = [
+        '😂','🤣','😍','🥳','😎','🤩','😭','😱',
+        '🥶','🤔','😴','🙈','🤡','😇','😡','🤯',
+        '❤️','💯','🔥','✨','🎉','👍','👎','🙌',
+        '👀','💩','🐱','🐶','🍕','☕','🌈','⚡'
+    ];
+
+    function openStickerPicker() {
+        if (!activeChatTarget) return;
+        const grid = document.getElementById('sticker-grid');
+        grid.innerHTML = '';
+        STICKERS.forEach(emoji => {
+            const btn = document.createElement('div');
+            btn.className = 'sticker-item';
+            btn.innerText = emoji;
+            btn.onclick = () => sendSticker(emoji);
+            grid.appendChild(btn);
+        });
+        openModal('modal-stickers');
+    }
+
+    function sendSticker(emoji) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            alert("Нет соединения с сервером.");
+            return;
+        }
+        ws.send(JSON.stringify({
+            type: 'message', target: activeChatTarget, sender: currentUser,
+            content: emoji, msg_type: 'sticker', is_group: isCurrentGroup
+        }));
+        closeModal('modal-stickers');
+    }
+
+    // ==========================================================
     //                    ГОЛОСОВЫЕ СООБЩЕНИЯ
     // ==========================================================
 
@@ -881,7 +935,7 @@
         const isMy = msg.sender === currentUser;
 
         const wrapper = document.createElement('div');
-        wrapper.className = `msg-wrapper ${isMy ? 'my' : 'other'}`;
+        wrapper.className = `msg-wrapper ${isMy ? 'my' : 'other'} ${msg.msg_type === 'sticker' ? 'sticker' : ''}`;
 
         let contentHtml;
         if (msg.msg_type === 'text') {
@@ -890,6 +944,8 @@
             contentHtml = `<img src="${msg.content}" class="msg-img" onclick="document.getElementById('lightbox-img').src=this.src; document.getElementById('lightbox').style.display='flex'">`;
         } else if (msg.msg_type === 'voice') {
             contentHtml = `<div class="msg-voice">🎤 <audio controls src="${msg.content}"></audio></div>`;
+        } else if (msg.msg_type === 'sticker') {
+            contentHtml = `<div class="msg-sticker-emoji">${msg.content}</div>`;
         } else {
             contentHtml = `<a href="${msg.content}" target="_blank" style="color:var(--accent-3)">📁 Файл</a>`;
         }
