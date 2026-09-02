@@ -51,11 +51,14 @@
         #auth-screen { display: none; position: fixed; inset: 0; z-index: 100; background: var(--bg-void); justify-content: center; align-items: center; overflow: hidden; }
         .auth-box { background: var(--bg-panel); padding: 40px 32px; border-radius: var(--radius-xl); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 14px; width: 90%; max-width: 400px; position: relative; z-index: 1; box-shadow: 0 30px 80px rgba(0,0,0,0.5); }
         .auth-title { font-family: 'Sora', sans-serif; font-size: 26px; font-weight: 800; text-align: center; }
+        .auth-hint { text-align: center; font-size: 12px; color: var(--text-muted); margin-top: -6px; }
+        .auth-error { text-align: center; font-size: 13px; color: var(--danger); min-height: 16px; }
         input[type="text"], input[type="password"], textarea { background: var(--bg-input); color: var(--text-primary); padding: 14px 18px; border: 1.5px solid var(--border); border-radius: var(--radius-md); font-size: 15px; outline: none; width: 100%; transition: border-color 0.15s; }
         textarea { resize: none; font-family: inherit; }
         input:focus, textarea:focus { border-color: var(--accent-b); }
         .btn-primary { background: var(--accent-grad); color: #fff; padding: 14px; border: none; border-radius: var(--radius-pill); font-weight: 700; font-family: 'Sora', sans-serif; cursor: pointer; transition: transform 0.12s, box-shadow 0.12s; }
         .btn-primary:active { transform: scale(0.97); }
+        .btn-primary:disabled { opacity: 0.6; }
         .btn-secondary { background: transparent; color: var(--text-muted); border: 1px solid var(--border); padding: 12px; border-radius: var(--radius-pill); font-weight: 600; cursor: pointer; }
         .btn-danger-text { background: transparent; color: var(--danger); border: 1px solid rgba(255,84,112,0.3); padding: 12px; border-radius: var(--radius-pill); font-weight: 600; cursor: pointer; }
 
@@ -104,10 +107,14 @@
         .msg-bubble.search-match { outline: 2px solid var(--accent-a); }
         .msg-bubble.search-current { outline: 2px solid #fff; }
 
+        #load-older-indicator { text-align: center; font-size: 12px; color: var(--text-muted); padding: 6px 0; display: none; }
+        #load-older-indicator.active { display: block; }
+
         #messages { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 4px; transition: opacity 0.15s ease; }
         .msg-wrapper { display: flex; flex-direction: column; max-width: 85%; animation-duration: 0.32s; animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); animation-fill-mode: both; position: relative; margin-bottom: 8px; }
         .msg-wrapper.my { align-self: flex-end; animation-name: msgInRight; }
         .msg-wrapper.other { align-self: flex-start; animation-name: msgInLeft; }
+        .msg-wrapper.no-anim { animation: none !important; }
         @keyframes msgInRight { from { opacity: 0; transform: translate(18px, 8px) scale(0.94); } to { opacity: 1; transform: none; } }
         @keyframes msgInLeft { from { opacity: 0; transform: translate(-18px, 8px) scale(0.94); } to { opacity: 1; transform: none; } }
 
@@ -236,8 +243,11 @@
 <div id="auth-screen">
     <div class="auth-box">
         <div class="auth-title">Вход в чат</div>
-        <input type="text" id="username-input" placeholder="Логин (без @)...">
-        <button class="btn-primary" onclick="login()">Войти</button>
+        <div class="auth-hint">Если аккаунта ещё нет — он создастся автоматически</div>
+        <input type="text" id="username-input" placeholder="Логин (3-20 символов, латиница/цифры)" onkeypress="if(event.key==='Enter') document.getElementById('password-input').focus()">
+        <input type="password" id="password-input" placeholder="Пароль (от 4 символов)" onkeypress="if(event.key==='Enter') login()">
+        <div class="auth-error" id="auth-error"></div>
+        <button class="btn-primary" id="btn-login" onclick="login()">Войти</button>
     </div>
 </div>
 
@@ -340,7 +350,9 @@
             <button class="btn-header-icon" onclick="toggleSearchBar()">✖</button>
         </div>
 
-        <div id="messages"></div>
+        <div id="messages">
+            <div id="load-older-indicator">Загружаем историю...</div>
+        </div>
 
         <div class="input-container">
             <div id="reply-bar">
@@ -379,6 +391,7 @@
 <script>
     let ws;
     let currentUser = "";
+    let currentToken = "";
     let activeChatTarget = "";
     let isCurrentGroup = false;
 
@@ -401,14 +414,24 @@
     let searchMatches = [];
     let searchCurrentIndex = -1;
 
+    let oldestLoadedMessageId = null;
+    let noMoreOlderMessages = false;
+    let isLoadingOlder = false;
+
     const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
     document.addEventListener("DOMContentLoaded", () => {
         let savedUser = localStorage.getItem('messenger_currentUser');
+        let savedToken = localStorage.getItem('messenger_token');
         setTimeout(() => {
             document.getElementById('splash-screen').classList.add('hidden');
-            if (savedUser) { currentUser = savedUser; setupUserInterface(); }
-            else { document.getElementById('auth-screen').style.display = 'flex'; }
+            if (savedUser && savedToken) {
+                currentUser = savedUser;
+                currentToken = savedToken;
+                setupUserInterface();
+            } else {
+                document.getElementById('auth-screen').style.display = 'flex';
+            }
         }, 800);
 
         if ('serviceWorker' in navigator) {
@@ -416,20 +439,78 @@
         }
     });
 
+    // ==========================================================
+    //                    ВХОД / РЕГИСТРАЦИЯ
+    // ==========================================================
+
     async function login() {
-        let username = document.getElementById('username-input').value.trim().replace('@', '');
-        if (!username) return alert("Введите имя!");
-        const formData = new FormData(); formData.append("username", username);
+        const username = document.getElementById('username-input').value.trim();
+        const password = document.getElementById('password-input').value;
+        const errorEl = document.getElementById('auth-error');
+        const btn = document.getElementById('btn-login');
+        errorEl.innerText = '';
+
+        if (!username || !password) {
+            errorEl.innerText = 'Заполните логин и пароль';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerText = 'Входим...';
+
         try {
-            const res = await fetch("/register", { method: "POST", body: formData });
+            const loginForm = new FormData();
+            loginForm.append('username', username);
+            loginForm.append('password', password);
+
+            let res = await fetch('/login', { method: 'POST', body: loginForm });
+
+            if (res.status === 404) {
+                // Аккаунта нет — создаём новый с этим логином/паролем
+                const regForm = new FormData();
+                regForm.append('username', username);
+                regForm.append('password', password);
+                res = await fetch('/register', { method: 'POST', body: regForm });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    errorEl.innerText = err.detail || 'Не удалось создать аккаунт';
+                    btn.disabled = false; btn.innerText = 'Войти';
+                    return;
+                }
+            } else if (res.status === 401) {
+                errorEl.innerText = 'Неверный пароль';
+                btn.disabled = false; btn.innerText = 'Войти';
+                return;
+            } else if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                errorEl.innerText = err.detail || 'Что-то пошло не так';
+                btn.disabled = false; btn.innerText = 'Войти';
+                return;
+            }
+
             const data = await res.json();
-            currentUser = data.username || username;
-        } catch (e) { currentUser = username; }
-        localStorage.setItem('messenger_currentUser', currentUser);
-        setupUserInterface();
+            currentUser = data.username;
+            currentToken = data.token;
+            localStorage.setItem('messenger_currentUser', currentUser);
+            localStorage.setItem('messenger_token', currentToken);
+            setupUserInterface();
+        } catch (e) {
+            errorEl.innerText = 'Ошибка соединения с сервером';
+            btn.disabled = false; btn.innerText = 'Войти';
+        }
     }
 
-    function logout() { localStorage.removeItem('messenger_currentUser'); location.reload(); }
+    async function logout() {
+        try {
+            const formData = new FormData();
+            formData.append('token', currentToken);
+            await fetch('/logout', { method: 'POST', body: formData });
+        } catch (e) {}
+        localStorage.removeItem('messenger_currentUser');
+        localStorage.removeItem('messenger_token');
+        location.reload();
+    }
 
     async function setupUserInterface() {
         document.getElementById('my-username').innerText = '@' + currentUser;
@@ -446,6 +527,10 @@
         updateOnlineStatus();
         setInterval(updateOnlineStatus, 5000);
     }
+
+    // ==========================================================
+    //                        УВЕДОМЛЕНИЯ
+    // ==========================================================
 
     function requestNotificationPermission() {
         if (!("Notification" in window)) return;
@@ -493,6 +578,10 @@
         }
     }
 
+    // ==========================================================
+    //                    WEBSOCKET-СОЕДИНЕНИЕ
+    // ==========================================================
+
     function setConnIndicator(text, color) {
         const el = document.getElementById('conn-indicator');
         el.innerText = text;
@@ -501,14 +590,21 @@
 
     function initWS() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const url = `${protocol}//${window.location.host}/ws/${encodeURIComponent(currentUser)}`;
+        const url = `${protocol}//${window.location.host}/ws/${encodeURIComponent(currentUser)}?token=${encodeURIComponent(currentToken)}`;
         setConnIndicator('⏳ подключение...');
 
         ws = new WebSocket(url);
 
         ws.onopen = () => { setConnIndicator('🟢 онлайн', 'rgba(16,185,129,0.6)'); };
 
-        ws.onclose = () => {
+        ws.onclose = (e) => {
+            if (e.code === 4001) {
+                // Токен недействителен — просим войти заново
+                localStorage.removeItem('messenger_currentUser');
+                localStorage.removeItem('messenger_token');
+                location.reload();
+                return;
+            }
             setConnIndicator('🔴 нет соединения, переподключение...', 'rgba(239,68,68,0.6)');
             setTimeout(initWS, 2000);
         };
@@ -560,6 +656,10 @@
             renderUserList();
         }
     }
+
+    // ==========================================================
+    //                    ИНДИКАТОР "ПЕЧАТАЕТ..."
+    // ==========================================================
 
     function onMsgInput() {
         updateCharCounter();
@@ -615,6 +715,10 @@
         return 'печатает...';
     }
 
+    // ==========================================================
+    //                        ПРОФИЛИ
+    // ==========================================================
+
     async function loadMyProfile() {
         try {
             const res = await fetch(`/profile/${currentUser}`);
@@ -669,7 +773,7 @@
     async function saveProfile() {
         const bio = document.getElementById('profile-bio-input').value.trim();
         const formData = new FormData();
-        formData.append('username', currentUser);
+        formData.append('token', currentToken);
         formData.append('bio', bio);
         if (chosenAvatarFile) formData.append('avatar', chosenAvatarFile);
 
@@ -698,6 +802,10 @@
         openModal('modal-view-profile');
     }
 
+    // ==========================================================
+    //                 УПРАВЛЕНИЕ ГРУППОЙ
+    // ==========================================================
+
     async function openGroupProfile() {
         if (!isCurrentGroup || !activeChatTarget) return;
         document.getElementById('group-profile-title').innerText = document.getElementById('target-username').innerText;
@@ -708,9 +816,10 @@
     async function refreshGroupMembersList() {
         let data;
         try {
-            const res = await fetch(`/groups/${activeChatTarget}/members`);
+            const res = await fetch(`/groups/${activeChatTarget}/members?token=${encodeURIComponent(currentToken)}`);
             data = await res.json();
         } catch (e) { return; }
+        if (!data || !data.members) return;
 
         const isOwner = data.owner === currentUser;
         document.getElementById('group-add-member-row').style.display = isOwner ? 'flex' : 'none';
@@ -744,7 +853,7 @@
 
         const formData = new FormData();
         formData.append('username', username);
-        formData.append('requester', currentUser);
+        formData.append('token', currentToken);
 
         try {
             const res = await fetch(`/groups/${activeChatTarget}/members/add`, { method: 'POST', body: formData });
@@ -758,7 +867,7 @@
         if (!confirm(`Удалить @${username} из группы?`)) return;
         const formData = new FormData();
         formData.append('username', username);
-        formData.append('requester', currentUser);
+        formData.append('token', currentToken);
 
         try {
             await fetch(`/groups/${activeChatTarget}/members/remove`, { method: 'POST', body: formData });
@@ -773,10 +882,10 @@
 
         try {
             if (isOwner) {
-                await fetch(`/groups/${activeChatTarget}?owner=${encodeURIComponent(currentUser)}`, { method: 'DELETE' });
+                await fetch(`/groups/${activeChatTarget}?token=${encodeURIComponent(currentToken)}`, { method: 'DELETE' });
             } else {
                 const formData = new FormData();
-                formData.append('username', currentUser);
+                formData.append('token', currentToken);
                 await fetch(`/groups/${activeChatTarget}/leave`, { method: 'POST', body: formData });
             }
             closeModal('modal-group-profile');
@@ -789,9 +898,11 @@
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
+    // ==========================================================
+
     async function fetchUserGroups() {
         try {
-            const res = await fetch(`/groups/my/${currentUser}`);
+            const res = await fetch(`/groups/my/${currentUser}?token=${encodeURIComponent(currentToken)}`);
             userGroups = await res.json();
         } catch(e) {}
     }
@@ -833,7 +944,7 @@
 
         const formData = new FormData();
         formData.append("title", title);
-        formData.append("owner", currentUser);
+        formData.append("token", currentToken);
         formData.append("members", members);
 
         try {
@@ -928,6 +1039,8 @@
         unreadCounts[target] = 0;
         cancelReply();
         closeSearchBar();
+        oldestLoadedMessageId = null;
+        noMoreOlderMessages = false;
 
         if (isGroup) {
             document.getElementById('target-username').innerText = groupTitle;
@@ -978,27 +1091,77 @@
         closeSearchBar();
     }
 
+    // ==========================================================
+    //          ИСТОРИЯ СООБЩЕНИЙ + ПОДГРУЗКА ПРИ СКРОЛЛЕ ВВЕРХ
+    // ==========================================================
+
     async function loadHistory() {
         if (!activeChatTarget) return;
         const box = document.getElementById('messages');
         box.style.opacity = '0';
 
-        const url = isCurrentGroup ? `/group-messages/${activeChatTarget}` : `/messages/${currentUser}/${activeChatTarget}`;
+        const baseUrl = isCurrentGroup ? `/group-messages/${activeChatTarget}` : `/messages/${currentUser}/${activeChatTarget}`;
+        const url = `${baseUrl}?token=${encodeURIComponent(currentToken)}`;
 
         try {
             const res = await fetch(url);
             const serverMsgs = await res.json();
-            box.innerHTML = '';
+            box.innerHTML = '<div id="load-older-indicator">Загружаем историю...</div>';
             serverMsgs.forEach(msg => appendMessageToUI(msg));
+
+            if (serverMsgs.length > 0) {
+                oldestLoadedMessageId = serverMsgs[0].id;
+            }
+            noMoreOlderMessages = serverMsgs.length < 50;
 
             if (!isCurrentGroup && serverMsgs.length > 0) {
                 sendReadReceipt(getChatId(currentUser, activeChatTarget), activeChatTarget);
             }
         } catch(e) {
-            box.innerHTML = '';
+            box.innerHTML = '<div id="load-older-indicator">Загружаем историю...</div>';
         }
 
         requestAnimationFrame(() => { box.style.opacity = '1'; });
+        setupInfiniteScroll();
+    }
+
+    function setupInfiniteScroll() {
+        const box = document.getElementById('messages');
+        box.onscroll = () => {
+            if (box.scrollTop < 60 && !isLoadingOlder && !noMoreOlderMessages) {
+                loadOlderMessages();
+            }
+        };
+    }
+
+    async function loadOlderMessages() {
+        if (!activeChatTarget || isLoadingOlder || noMoreOlderMessages || !oldestLoadedMessageId) return;
+        isLoadingOlder = true;
+        const indicator = document.getElementById('load-older-indicator');
+        if (indicator) indicator.classList.add('active');
+
+        const box = document.getElementById('messages');
+        const prevScrollHeight = box.scrollHeight;
+
+        const baseUrl = isCurrentGroup ? `/group-messages/${activeChatTarget}` : `/messages/${currentUser}/${activeChatTarget}`;
+        const url = `${baseUrl}?token=${encodeURIComponent(currentToken)}&before_id=${oldestLoadedMessageId}`;
+
+        try {
+            const res = await fetch(url);
+            const olderMsgs = await res.json();
+
+            if (olderMsgs.length === 0) {
+                noMoreOlderMessages = true;
+            } else {
+                oldestLoadedMessageId = olderMsgs[0].id;
+                noMoreOlderMessages = olderMsgs.length < 50;
+                olderMsgs.reverse().forEach(msg => prependMessageToUI(msg));
+                box.scrollTop = box.scrollHeight - prevScrollHeight;
+            }
+        } catch(e) {}
+
+        if (indicator) indicator.classList.remove('active');
+        isLoadingOlder = false;
     }
 
     function sendReadReceipt(chatId, senderToNotify) {
@@ -1008,6 +1171,10 @@
     }
 
     function getChatId(user1, user2) { return [user1, user2].sort().join("_"); }
+
+    // ==========================================================
+    //                      ОТВЕТ НА СООБЩЕНИЕ
+    // ==========================================================
 
     function setReplyTarget(msg) {
         replyTarget = msg;
@@ -1026,6 +1193,8 @@
         replyTarget = null;
         document.getElementById('reply-bar').classList.remove('active');
     }
+
+    // ==========================================================
 
     function sendMessage() {
         const input = document.getElementById('msg-input');
@@ -1086,10 +1255,18 @@
             file = await compressImage(file);
         }
 
-        const formData = new FormData(); formData.append("file", file);
+        const formData = new FormData();
+        formData.append("token", currentToken);
+        formData.append("file", file);
 
         try {
             const res = await fetch("/upload", { method: "POST", body: formData });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                alert(err.detail || "Не удалось загрузить файл");
+                input.value = '';
+                return;
+            }
             const data = await res.json();
 
             if (!ws || ws.readyState !== WebSocket.OPEN) { alert("Нет соединения с сервером."); return; }
@@ -1227,10 +1404,16 @@
         const file = new File([blob], `voice_${Date.now()}.${ext}`, { type: blob.type });
 
         const formData = new FormData();
+        formData.append("token", currentToken);
         formData.append("file", file);
 
         try {
             const res = await fetch("/upload", { method: "POST", body: formData });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                alert(err.detail || "Не удалось отправить голосовое сообщение");
+                return;
+            }
             const data = await res.json();
 
             if (!ws || ws.readyState !== WebSocket.OPEN) { alert("Нет соединения с сервером."); return; }
@@ -1315,8 +1498,7 @@
         return `<span class="status-checks sent" title="Отправлено">✓</span>`;
     }
 
-    function appendMessageToUI(msg) {
-        const box = document.getElementById('messages');
+    function buildMessageElement(msg) {
         const isMy = msg.sender === currentUser;
 
         const wrapper = document.createElement('div');
@@ -1355,7 +1537,6 @@
         let reactionsHtml = renderReactionsHtml(msg.id, msg.reactions);
 
         const pickerButtonsHtml = REACTION_EMOJIS.map(e => `<span onclick="sendReaction(${msg.id}, '${e}')">${e}</span>`).join('');
-
         const replyPayload = JSON.stringify({ id: msg.id, sender: msg.sender, content: msg.content, msg_type: msg.msg_type }).replace(/"/g, '&quot;');
 
         wrapper.innerHTML = `
@@ -1386,8 +1567,26 @@
 
         attachSwipeToReply(bubbleTouchZone, { id: msg.id, sender: msg.sender, content: msg.content, msg_type: msg.msg_type });
 
+        return wrapper;
+    }
+
+    function appendMessageToUI(msg) {
+        const box = document.getElementById('messages');
+        const wrapper = buildMessageElement(msg);
         box.appendChild(wrapper);
         box.scrollTop = box.scrollHeight;
+    }
+
+    function prependMessageToUI(msg) {
+        const box = document.getElementById('messages');
+        const wrapper = buildMessageElement(msg);
+        wrapper.classList.add('no-anim');
+        const indicator = document.getElementById('load-older-indicator');
+        if (indicator && indicator.nextSibling) {
+            box.insertBefore(wrapper, indicator.nextSibling);
+        } else {
+            box.appendChild(wrapper);
+        }
     }
 
     function scrollToMessage(messageId) {
@@ -1461,7 +1660,7 @@
             goToSearchMatch();
         }
         document.getElementById('search-nav').innerText = searchMatches.length > 0
-            ? `${searchCurrentIndex + 1}/${searchMatches.length}` : 'нет совпадений';
+            ? `${searchCurrentIndex + 1}/${searchMatches.length}` : 'нет совпадений (только в загруженной части)';
     }
 
     function searchNav(direction) {
@@ -1485,7 +1684,9 @@
         if(!confirm(`Удалить переписку с @${targetUser}?`)) return;
         knownUsers = knownUsers.filter(u => u !== targetUser);
         localStorage.setItem('chats_' + currentUser, JSON.stringify(knownUsers));
-        try { await fetch(`/messages/${currentUser}/${targetUser}`, { method: 'DELETE' }); } catch(e) {}
+        try {
+            await fetch(`/messages/${currentUser}/${targetUser}?token=${encodeURIComponent(currentToken)}`, { method: 'DELETE' });
+        } catch(e) {}
         if(activeChatTarget === targetUser) closeChat();
         renderUserList();
     }
