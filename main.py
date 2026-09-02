@@ -1,6 +1,9 @@
 import os
+import re
+import hashlib
+import secrets
 import sqlite3
-from typing import Dict, List
+from typing import Dict, List, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -16,6 +19,15 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+USERNAME_RE = re.compile(r'^[A-Za-z0-9]{3,20}$')
+MAX_UPLOAD_SIZE = 25 * 1024 * 1024  # 25 МБ
+ALLOWED_UPLOAD_EXTENSIONS = {
+    '.jpg', '.jpeg', '.png', '.gif', '.webp',
+    '.mp3', '.wav', '.ogg', '.webm', '.m4a',
+    '.pdf', '.txt', '.zip', '.mp4', '.mov'
+}
+MESSAGES_PAGE_SIZE = 50
+
 
 # ==========================================================
 #                        БАЗА ДАННЫХ
@@ -27,7 +39,6 @@ def get_db():
 
 
 def safe_alter(cursor, sql):
-    """Пытается добавить колонку в существующую таблицу, игнорируя ошибку если она уже есть"""
     try:
         cursor.execute(sql)
     except sqlite3.OperationalError:
@@ -41,11 +52,21 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
+            password_hash TEXT,
             avatar_url TEXT DEFAULT '/uploads/default.png',
             bio TEXT DEFAULT ''
         )
     ''')
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''")
+    safe_alter(cursor, "ALTER TABLE users ADD COLUMN password_hash TEXT")
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            username TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS messages (
@@ -98,8 +119,67 @@ def get_chat_id(user1: str, user2: str) -> str:
     return "_".join(sorted([user1, user2]))
 
 
+# ==========================================================
+#                    ПАРОЛИ И АВТОРИЗАЦИЯ
+# ==========================================================
+
+def hash_password(password: str) -> str:
+    salt = os.urandom(16).hex()
+    dk = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), bytes.fromhex(salt), 100_000)
+    return f"{salt}${dk.hex()}"
+
+
+def verify_password(password: str, stored: str) -> bool:
+    try:
+        salt, hash_hex = stored.split('$')
+        dk = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), bytes.fromhex(salt), 100_000)
+        return secrets.compare_digest(dk.hex(), hash_hex)
+    except Exception:
+        return False
+
+
+def create_session(username: str) -> str:
+    token = secrets.token_hex(24)
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO sessions (token, username) VALUES (?, ?)", (token, username))
+    conn.commit()
+    conn.close()
+    return token
+
+
+def get_username_by_token(token: Optional[str]) -> Optional[str]:
+    if not token:
+        return None
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT username FROM sessions WHERE token = ?", (token,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
+def require_auth(token: Optional[str]) -> str:
+    """Возвращает username владельца токена или бросает 401"""
+    username = get_username_by_token(token)
+    if not username:
+        raise HTTPException(status_code=401, detail="Не авторизован. Войдите заново.")
+    return username
+
+
+def is_group_member(group_id: str, username: str) -> bool:
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT 1 FROM group_members WHERE group_id = ? AND username = ?",
+        (group_id, username)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row is not None
+
+
 def fetch_reactions_for_messages(cursor, message_ids: List[int]) -> Dict[int, List[dict]]:
-    """Возвращает {message_id: [{username, emoji}, ...]} для списка id сообщений"""
     if not message_ids:
         return {}
     placeholders = ",".join("?" * len(message_ids))
@@ -114,7 +194,6 @@ def fetch_reactions_for_messages(cursor, message_ids: List[int]) -> Dict[int, Li
 
 
 def rows_to_messages(cursor, rows) -> List[dict]:
-    """Преобразует строки SQL (с LEFT JOIN на reply) в список словарей с превью ответа и реакциями"""
     ids = [r[0] for r in rows]
     reactions_map = fetch_reactions_for_messages(cursor, ids)
 
@@ -126,10 +205,8 @@ def rows_to_messages(cursor, rows) -> List[dict]:
         reply_preview = None
         if reply_to and reply_sender is not None:
             reply_preview = {
-                "id": reply_to,
-                "sender": reply_sender,
-                "content": reply_content,
-                "msg_type": reply_msg_type
+                "id": reply_to, "sender": reply_sender,
+                "content": reply_content, "msg_type": reply_msg_type
             }
 
         result.append({
@@ -141,14 +218,13 @@ def rows_to_messages(cursor, rows) -> List[dict]:
     return result
 
 
-MESSAGES_SELECT_SQL = '''
-    SELECT m.id, m.chat_id, m.sender, m.content, m.msg_type, m.status, m.reply_to, m.timestamp,
-           r.sender, r.content, r.msg_type
-    FROM messages m
-    LEFT JOIN messages r ON m.reply_to = r.id
-    WHERE m.chat_id = ?
-    ORDER BY m.timestamp ASC
-'''
+def get_group_member_usernames(group_id: str) -> List[str]:
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT username FROM group_members WHERE group_id = ?", (group_id,))
+    members = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return members
 
 
 # ==========================================================
@@ -185,15 +261,6 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-def get_group_member_usernames(group_id: str) -> List[str]:
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT username FROM group_members WHERE group_id = ?", (group_id,))
-    members = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    return members
-
-
 # ==========================================================
 #                      ОБЫЧНЫЕ ЭНДПОИНТЫ
 # ==========================================================
@@ -214,16 +281,20 @@ def get_sw():
 
 
 @app.post("/register")
-async def register(username: str = Form(...), avatar: UploadFile = File(None)):
+async def register(username: str = Form(...), password: str = Form(...), avatar: UploadFile = File(None)):
+    if not USERNAME_RE.match(username):
+        raise HTTPException(status_code=400, detail="Никнейм должен быть 3-20 символов: только латинские буквы и цифры")
+    if len(password) < 4:
+        raise HTTPException(status_code=400, detail="Пароль должен быть не короче 4 символов")
+
     conn = get_db()
     cursor = conn.cursor()
+    cursor.execute("SELECT username FROM users WHERE username = ?", (username,))
+    if cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=400, detail="Этот никнейм уже занят")
 
-    cursor.execute("SELECT avatar_url, bio FROM users WHERE username = ?", (username,))
-    existing = cursor.fetchone()
-
-    avatar_url = existing[0] if existing else "/uploads/default.png"
-    bio = existing[1] if existing else ""
-
+    avatar_url = "/uploads/default.png"
     if avatar:
         file_path = os.path.join(UPLOAD_DIR, avatar.filename)
         with open(file_path, "wb") as f:
@@ -231,13 +302,44 @@ async def register(username: str = Form(...), avatar: UploadFile = File(None)):
         avatar_url = f"/uploads/{avatar.filename}"
 
     cursor.execute(
-        "REPLACE INTO users (username, avatar_url, bio) VALUES (?, ?, ?)",
-        (username, avatar_url, bio)
+        "INSERT INTO users (username, password_hash, avatar_url, bio) VALUES (?, ?, ?, ?)",
+        (username, hash_password(password), avatar_url, "")
     )
     conn.commit()
     conn.close()
 
-    return {"status": "ok", "username": username, "avatar_url": avatar_url, "bio": bio}
+    token = create_session(username)
+    return {"status": "ok", "username": username, "avatar_url": avatar_url, "bio": "", "token": token}
+
+
+@app.post("/login")
+async def login(username: str = Form(...), password: str = Form(...)):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT password_hash, avatar_url, bio FROM users WHERE username = ?", (username,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    if not row[0] or not verify_password(password, row[0]):
+        raise HTTPException(status_code=401, detail="Неверный пароль")
+
+    token = create_session(username)
+    return {
+        "status": "ok", "username": username,
+        "avatar_url": row[1] or "/uploads/default.png", "bio": row[2] or "", "token": token
+    }
+
+
+@app.post("/logout")
+async def logout(token: str = Form(...)):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM sessions WHERE token = ?", (token,))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
 
 
 @app.get("/profile/{username}")
@@ -250,19 +352,19 @@ def get_profile(username: str):
 
     if not row:
         return {"username": username, "avatar_url": "/uploads/default.png", "bio": ""}
-
     return {"username": username, "avatar_url": row[0] or "/uploads/default.png", "bio": row[1] or ""}
 
 
 @app.post("/profile/update")
 async def update_profile(
-    username: str = Form(...),
+    token: str = Form(...),
     bio: str = Form(""),
     avatar: UploadFile = File(None)
 ):
+    username = require_auth(token)
+
     conn = get_db()
     cursor = conn.cursor()
-
     cursor.execute("SELECT avatar_url FROM users WHERE username = ?", (username,))
     row = cursor.fetchone()
     avatar_url = row[0] if row else "/uploads/default.png"
@@ -273,10 +375,7 @@ async def update_profile(
             f.write(await avatar.read())
         avatar_url = f"/uploads/{avatar.filename}"
 
-    cursor.execute(
-        "REPLACE INTO users (username, avatar_url, bio) VALUES (?, ?, ?)",
-        (username, avatar_url, bio)
-    )
+    cursor.execute("UPDATE users SET avatar_url = ?, bio = ? WHERE username = ?", (avatar_url, bio, username))
     conn.commit()
     conn.close()
 
@@ -284,11 +383,23 @@ async def update_profile(
 
 
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
+async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
+    require_auth(token)
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Этот тип файла не поддерживается")
+
+    contents = await file.read()
+    if len(contents) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=400, detail="Файл слишком большой (максимум 25 МБ)")
+
+    safe_name = f"{secrets.token_hex(8)}{ext}"
+    file_path = os.path.join(UPLOAD_DIR, safe_name)
     with open(file_path, "wb") as f:
-        f.write(await file.read())
-    return {"file_url": f"/uploads/{file.filename}"}
+        f.write(contents)
+
+    return {"file_url": f"/uploads/{safe_name}"}
 
 
 @app.get("/users")
@@ -301,7 +412,8 @@ def get_online_users():
 # ==========================================================
 
 @app.post("/groups/create")
-async def create_group(title: str = Form(...), owner: str = Form(...), members: str = Form(...)):
+async def create_group(token: str = Form(...), title: str = Form(...), members: str = Form(...)):
+    owner = require_auth(token)
     member_list = [m.strip() for m in members.split(",") if m.strip()]
     if owner not in member_list:
         member_list.append(owner)
@@ -320,7 +432,11 @@ async def create_group(title: str = Form(...), owner: str = Form(...), members: 
 
 
 @app.get("/groups/my/{username}")
-def get_user_groups(username: str):
+def get_user_groups(username: str, token: str):
+    requester = require_auth(token)
+    if requester != username:
+        raise HTTPException(status_code=403, detail="Нет доступа")
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('''
@@ -335,7 +451,11 @@ def get_user_groups(username: str):
 
 
 @app.get("/groups/{group_id}/members")
-def get_group_members(group_id: str):
+def get_group_members(group_id: str, token: str):
+    requester = require_auth(token)
+    if not is_group_member(group_id, requester):
+        raise HTTPException(status_code=403, detail="Нет доступа к этой группе")
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT owner FROM groups WHERE group_id = ?", (group_id,))
@@ -351,7 +471,9 @@ def get_group_members(group_id: str):
 
 
 @app.post("/groups/{group_id}/members/add")
-async def add_group_member(group_id: str, username: str = Form(...), requester: str = Form(...)):
+async def add_group_member(group_id: str, token: str = Form(...), username: str = Form(...)):
+    requester = require_auth(token)
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT owner FROM groups WHERE group_id = ?", (group_id,))
@@ -370,7 +492,9 @@ async def add_group_member(group_id: str, username: str = Form(...), requester: 
 
 
 @app.post("/groups/{group_id}/members/remove")
-async def remove_group_member(group_id: str, username: str = Form(...), requester: str = Form(...)):
+async def remove_group_member(group_id: str, token: str = Form(...), username: str = Form(...)):
+    requester = require_auth(token)
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT owner FROM groups WHERE group_id = ?", (group_id,))
@@ -392,7 +516,9 @@ async def remove_group_member(group_id: str, username: str = Form(...), requeste
 
 
 @app.post("/groups/{group_id}/leave")
-async def leave_group(group_id: str, username: str = Form(...)):
+async def leave_group(group_id: str, token: str = Form(...)):
+    username = require_auth(token)
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT owner FROM groups WHERE group_id = ?", (group_id,))
@@ -402,16 +528,13 @@ async def leave_group(group_id: str, username: str = Form(...)):
         raise HTTPException(status_code=404, detail="Группа не найдена")
 
     cursor.execute("DELETE FROM group_members WHERE group_id = ? AND username = ?", (group_id, username))
-
     cursor.execute("SELECT username FROM group_members WHERE group_id = ?", (group_id,))
     remaining = [r[0] for r in cursor.fetchall()]
 
     if not remaining:
-        # Группа опустела - удаляем её полностью
         cursor.execute("DELETE FROM groups WHERE group_id = ?", (group_id,))
         cursor.execute("DELETE FROM messages WHERE chat_id = ?", (group_id,))
     elif row[0] == username:
-        # Владелец вышел - передаём права первому оставшемуся участнику
         cursor.execute("UPDATE groups SET owner = ? WHERE group_id = ?", (remaining[0], group_id))
 
     conn.commit()
@@ -420,17 +543,17 @@ async def leave_group(group_id: str, username: str = Form(...)):
 
 
 @app.delete("/groups/{group_id}")
-def delete_group(group_id: str, owner: str):
+def delete_group(group_id: str, token: str):
+    owner = require_auth(token)
+
     conn = get_db()
     cursor = conn.cursor()
-
     cursor.execute("SELECT owner FROM groups WHERE group_id = ?", (group_id,))
     row = cursor.fetchone()
 
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="Группа не найдена")
-
     if row[0] != owner:
         conn.close()
         raise HTTPException(status_code=403, detail="Только создатель может удалить группу")
@@ -448,31 +571,67 @@ def delete_group(group_id: str, owner: str):
 #                 СООБЩЕНИЯ И ИСТОРИЯ ЧАТОВ
 # ==========================================================
 
+def build_paginated_sql(before_id: Optional[int]) -> str:
+    if before_id:
+        return '''
+            SELECT m.id, m.chat_id, m.sender, m.content, m.msg_type, m.status, m.reply_to, m.timestamp,
+                   r.sender, r.content, r.msg_type
+            FROM messages m
+            LEFT JOIN messages r ON m.reply_to = r.id
+            WHERE m.chat_id = ? AND m.id < ?
+            ORDER BY m.id DESC LIMIT ?
+        '''
+    return '''
+        SELECT m.id, m.chat_id, m.sender, m.content, m.msg_type, m.status, m.reply_to, m.timestamp,
+               r.sender, r.content, r.msg_type
+        FROM messages m
+        LEFT JOIN messages r ON m.reply_to = r.id
+        WHERE m.chat_id = ?
+        ORDER BY m.id DESC LIMIT ?
+    '''
+
+
 @app.get("/messages/{user1}/{user2}")
-def get_messages(user1: str, user2: str):
+def get_messages(user1: str, user2: str, token: str, before_id: Optional[int] = None):
+    requester = require_auth(token)
+    if requester not in (user1, user2):
+        raise HTTPException(status_code=403, detail="Нет доступа к этой переписке")
+
     chat_id = get_chat_id(user1, user2)
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute(MESSAGES_SELECT_SQL, (chat_id,))
-    rows = cursor.fetchall()
+    sql = build_paginated_sql(before_id)
+    params = (chat_id, before_id, MESSAGES_PAGE_SIZE) if before_id else (chat_id, MESSAGES_PAGE_SIZE)
+    cursor.execute(sql, params)
+    rows = list(reversed(cursor.fetchall()))
     result = rows_to_messages(cursor, rows)
     conn.close()
     return result
 
 
 @app.get("/group-messages/{group_id}")
-def get_group_messages(group_id: str):
+def get_group_messages(group_id: str, token: str, before_id: Optional[int] = None):
+    requester = require_auth(token)
+    if not is_group_member(group_id, requester):
+        raise HTTPException(status_code=403, detail="Нет доступа к этой группе")
+
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute(MESSAGES_SELECT_SQL, (group_id,))
-    rows = cursor.fetchall()
+    sql = build_paginated_sql(before_id)
+    params = (group_id, before_id, MESSAGES_PAGE_SIZE) if before_id else (group_id, MESSAGES_PAGE_SIZE)
+    cursor.execute(sql, params)
+    rows = list(reversed(cursor.fetchall()))
     result = rows_to_messages(cursor, rows)
     conn.close()
     return result
 
 
 @app.delete("/messages/{user1}/{user2}")
-def delete_chat(user1: str, user2: str):
+def delete_chat(user1: str, user2: str, token: str):
+    requester = require_auth(token)
+    if requester not in (user1, user2):
+        raise HTTPException(status_code=403, detail="Нет доступа к этой переписке")
+
     chat_id = get_chat_id(user1, user2)
     conn = get_db()
     cursor = conn.cursor()
@@ -487,7 +646,12 @@ def delete_chat(user1: str, user2: str):
 # ==========================================================
 
 @app.websocket("/ws/{username}")
-async def websocket_endpoint(websocket: WebSocket, username: str):
+async def websocket_endpoint(websocket: WebSocket, username: str, token: Optional[str] = None):
+    verified_username = get_username_by_token(token)
+    if not verified_username or verified_username != username:
+        await websocket.close(code=4001)
+        return
+
     await manager.connect(username, websocket)
     try:
         while True:
@@ -495,7 +659,7 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
             msg_type = data.get("type", "message")
 
             # ------------------------------------------------
-            # 1. НОВОЕ СООБЩЕНИЕ (текст, картинка, файл, голосовое, стикер, ответ)
+            # 1. НОВОЕ СООБЩЕНИЕ
             # ------------------------------------------------
             if msg_type == "message":
                 is_group = bool(data.get("is_group", False))
@@ -506,6 +670,10 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
                 reply_to_id = data.get("reply_to")
 
                 if not target or not content:
+                    continue
+
+                # Проверяем, что отправитель реально состоит в группе
+                if is_group and not is_group_member(target, username):
                     continue
 
                 chat_id = target if is_group else get_chat_id(username, target)
@@ -532,18 +700,10 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
                 conn.close()
 
                 msg_payload = {
-                    "type": "message",
-                    "id": msg_id,
-                    "chat_id": chat_id,
-                    "target": target,
-                    "sender": username,
-                    "content": content,
-                    "msg_type": content_type,
-                    "status": initial_status,
-                    "is_group": is_group,
-                    "duration": duration,
-                    "reply_to": reply_preview,
-                    "reactions": []
+                    "type": "message", "id": msg_id, "chat_id": chat_id, "target": target,
+                    "sender": username, "content": content, "msg_type": content_type,
+                    "status": initial_status, "is_group": is_group, "duration": duration,
+                    "reply_to": reply_preview, "reactions": []
                 }
 
                 if is_group:
@@ -560,7 +720,6 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
             elif msg_type == "read_receipt":
                 chat_id = data.get("chat_id")
                 sender_to_notify = data.get("sender")
-
                 if not chat_id or not sender_to_notify:
                     continue
 
@@ -574,9 +733,7 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
                 conn.close()
 
                 await manager.send_to_user({
-                    "type": "status_update",
-                    "chat_id": chat_id,
-                    "status": "read"
+                    "type": "status_update", "chat_id": chat_id, "status": "read"
                 }, sender_to_notify)
 
             # ------------------------------------------------
@@ -589,6 +746,8 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
                 emoji = data.get("emoji")
 
                 if not message_id or not target or not emoji:
+                    continue
+                if is_group and not is_group_member(target, username):
                     continue
 
                 conn = get_db()
@@ -615,11 +774,7 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
                 reactions = [{"username": r[0], "emoji": r[1]} for r in cursor.fetchall()]
                 conn.close()
 
-                update_payload = {
-                    "type": "reaction_update",
-                    "message_id": message_id,
-                    "reactions": reactions
-                }
+                update_payload = {"type": "reaction_update", "message_id": message_id, "reactions": reactions}
 
                 if is_group:
                     for member_user in get_group_member_usernames(target):
@@ -636,16 +791,14 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
                 is_group = bool(data.get("is_group", False))
                 target = data.get("target")
                 is_typing = bool(data.get("is_typing", False))
-
                 if not target:
+                    continue
+                if is_group and not is_group_member(target, username):
                     continue
 
                 typing_payload = {
-                    "type": "typing",
-                    "sender": username,
-                    "target": target,
-                    "is_group": is_group,
-                    "is_typing": is_typing
+                    "type": "typing", "sender": username, "target": target,
+                    "is_group": is_group, "is_typing": is_typing
                 }
 
                 if is_group:
