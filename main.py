@@ -7,8 +7,21 @@ from typing import Dict, List, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+# Разрешаем запросы с любого источника — это важно для APK-обёртки,
+# так как некоторые генераторы приложений грузят страницу не с самого
+# домена сервера, и без CORS браузерный движок внутри приложения
+# будет блокировать запросы к /login, /register и остальным эндпоинтам.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 UPLOAD_DIR = "uploads"
 STATIC_DIR = "static"
@@ -19,7 +32,7 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-USERNAME_RE = re.compile(r'^[A-Za-z0-9]{3,20}$')
+USERNAME_RE = re.compile(r'^[A-Za-zА-Яа-яЁё0-9]{3,20}$')
 MAX_UPLOAD_SIZE = 25 * 1024 * 1024  # 25 МБ
 ALLOWED_UPLOAD_EXTENSIONS = {
     '.jpg', '.jpeg', '.png', '.gif', '.webp',
@@ -283,7 +296,7 @@ def get_sw():
 @app.post("/register")
 async def register(username: str = Form(...), password: str = Form(...), avatar: UploadFile = File(None)):
     if not USERNAME_RE.match(username):
-        raise HTTPException(status_code=400, detail="Никнейм должен быть 3-20 символов: только латинские буквы и цифры")
+        raise HTTPException(status_code=400, detail="Никнейм должен быть 3-20 символов: только буквы (рус/лат) и цифры")
     if len(password) < 4:
         raise HTTPException(status_code=400, detail="Пароль должен быть не короче 4 символов")
 
@@ -318,13 +331,20 @@ async def login(username: str = Form(...), password: str = Form(...)):
     cursor = conn.cursor()
     cursor.execute("SELECT password_hash, avatar_url, bio FROM users WHERE username = ?", (username,))
     row = cursor.fetchone()
-    conn.close()
 
     if not row:
+        conn.close()
         raise HTTPException(status_code=404, detail="Пользователь не найден")
-    if not row[0] or not verify_password(password, row[0]):
+
+    if not row[0]:
+        # Старый аккаунт, созданный ещё до появления паролей — задаём пароль сейчас
+        cursor.execute("UPDATE users SET password_hash = ? WHERE username = ?", (hash_password(password), username))
+        conn.commit()
+    elif not verify_password(password, row[0]):
+        conn.close()
         raise HTTPException(status_code=401, detail="Неверный пароль")
 
+    conn.close()
     token = create_session(username)
     return {
         "status": "ok", "username": username,
