@@ -4,7 +4,9 @@ services:
     runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
+    healthCheckPath: /
     disk:
-      name: data
+      name: messenger-data
       mountPath: /data
       sizeGB: 1
