@@ -1,4 +1,3 @@
-
 import os
 import re
 import hashlib
@@ -943,6 +942,13 @@ async def websocket_endpoint(
             # ------------------------------------------------
             # 4. ИНДИКАТОР "ПЕЧАТАЕТ..."
             # ------------------------------------------------
+            # ------------------------------------------------
+            # 0. PING / PONG — держим соединение живым
+            # ------------------------------------------------
+            elif msg_type == "ping":
+                await websocket.send_json({"type": "pong"})
+                continue
+
             elif msg_type == "typing":
                 is_group  = bool(data.get("is_group", False))
                 target    = data.get("target")
