@@ -367,15 +367,12 @@
                 <input type="file" id="file-input" style="display:none" onchange="sendFile(this)">
                 <button class="btn-icon" id="btn-attach" onclick="document.getElementById('file-input').click()">📁</button>
                 <button class="btn-icon" id="btn-sticker" onclick="openStickerPicker()">😊</button>
-
                 <input type="text" id="msg-input" placeholder="Сообщение..." maxlength="2000" oninput="onMsgInput()" onkeypress="if(event.key==='Enter') sendMessage()">
-
                 <div id="recording-bar">
                     <div class="rec-dot"></div>
                     <div id="rec-timer">0:00</div>
                     <button class="btn-cancel-rec" onclick="cancelRecording()">✖</button>
                 </div>
-
                 <button class="btn-icon" id="btn-mic" onclick="toggleRecording()">🎤</button>
                 <button class="btn-send" id="btn-send" onclick="sendMessage()">➤</button>
             </div>
@@ -418,6 +415,31 @@
     let noMoreOlderMessages = false;
     let isLoadingOlder = false;
 
+    // ── PING/PONG ──────────────────────────────────────────────
+    let pingInterval = null;
+    let pongTimeout = null;
+
+    function startPing() {
+        stopPing();
+        pingInterval = setInterval(() => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            try {
+                ws.send(JSON.stringify({ type: 'ping' }));
+                // Если сервер не ответил pong за 10 сек — считаем соединение мёртвым
+                pongTimeout = setTimeout(() => {
+                    console.warn('[WS] Pong не получен, переподключение...');
+                    ws.close();
+                }, 10000);
+            } catch(e) {}
+        }, 25000); // пингуем каждые 25 секунд
+    }
+
+    function stopPing() {
+        if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
+        if (pongTimeout) { clearTimeout(pongTimeout); pongTimeout = null; }
+    }
+    // ───────────────────────────────────────────────────────────
+
     const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -450,10 +472,7 @@
         const btn = document.getElementById('btn-login');
         errorEl.innerText = '';
 
-        if (!username || !password) {
-            errorEl.innerText = 'Заполните логин и пароль';
-            return;
-        }
+        if (!username || !password) { errorEl.innerText = 'Заполните логин и пароль'; return; }
 
         btn.disabled = true;
         btn.innerText = 'Входим...';
@@ -466,27 +485,22 @@
             let res = await fetch('/login', { method: 'POST', body: loginForm });
 
             if (res.status === 404) {
-                // Аккаунта нет — создаём новый с этим логином/паролем
                 const regForm = new FormData();
                 regForm.append('username', username);
                 regForm.append('password', password);
                 res = await fetch('/register', { method: 'POST', body: regForm });
-
                 if (!res.ok) {
                     const err = await res.json();
                     errorEl.innerText = err.detail || 'Не удалось создать аккаунт';
-                    btn.disabled = false; btn.innerText = 'Войти';
-                    return;
+                    btn.disabled = false; btn.innerText = 'Войти'; return;
                 }
             } else if (res.status === 401) {
                 errorEl.innerText = 'Неверный пароль';
-                btn.disabled = false; btn.innerText = 'Войти';
-                return;
+                btn.disabled = false; btn.innerText = 'Войти'; return;
             } else if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 errorEl.innerText = err.detail || 'Что-то пошло не так';
-                btn.disabled = false; btn.innerText = 'Войти';
-                return;
+                btn.disabled = false; btn.innerText = 'Войти'; return;
             }
 
             const data = await res.json();
@@ -502,6 +516,7 @@
     }
 
     async function logout() {
+        stopPing();
         try {
             const formData = new FormData();
             formData.append('token', currentToken);
@@ -516,12 +531,9 @@
         document.getElementById('my-username').innerText = '@' + currentUser;
         document.getElementById('my-avatar-letter').innerText = currentUser.charAt(0).toUpperCase();
         document.getElementById('auth-screen').style.display = 'none';
-
         knownUsers = JSON.parse(localStorage.getItem('chats_' + currentUser) || '[]');
-
         await loadMyProfile();
         requestNotificationPermission();
-
         initWS();
         await fetchUserGroups();
         updateOnlineStatus();
@@ -535,7 +547,9 @@
     function requestNotificationPermission() {
         if (!("Notification" in window)) return;
         if (Notification.permission === "default") {
-            Notification.requestPermission();
+            Notification.requestPermission().then(perm => {
+                if (perm === "granted") showToast('🔔 Уведомления включены', 'Вы будете получать уведомления о новых сообщениях');
+            });
         }
     }
 
@@ -561,19 +575,28 @@
             : data.msg_type === 'sticker' ? `Стикер ${data.content}`
             : '📁 Файл';
 
-        showToast('@' + data.sender + (data.is_group ? ` (${chatTitle})` : ''), previewText, () => {
+        const goToChat = () => {
             if (data.is_group) {
                 let g = userGroups.find(gr => gr.group_id === chatKey);
                 selectChat(chatKey, true, g ? g.title : chatTitle);
             } else {
                 selectChat(chatKey, false);
             }
-        });
+        };
 
+        showToast('@' + data.sender + (data.is_group ? ` (${chatTitle})` : ''), previewText, goToChat);
+
+        // Системное уведомление когда вкладка скрыта
         if (document.hidden && "Notification" in window && Notification.permission === "granted") {
             try {
-                const n = new Notification('@' + data.sender, { body: previewText });
-                n.onclick = () => { window.focus(); };
+                const n = new Notification('@' + data.sender + (data.is_group ? ` (${chatTitle})` : ''), {
+                    body: previewText,
+                    icon: '/static/icon-192.png',
+                    badge: '/static/icon-96.png',
+                    tag: chatKey, // группирует уведомления от одного чата
+                    renotify: true,
+                });
+                n.onclick = () => { window.focus(); goToChat(); n.close(); };
             } catch (e) {}
         }
     }
@@ -589,31 +612,41 @@
     }
 
     function initWS() {
+        stopPing();
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const url = `${protocol}//${window.location.host}/ws/${encodeURIComponent(currentUser)}?token=${encodeURIComponent(currentToken)}`;
         setConnIndicator('⏳ подключение...');
 
         ws = new WebSocket(url);
 
-        ws.onopen = () => { setConnIndicator('🟢 онлайн', 'rgba(16,185,129,0.6)'); };
+        ws.onopen = () => {
+            setConnIndicator('🟢 онлайн', 'rgba(16,185,129,0.6)');
+            startPing(); // ← запускаем пинг после подключения
+        };
 
         ws.onclose = (e) => {
+            stopPing();
             if (e.code === 4001) {
-                // Токен недействителен — просим войти заново
                 localStorage.removeItem('messenger_currentUser');
                 localStorage.removeItem('messenger_token');
                 location.reload();
                 return;
             }
             setConnIndicator('🔴 нет соединения, переподключение...', 'rgba(239,68,68,0.6)');
-            setTimeout(initWS, 2000);
+            setTimeout(initWS, 3000);
         };
 
-        ws.onerror = (e) => { console.error("[WS] Ошибка соединения:", e); };
+        ws.onerror = (e) => { console.error("[WS] Ошибка:", e); };
 
         ws.onmessage = (event) => {
             let data;
             try { data = JSON.parse(event.data); } catch (e) { return; }
+
+            // ── обработка pong ──
+            if (data.type === 'pong') {
+                if (pongTimeout) { clearTimeout(pongTimeout); pongTimeout = null; }
+                return;
+            }
 
             if (data.type === 'message') {
                 handleIncomingMessage(data);
@@ -629,7 +662,6 @@
 
     function handleIncomingMessage(data) {
         let chatTarget;
-
         if (data.is_group) {
             chatTarget = data.target;
         } else if (data.sender === currentUser) {
@@ -664,14 +696,11 @@
     function onMsgInput() {
         updateCharCounter();
         if (!activeChatTarget || !ws || ws.readyState !== WebSocket.OPEN) return;
-
         ws.send(JSON.stringify({ type: 'typing', target: activeChatTarget, is_group: isCurrentGroup, is_typing: true }));
-
         clearTimeout(typingSendTimer);
         typingSendTimer = setTimeout(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
+            if (ws && ws.readyState === WebSocket.OPEN)
                 ws.send(JSON.stringify({ type: 'typing', target: activeChatTarget, is_group: isCurrentGroup, is_typing: false }));
-            }
         }, 2000);
     }
 
@@ -689,11 +718,7 @@
     function handleTypingEvent(data) {
         const chatKey = data.is_group ? data.target : data.sender;
         if (!typingUsersInChat[chatKey]) typingUsersInChat[chatKey] = {};
-
-        if (typingUsersInChat[chatKey][data.sender]) {
-            clearTimeout(typingUsersInChat[chatKey][data.sender]);
-        }
-
+        if (typingUsersInChat[chatKey][data.sender]) clearTimeout(typingUsersInChat[chatKey][data.sender]);
         if (data.is_typing) {
             typingUsersInChat[chatKey][data.sender] = setTimeout(() => {
                 delete typingUsersInChat[chatKey][data.sender];
@@ -702,16 +727,13 @@
         } else {
             delete typingUsersInChat[chatKey][data.sender];
         }
-
         if (activeChatTarget === chatKey) updateHeaderStatus();
     }
 
     function getTypingText(chatKey) {
         const typers = Object.keys(typingUsersInChat[chatKey] || {});
         if (typers.length === 0) return null;
-        if (isCurrentGroup) {
-            return typers.length === 1 ? `@${typers[0]} печатает...` : `${typers.length} печатают...`;
-        }
+        if (isCurrentGroup) return typers.length === 1 ? `@${typers[0]} печатает...` : `${typers.length} печатают...`;
         return 'печатает...';
     }
 
@@ -729,11 +751,10 @@
 
     function renderMyAvatar() {
         const el = document.getElementById('my-avatar-letter');
-        if (myProfile.avatar_url && myProfile.avatar_url !== '/uploads/default.png') {
+        if (myProfile.avatar_url && myProfile.avatar_url !== '/uploads/default.png')
             el.innerHTML = `<img src="${myProfile.avatar_url}">`;
-        } else {
+        else
             el.innerHTML = currentUser.charAt(0).toUpperCase();
-        }
     }
 
     async function getProfile(username) {
@@ -743,17 +764,14 @@
             const data = await res.json();
             profileCache[username] = data;
             return data;
-        } catch (e) {
-            return { username, avatar_url: '/uploads/default.png', bio: '' };
-        }
+        } catch (e) { return { username, avatar_url: '/uploads/default.png', bio: '' }; }
     }
 
     function openMyProfile() {
         document.getElementById('profile-bio-input').value = myProfile.bio || '';
         const avatarEl = document.getElementById('profile-edit-avatar');
         avatarEl.innerHTML = (myProfile.avatar_url && myProfile.avatar_url !== '/uploads/default.png')
-            ? `<img src="${myProfile.avatar_url}">`
-            : currentUser.charAt(0).toUpperCase();
+            ? `<img src="${myProfile.avatar_url}">` : currentUser.charAt(0).toUpperCase();
         openModal('modal-my-profile');
     }
 
@@ -764,9 +782,7 @@
         if (!file) return;
         chosenAvatarFile = file;
         const reader = new FileReader();
-        reader.onload = (e) => {
-            document.getElementById('profile-edit-avatar').innerHTML = `<img src="${e.target.result}">`;
-        };
+        reader.onload = (e) => { document.getElementById('profile-edit-avatar').innerHTML = `<img src="${e.target.result}">`; };
         reader.readAsDataURL(file);
     }
 
@@ -776,7 +792,6 @@
         formData.append('token', currentToken);
         formData.append('bio', bio);
         if (chosenAvatarFile) formData.append('avatar', chosenAvatarFile);
-
         try {
             const res = await fetch('/profile/update', { method: 'POST', body: formData });
             myProfile = await res.json();
@@ -784,21 +799,19 @@
             renderMyAvatar();
             chosenAvatarFile = null;
             closeModal('modal-my-profile');
-        } catch (e) {
-            alert('Не удалось сохранить профиль');
-        }
+        } catch (e) { alert('Не удалось сохранить профиль'); }
     }
 
     async function openUserProfile(username) {
         const profile = await getProfile(username);
         document.getElementById('view-profile-name').innerText = '@' + username;
-        document.getElementById('view-profile-bio').innerText = profile.bio && profile.bio.length > 0 ? profile.bio : 'Пользователь пока ничего о себе не написал';
+        document.getElementById('view-profile-bio').innerText = profile.bio && profile.bio.length > 0
+            ? profile.bio : 'Пользователь пока ничего о себе не написал';
         const avatarEl = document.getElementById('view-profile-avatar');
-        if (profile.avatar_url && profile.avatar_url !== '/uploads/default.png') {
+        if (profile.avatar_url && profile.avatar_url !== '/uploads/default.png')
             avatarEl.innerHTML = `<img src="${profile.avatar_url}">`;
-        } else {
+        else
             avatarEl.innerHTML = username.charAt(0).toUpperCase();
-        }
         openModal('modal-view-profile');
     }
 
@@ -836,7 +849,6 @@
                 ${(isOwner && member !== currentUser) ? `<button class="btn-remove-member" onclick="removeGroupMember('${member}')">✖</button>` : ''}
             `;
             list.appendChild(row);
-
             getProfile(member).then(p => {
                 if (p.avatar_url && p.avatar_url !== '/uploads/default.png') {
                     const av = row.querySelector('.avatar');
@@ -850,11 +862,9 @@
         const input = document.getElementById('group-add-member-input');
         const username = input.value.trim().replace('@', '');
         if (!username) return;
-
         const formData = new FormData();
         formData.append('username', username);
         formData.append('token', currentToken);
-
         try {
             const res = await fetch(`/groups/${activeChatTarget}/members/add`, { method: 'POST', body: formData });
             if (!res.ok) { const err = await res.json(); alert(err.detail || 'Не удалось добавить участника'); return; }
@@ -868,7 +878,6 @@
         const formData = new FormData();
         formData.append('username', username);
         formData.append('token', currentToken);
-
         try {
             await fetch(`/groups/${activeChatTarget}/members/remove`, { method: 'POST', body: formData });
             await refreshGroupMembersList();
@@ -877,9 +886,7 @@
 
     async function leaveOrDeleteGroup() {
         const isOwner = document.getElementById('group-leave-btn').innerText === 'Удалить группу';
-        const confirmText = isOwner ? 'Удалить группу для всех участников?' : 'Покинуть группу?';
-        if (!confirm(confirmText)) return;
-
+        if (!confirm(isOwner ? 'Удалить группу для всех участников?' : 'Покинуть группу?')) return;
         try {
             if (isOwner) {
                 await fetch(`/groups/${activeChatTarget}?token=${encodeURIComponent(currentToken)}`, { method: 'DELETE' });
@@ -898,8 +905,6 @@
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-    // ==========================================================
-
     async function fetchUserGroups() {
         try {
             const res = await fetch(`/groups/my/${currentUser}?token=${encodeURIComponent(currentToken)}`);
@@ -912,7 +917,6 @@
             const res = await fetch('/users');
             onlineUsers = await res.json();
         } catch (e) {}
-
         await fetchUserGroups();
         onlineUsers.forEach(u => { if(u !== currentUser) addKnownUser(u); });
         renderUserList();
@@ -941,12 +945,10 @@
         let title = document.getElementById('group-title-input').value.trim();
         let members = document.getElementById('group-members-input').value.trim();
         if (!title) return alert("Введите название группы");
-
         const formData = new FormData();
         formData.append("title", title);
         formData.append("token", currentToken);
         formData.append("members", members);
-
         try {
             const res = await fetch("/groups/create", { method: "POST", body: formData });
             const data = await res.json();
@@ -1000,13 +1002,13 @@
 
         sortedUsers.forEach(user => {
             let isOnline = onlineUsers.includes(user);
-            let statusHtml = isOnline ? `<span class="status-dot online-dot"></span>В сети` : `<span class="status-dot offline-dot"></span>Был(а) недавно`;
+            let statusHtml = isOnline
+                ? `<span class="status-dot online-dot"></span>В сети`
+                : `<span class="status-dot offline-dot"></span>Был(а) недавно`;
             const unread = unreadCounts[user] || 0;
-
             const item = document.createElement('div');
             item.className = `chat-item ${user === activeChatTarget ? 'active' : ''}`;
             item.onclick = () => selectChat(user, false);
-
             item.innerHTML = `
                 <div class="chat-item-left">
                     <div class="avatar" id="avatar-list-${cssSafe(user)}">${user.charAt(0).toUpperCase()}</div>
@@ -1021,7 +1023,6 @@
                 </div>
             `;
             container.appendChild(item);
-
             getProfile(user).then(p => {
                 if (p.avatar_url && p.avatar_url !== '/uploads/default.png') {
                     const av = document.getElementById(`avatar-list-${cssSafe(user)}`);
@@ -1052,11 +1053,9 @@
             document.getElementById('target-avatar-letter').innerText = target.charAt(0).toUpperCase();
             updateHeaderStatus();
             document.getElementById('chat-header-clickable').onclick = () => openUserProfile(target);
-
             const p = await getProfile(target);
-            if (p.avatar_url && p.avatar_url !== '/uploads/default.png') {
+            if (p.avatar_url && p.avatar_url !== '/uploads/default.png')
                 document.getElementById('target-avatar-letter').innerHTML = `<img src="${p.avatar_url}">`;
-            }
         }
 
         document.getElementById('app').classList.add('mobile-chat-active');
@@ -1072,10 +1071,7 @@
             document.getElementById('target-status').innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span>&nbsp;${typingText}`;
             return;
         }
-        if (isCurrentGroup) {
-            document.getElementById('target-status').innerText = 'Группа';
-            return;
-        }
+        if (isCurrentGroup) { document.getElementById('target-status').innerText = 'Группа'; return; }
         let isOnline = onlineUsers.includes(activeChatTarget);
         document.getElementById('target-status').innerHTML = isOnline
             ? `<span class="status-dot online-dot"></span>В сети`
@@ -1091,36 +1087,24 @@
         closeSearchBar();
     }
 
-    // ==========================================================
-    //          ИСТОРИЯ СООБЩЕНИЙ + ПОДГРУЗКА ПРИ СКРОЛЛЕ ВВЕРХ
-    // ==========================================================
-
     async function loadHistory() {
         if (!activeChatTarget) return;
         const box = document.getElementById('messages');
         box.style.opacity = '0';
-
         const baseUrl = isCurrentGroup ? `/group-messages/${activeChatTarget}` : `/messages/${currentUser}/${activeChatTarget}`;
         const url = `${baseUrl}?token=${encodeURIComponent(currentToken)}`;
-
         try {
             const res = await fetch(url);
             const serverMsgs = await res.json();
             box.innerHTML = '<div id="load-older-indicator">Загружаем историю...</div>';
             serverMsgs.forEach(msg => appendMessageToUI(msg, true));
-
-            if (serverMsgs.length > 0) {
-                oldestLoadedMessageId = serverMsgs[0].id;
-            }
+            if (serverMsgs.length > 0) oldestLoadedMessageId = serverMsgs[0].id;
             noMoreOlderMessages = serverMsgs.length < 50;
-
-            if (!isCurrentGroup && serverMsgs.length > 0) {
+            if (!isCurrentGroup && serverMsgs.length > 0)
                 sendReadReceipt(getChatId(currentUser, activeChatTarget), activeChatTarget);
-            }
         } catch(e) {
             box.innerHTML = '<div id="load-older-indicator">Загружаем историю...</div>';
         }
-
         requestAnimationFrame(() => { box.style.opacity = '1'; });
         setupInfiniteScroll();
     }
@@ -1128,9 +1112,7 @@
     function setupInfiniteScroll() {
         const box = document.getElementById('messages');
         box.onscroll = () => {
-            if (box.scrollTop < 60 && !isLoadingOlder && !noMoreOlderMessages) {
-                loadOlderMessages();
-            }
+            if (box.scrollTop < 60 && !isLoadingOlder && !noMoreOlderMessages) loadOlderMessages();
         };
     }
 
@@ -1139,17 +1121,13 @@
         isLoadingOlder = true;
         const indicator = document.getElementById('load-older-indicator');
         if (indicator) indicator.classList.add('active');
-
         const box = document.getElementById('messages');
         const prevScrollHeight = box.scrollHeight;
-
         const baseUrl = isCurrentGroup ? `/group-messages/${activeChatTarget}` : `/messages/${currentUser}/${activeChatTarget}`;
         const url = `${baseUrl}?token=${encodeURIComponent(currentToken)}&before_id=${oldestLoadedMessageId}`;
-
         try {
             const res = await fetch(url);
             const olderMsgs = await res.json();
-
             if (olderMsgs.length === 0) {
                 noMoreOlderMessages = true;
             } else {
@@ -1159,30 +1137,23 @@
                 box.scrollTop = box.scrollHeight - prevScrollHeight;
             }
         } catch(e) {}
-
         if (indicator) indicator.classList.remove('active');
         isLoadingOlder = false;
     }
 
     function sendReadReceipt(chatId, senderToNotify) {
-        if (ws && ws.readyState === WebSocket.OPEN) {
+        if (ws && ws.readyState === WebSocket.OPEN)
             ws.send(JSON.stringify({ type: "read_receipt", chat_id: chatId, sender: senderToNotify }));
-        }
     }
 
     function getChatId(user1, user2) { return [user1, user2].sort().join("_"); }
-
-    // ==========================================================
-    //                      ОТВЕТ НА СООБЩЕНИЕ
-    // ==========================================================
 
     function setReplyTarget(msg) {
         replyTarget = msg;
         let previewText = msg.msg_type === 'text' ? msg.content
             : msg.msg_type === 'image' ? '📷 Фото'
             : msg.msg_type === 'voice' ? '🎤 Голосовое сообщение'
-            : msg.msg_type === 'sticker' ? 'Стикер ' + msg.content
-            : '📁 Файл';
+            : msg.msg_type === 'sticker' ? 'Стикер ' + msg.content : '📁 Файл';
         document.getElementById('reply-bar-sender').innerText = '@' + msg.sender;
         document.getElementById('reply-bar-content').innerText = previewText;
         document.getElementById('reply-bar').classList.add('active');
@@ -1194,18 +1165,14 @@
         document.getElementById('reply-bar').classList.remove('active');
     }
 
-    // ==========================================================
-
     function sendMessage() {
         const input = document.getElementById('msg-input');
         const text = input.value.trim();
         if (!text || !activeChatTarget) return;
-
         if (!ws || ws.readyState !== WebSocket.OPEN) {
-            alert("Нет соединения с сервером. Подождите переподключения и попробуйте снова.");
+            alert("Нет соединения с сервером. Подождите переподключения.");
             return;
         }
-
         ws.send(JSON.stringify({
             type: 'message', target: activeChatTarget, sender: currentUser,
             content: text, msg_type: 'text', is_group: isCurrentGroup,
@@ -1220,10 +1187,7 @@
 
     function compressImage(file) {
         return new Promise((resolve) => {
-            if (file.type === 'image/gif' || file.size < 500 * 1024) {
-                resolve(file);
-                return;
-            }
+            if (file.type === 'image/gif' || file.size < 500 * 1024) { resolve(file); return; }
             const img = new Image();
             const objectUrl = URL.createObjectURL(file);
             img.onload = () => {
@@ -1250,27 +1214,19 @@
     async function sendFile(input) {
         let file = input.files[0];
         if (!file || !activeChatTarget) return;
-
-        if (file.type.startsWith("image/")) {
-            file = await compressImage(file);
-        }
-
+        if (file.type.startsWith("image/")) file = await compressImage(file);
         const formData = new FormData();
         formData.append("token", currentToken);
         formData.append("file", file);
-
         try {
             const res = await fetch("/upload", { method: "POST", body: formData });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 alert(err.detail || "Не удалось загрузить файл");
-                input.value = '';
-                return;
+                input.value = ''; return;
             }
             const data = await res.json();
-
-            if (!ws || ws.readyState !== WebSocket.OPEN) { alert("Нет соединения с сервером."); return; }
-
+            if (!ws || ws.readyState !== WebSocket.OPEN) { alert("Нет соединения."); return; }
             ws.send(JSON.stringify({
                 type: 'message', target: activeChatTarget, sender: currentUser,
                 content: data.file_url,
@@ -1305,10 +1261,7 @@
     }
 
     function sendSticker(emoji) {
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
-            alert("Нет соединения с сервером.");
-            return;
-        }
+        if (!ws || ws.readyState !== WebSocket.OPEN) { alert("Нет соединения."); return; }
         ws.send(JSON.stringify({
             type: 'message', target: activeChatTarget, sender: currentUser,
             content: emoji, msg_type: 'sticker', is_group: isCurrentGroup,
@@ -1321,38 +1274,25 @@
     function pickSupportedMimeType() {
         const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
         for (const type of candidates) {
-            if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(type)) {
-                return type;
-            }
+            if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(type)) return type;
         }
         return '';
     }
 
     async function toggleRecording() {
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-            stopRecordingAndSend();
-            return;
-        }
+        if (mediaRecorder && mediaRecorder.state === 'recording') { stopRecordingAndSend(); return; }
         if (!activeChatTarget) return;
-
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            alert("Ваш браузер не поддерживает запись голоса.");
-            return;
+            alert("Ваш браузер не поддерживает запись голоса."); return;
         }
-
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const mimeType = pickSupportedMimeType();
             mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
             recordedChunks = [];
             recordingCancelled = false;
-
             mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
-            mediaRecorder.onstop = () => {
-                stream.getTracks().forEach(t => t.stop());
-                if (!recordingCancelled) uploadAndSendVoice();
-            };
-
+            mediaRecorder.onstop = () => { stream.getTracks().forEach(t => t.stop()); if (!recordingCancelled) uploadAndSendVoice(); };
             mediaRecorder.start();
             recordingSeconds = 0;
             document.getElementById('recording-bar').classList.add('active');
@@ -1361,13 +1301,8 @@
             document.getElementById('btn-mic').innerText = '⏹️';
             document.getElementById('btn-mic').classList.add('recording');
             updateRecTimerDisplay();
-            recordingTimerHandle = setInterval(() => {
-                recordingSeconds++;
-                updateRecTimerDisplay();
-            }, 1000);
-        } catch (e) {
-            alert("Не удалось получить доступ к микрофону. Разрешите доступ в настройках браузера.");
-        }
+            recordingTimerHandle = setInterval(() => { recordingSeconds++; updateRecTimerDisplay(); }, 1000);
+        } catch (e) { alert("Не удалось получить доступ к микрофону."); }
     }
 
     function updateRecTimerDisplay() {
@@ -1402,29 +1337,21 @@
         const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
         const ext = (mediaRecorder.mimeType || '').includes('mp4') ? 'm4a' : 'webm';
         const file = new File([blob], `voice_${Date.now()}.${ext}`, { type: blob.type });
-
         const formData = new FormData();
         formData.append("token", currentToken);
         formData.append("file", file);
-
         try {
             const res = await fetch("/upload", { method: "POST", body: formData });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                alert(err.detail || "Не удалось отправить голосовое сообщение");
-                return;
-            }
+            if (!res.ok) { const err = await res.json().catch(() => ({})); alert(err.detail || "Не удалось отправить голосовое"); return; }
             const data = await res.json();
-
-            if (!ws || ws.readyState !== WebSocket.OPEN) { alert("Нет соединения с сервером."); return; }
-
+            if (!ws || ws.readyState !== WebSocket.OPEN) { alert("Нет соединения."); return; }
             ws.send(JSON.stringify({
                 type: 'message', target: activeChatTarget, sender: currentUser,
                 content: data.file_url, msg_type: 'voice', is_group: isCurrentGroup,
                 duration: durationSeconds, reply_to: replyTarget ? replyTarget.id : null
             }));
             cancelReply();
-        } catch (e) { alert("Не удалось отправить голосовое сообщение"); }
+        } catch (e) { alert("Не удалось отправить голосовое"); }
     }
 
     function toggleReactionPicker(messageId) {
@@ -1437,10 +1364,7 @@
 
     function sendReaction(messageId, emoji) {
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
-        ws.send(JSON.stringify({
-            type: 'reaction', message_id: messageId, target: activeChatTarget,
-            is_group: isCurrentGroup, emoji
-        }));
+        ws.send(JSON.stringify({ type: 'reaction', message_id: messageId, target: activeChatTarget, is_group: isCurrentGroup, emoji }));
         const picker = document.getElementById(`picker-${messageId}`);
         if (picker) picker.classList.remove('open');
     }
@@ -1469,21 +1393,12 @@
 
     function attachSwipeToReply(bubbleEl, msg) {
         let startX = 0, currentX = 0, dragging = false;
-
-        bubbleEl.addEventListener('touchstart', (e) => {
-            startX = e.touches[0].clientX;
-            dragging = true;
-        }, { passive: true });
-
+        bubbleEl.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; dragging = true; }, { passive: true });
         bubbleEl.addEventListener('touchmove', (e) => {
             if (!dragging) return;
             currentX = e.touches[0].clientX - startX;
-            if (currentX > 0) {
-                const clamped = Math.min(currentX, 70);
-                bubbleEl.style.transform = `translateX(${clamped}px)`;
-            }
+            if (currentX > 0) bubbleEl.style.transform = `translateX(${Math.min(currentX, 70)}px)`;
         }, { passive: true });
-
         bubbleEl.addEventListener('touchend', () => {
             dragging = false;
             if (currentX > 55) setReplyTarget(msg);
@@ -1500,42 +1415,32 @@
 
     function buildMessageElement(msg, skipAnim) {
         const isMy = msg.sender === currentUser;
-
         const wrapper = document.createElement('div');
         wrapper.className = `msg-wrapper ${isMy ? 'my' : 'other'} ${msg.msg_type === 'sticker' ? 'sticker' : ''} ${skipAnim ? 'no-anim' : ''}`;
         wrapper.dataset.msgId = msg.id;
 
         let contentHtml;
-        if (msg.msg_type === 'text') {
-            contentHtml = `<div>${escapeHtml(msg.content)}</div>`;
-        } else if (msg.msg_type === 'image') {
-            contentHtml = `<img src="${msg.content}" class="msg-img" onclick="document.getElementById('lightbox-img').src=this.src; document.getElementById('lightbox').style.display='flex'">`;
-        } else if (msg.msg_type === 'voice') {
-            contentHtml = `<div class="msg-voice">🎤 <audio controls src="${msg.content}"></audio></div>`;
-        } else if (msg.msg_type === 'sticker') {
-            contentHtml = `<div class="msg-sticker-emoji">${msg.content}</div>`;
-        } else {
-            contentHtml = `<a href="${msg.content}" target="_blank" style="color:var(--accent-3)">📁 Файл</a>`;
-        }
+        if (msg.msg_type === 'text') contentHtml = `<div>${escapeHtml(msg.content)}</div>`;
+        else if (msg.msg_type === 'image') contentHtml = `<img src="${msg.content}" class="msg-img" onclick="document.getElementById('lightbox-img').src=this.src; document.getElementById('lightbox').style.display='flex'">`;
+        else if (msg.msg_type === 'voice') contentHtml = `<div class="msg-voice">🎤 <audio controls src="${msg.content}"></audio></div>`;
+        else if (msg.msg_type === 'sticker') contentHtml = `<div class="msg-sticker-emoji">${msg.content}</div>`;
+        else contentHtml = `<a href="${msg.content}" target="_blank" style="color:var(--accent-b)">📁 Файл</a>`;
 
         let replyHtml = '';
         if (msg.reply_to) {
             let replyPreview = msg.reply_to.msg_type === 'text' ? escapeHtml(msg.reply_to.content)
                 : msg.reply_to.msg_type === 'image' ? '📷 Фото'
                 : msg.reply_to.msg_type === 'voice' ? '🎤 Голосовое'
-                : msg.reply_to.msg_type === 'sticker' ? 'Стикер ' + msg.reply_to.content
-                : '📁 Файл';
+                : msg.reply_to.msg_type === 'sticker' ? 'Стикер ' + msg.reply_to.content : '📁 Файл';
             replyHtml = `
                 <div class="msg-reply-quote" onclick="scrollToMessage(${msg.reply_to.id})">
                     <div class="msg-reply-quote-sender">@${msg.reply_to.sender}</div>
                     <div>${replyPreview}</div>
-                </div>
-            `;
+                </div>`;
         }
 
         let statusHtml = isMy && !isCurrentGroup ? getStatusIconHtml(msg.status || 'sent') : '';
         let reactionsHtml = renderReactionsHtml(msg.id, msg.reactions);
-
         const pickerButtonsHtml = REACTION_EMOJIS.map(e => `<span onclick="sendReaction(${msg.id}, '${e}')">${e}</span>`).join('');
         const replyPayload = JSON.stringify({ id: msg.id, sender: msg.sender, content: msg.content, msg_type: msg.msg_type }).replace(/"/g, '&quot;');
 
@@ -1558,13 +1463,10 @@
         const bubbleTouchZone = wrapper.querySelector('.msg-bubble-touch-zone');
         const bubbleEl = wrapper.querySelector('.msg-bubble');
         let pressTimer = null;
-        bubbleTouchZone.addEventListener('touchstart', () => {
-            pressTimer = setTimeout(() => toggleReactionPicker(msg.id), 450);
-        }, { passive: true });
+        bubbleTouchZone.addEventListener('touchstart', () => { pressTimer = setTimeout(() => toggleReactionPicker(msg.id), 450); }, { passive: true });
         bubbleTouchZone.addEventListener('touchend', () => clearTimeout(pressTimer));
         bubbleTouchZone.addEventListener('touchmove', () => clearTimeout(pressTimer));
         bubbleEl.addEventListener('dblclick', () => toggleReactionPicker(msg.id));
-
         attachSwipeToReply(bubbleTouchZone, { id: msg.id, sender: msg.sender, content: msg.content, msg_type: msg.msg_type });
 
         return wrapper;
@@ -1581,11 +1483,8 @@
         const box = document.getElementById('messages');
         const wrapper = buildMessageElement(msg, true);
         const indicator = document.getElementById('load-older-indicator');
-        if (indicator && indicator.nextSibling) {
-            box.insertBefore(wrapper, indicator.nextSibling);
-        } else {
-            box.appendChild(wrapper);
-        }
+        if (indicator && indicator.nextSibling) box.insertBefore(wrapper, indicator.nextSibling);
+        else box.appendChild(wrapper);
     }
 
     function scrollToMessage(messageId) {
@@ -1605,8 +1504,7 @@
     }
 
     function updateMessagesStatusUI(newStatus) {
-        const checks = document.querySelectorAll('.msg-wrapper.my .status-checks');
-        checks.forEach(el => {
+        document.querySelectorAll('.msg-wrapper.my .status-checks').forEach(el => {
             el.className = `status-checks ${newStatus}`;
             el.innerText = '✓✓';
         });
@@ -1614,12 +1512,8 @@
 
     function toggleSearchBar() {
         const bar = document.getElementById('search-bar');
-        if (bar.classList.contains('active')) {
-            closeSearchBar();
-        } else {
-            bar.classList.add('active');
-            document.getElementById('search-input').focus();
-        }
+        if (bar.classList.contains('active')) closeSearchBar();
+        else { bar.classList.add('active'); document.getElementById('search-input').focus(); }
     }
 
     function closeSearchBar() {
@@ -1642,24 +1536,17 @@
         clearSearchHighlights();
         searchMatches = [];
         searchCurrentIndex = -1;
-
         if (!query) { document.getElementById('search-nav').innerText = ''; return; }
-
         document.querySelectorAll('#messages .msg-wrapper').forEach(wrapper => {
             const bubble = wrapper.querySelector('.msg-bubble');
-            const text = bubble.innerText.toLowerCase();
-            if (text.includes(query)) {
+            if (bubble.innerText.toLowerCase().includes(query)) {
                 bubble.classList.add('search-match');
                 searchMatches.push(bubble);
             }
         });
-
-        if (searchMatches.length > 0) {
-            searchCurrentIndex = 0;
-            goToSearchMatch();
-        }
+        if (searchMatches.length > 0) { searchCurrentIndex = 0; goToSearchMatch(); }
         document.getElementById('search-nav').innerText = searchMatches.length > 0
-            ? `${searchCurrentIndex + 1}/${searchMatches.length}` : 'нет совпадений (только в загруженной части)';
+            ? `${searchCurrentIndex + 1}/${searchMatches.length}` : 'нет совпадений';
     }
 
     function searchNav(direction) {
@@ -1672,21 +1559,18 @@
     function goToSearchMatch() {
         searchMatches.forEach(el => el.classList.remove('search-current'));
         const current = searchMatches[searchCurrentIndex];
-        if (current) {
-            current.classList.add('search-current');
-            current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
+        if (current) { current.classList.add('search-current'); current.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     }
 
     async function deleteChat(event, targetUser) {
         event.stopPropagation();
-        if(!confirm(`Удалить переписку с @${targetUser}?`)) return;
+        if (!confirm(`Удалить переписку с @${targetUser}?`)) return;
         knownUsers = knownUsers.filter(u => u !== targetUser);
         localStorage.setItem('chats_' + currentUser, JSON.stringify(knownUsers));
         try {
             await fetch(`/messages/${currentUser}/${targetUser}?token=${encodeURIComponent(currentToken)}`, { method: 'DELETE' });
         } catch(e) {}
-        if(activeChatTarget === targetUser) closeChat();
+        if (activeChatTarget === targetUser) closeChat();
         renderUserList();
     }
 </script>
