@@ -1,6 +1,5 @@
 fastapi
 uvicorn[standard]
 websockets
-python-multipart
-
+python-multipart==0.0.9
 
