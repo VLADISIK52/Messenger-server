@@ -2,22 +2,10 @@ services:
   - type: web
     name: messenger
     runtime: python
-    plan: free
-
     buildCommand: pip install -r requirements.txt
-
-    startCommand: >
-      uvicorn main:app
-      --host 0.0.0.0
-      --port $PORT
-      --ws websockets
-      --ws-ping-interval 20
-      --ws-ping-timeout 30
-
-    autoDeployTrigger: commit
-
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
     healthCheckPath: /
-
     disk:
       name: messenger-data
       mountPath: /data
