@@ -1,24 +1,20 @@
-const CACHE_NAME = 'messenger-v2';
+// sw.js — сервис-воркер: ТОЛЬКО push-уведомления.
+// Кэширования нет вообще — страница всегда свежая с сервера.
 
-self.addEventListener('install', (event) => {
+self.addEventListener('install', () => {
     self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-    event.waitUntil(self.clients.claim());
-});
-
-self.addEventListener('fetch', (event) => {
-    // Пропускаем API и WebSocket — они не кэшируются
-    if (event.request.url.includes('/ws/') || event.request.method !== 'GET') return;
-    event.respondWith(
-        caches.match(event.request).then(cached => {
-            return cached || fetch(event.request).catch(() => cached);
-        })
+    // Уничтожаем ВСЕ старые кэши прошлых версий воркера
+    event.waitUntil(
+        caches.keys()
+            .then(keys => Promise.all(keys.map(k => caches.delete(k))))
+            .then(() => self.clients.claim())
     );
 });
 
-// ── PUSH: получение уведомления от сервера ──
+// ── PUSH: уведомление от сервера ──
 self.addEventListener('push', (event) => {
     const data = event.data ? event.data.json() : {};
     const title = data.title || '💬 Новое сообщение';
@@ -29,14 +25,11 @@ self.addEventListener('push', (event) => {
         tag: 'nexus-message',
         renotify: true,
         data: { url: self.location.origin },
-        actions: [
-            { action: 'open', title: 'Открыть' },
-        ],
     };
     event.waitUntil(self.registration.showNotification(title, options));
 });
 
-// ── Клик по push-уведомлению → открыть приложение ──
+// ── Клик по уведомлению → открыть приложение ──
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
     event.waitUntil(
