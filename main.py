@@ -66,7 +66,7 @@ MESSAGES_PAGE_SIZE = 50
 # ==========================================================
 from pywebpush import webpush, WebPushException
 from py_vapid import Vapid
-from cryptography.hazmat.primitives.asymmetric.ec import Encoding, PublicFormat
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 VAPID_PRIVATE_PEM = os.path.join(DATA_DIR, "vapid_private.pem")
 VAPID_PUBLIC_PEM = os.path.join(DATA_DIR, "vapid_public.pem")
