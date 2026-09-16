@@ -3,6 +3,9 @@ import re
 import hashlib
 import secrets
 import sqlite3
+import json
+import base64
+import asyncio
 from contextlib import asynccontextmanager
 from typing import Dict, List, Optional
 
@@ -33,6 +36,7 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    ensure_vapid_keys()
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -56,6 +60,77 @@ ALLOWED_UPLOAD_EXTENSIONS = {
     '.pdf', '.txt', '.zip', '.mp4', '.mov'
 }
 MESSAGES_PAGE_SIZE = 50
+
+# ==========================================================
+#                WEB PUSH (уведомления)
+# ==========================================================
+from pywebpush import webpush, WebPushException
+from py_vapid import Vapid
+from cryptography.hazmat.primitives.asymmetric.ec import Encoding, PublicFormat
+
+VAPID_PRIVATE_PEM = os.path.join(DATA_DIR, "vapid_private.pem")
+VAPID_PUBLIC_PEM = os.path.join(DATA_DIR, "vapid_public.pem")
+VAPID_CLAIMS = {"sub": "mailto:admin@nexus-messenger.local"}
+
+
+def ensure_vapid_keys() -> None:
+    """Создаёт VAPID-ключи при первом запуске."""
+    if not (os.path.exists(VAPID_PRIVATE_PEM) and os.path.exists(VAPID_PUBLIC_PEM)):
+        v = Vapid()
+        v.generate_keys()
+        v.save_key(VAPID_PRIVATE_PEM)
+        v.save_public_key(VAPID_PUBLIC_PEM)
+
+
+def get_vapid_public_b64() -> str:
+    """Публичный VAPID-ключ в base64url для браузера."""
+    v = Vapid.from_file(VAPID_PRIVATE_PEM)
+    pub = getattr(v, "public_key", None) or v.private_key.public_key()
+    raw = pub.public_bytes(Encoding.X9_62, PublicFormat.UncompressedPoint)
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def send_push_to_user(username: str, title: str, body: str) -> None:
+    """Шлёт Web Push всем подпискам пользователя; мёртвые подписки чистит."""
+    conn = get_db()
+    try:
+        subs = conn.execute(
+            "SELECT endpoint, p256dh, auth FROM push_subs WHERE username = ?",
+            (username,),
+        ).fetchall()
+    finally:
+        conn.close()
+    if not subs:
+        return
+    payload = json.dumps({"title": title, "body": body})
+    dead = []
+    for endpoint, p256dh, auth in subs:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": endpoint,
+                    "keys": {"p256dh": p256dh, "auth": auth},
+                },
+                data=payload,
+                vapid_private_key=VAPID_PRIVATE_PEM,
+                vapid_claims=VAPID_CLAIMS,
+            )
+        except WebPushException as e:
+            print(f"[PUSH] ошибка для {username}: {e}")
+            resp = getattr(e, "response", None)
+            if resp is not None and getattr(resp, "status_code", 0) in (404, 410):
+                dead.append(endpoint)
+        except Exception as e:
+            print(f"[PUSH] неожиданная ошибка: {e}")
+    if dead:
+        conn = get_db()
+        try:
+            conn.executemany(
+                "DELETE FROM push_subs WHERE endpoint = ?", [(e,) for e in dead]
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
 # ==========================================================
 #                        БАЗА ДАННЫХ
@@ -132,6 +207,14 @@ def init_db() -> None:
             group_id TEXT NOT NULL,
             username TEXT NOT NULL,
             PRIMARY KEY (group_id, username)
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS push_subs (
+            endpoint TEXT PRIMARY KEY,
+            username TEXT NOT NULL,
+            p256dh   TEXT NOT NULL,
+            auth     TEXT NOT NULL
         )
     ''')
     conn.commit()
@@ -339,6 +422,56 @@ def get_icon512():
 @app.get("/apple-touch-icon.png")
 def get_apple_icon():
     return FileResponse("apple-touch-icon.png", media_type="image/png")
+
+
+@app.get("/search")
+def search_users(q: str, token: str):
+    """Честный поиск: только реально существующие аккаунты,
+    регистронезависимо (включая кириллицу), топ-10."""
+    require_auth(token)
+    q = q.strip()
+    if not q:
+        return []
+    conn = get_db()
+    try:
+        rows = conn.execute("SELECT username, avatar_url FROM users").fetchall()
+    finally:
+        conn.close()
+    ql = q.lower()
+    found = [
+        {"username": r[0], "avatar_url": r[1] or "/uploads/default.png"}
+        for r in rows if ql in r[0].lower()
+    ]
+    return found[:10]
+
+
+@app.get("/push/publickey")
+def push_publickey():
+    return {"publicKey": get_vapid_public_b64()}
+
+
+@app.post("/push/subscribe")
+async def push_subscribe(token: str = Form(...), subscription: str = Form(...)):
+    username = require_auth(token)
+    try:
+        sub = json.loads(subscription)
+        endpoint = sub["endpoint"]
+        keys = sub.get("keys", {})
+        p256dh = keys.get("p256dh", "")
+        auth = keys.get("auth", "")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Некорректная подписка")
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM push_subs WHERE endpoint = ?", (endpoint,))
+        conn.execute(
+            "INSERT INTO push_subs (username, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)",
+            (username, endpoint, p256dh, auth),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"status": "ok"}
 
 
 @app.post("/register")
@@ -826,11 +959,23 @@ async def websocket_endpoint(
                 }
                 if is_group:
                     for member_user in get_group_member_usernames(target):
-                        await manager.send_to_user(msg_payload, member_user)
+                        if member_user == username:
+                            continue
+                        ok = await manager.send_to_user(msg_payload, member_user)
+                        if not ok:
+                            await asyncio.to_thread(
+                                send_push_to_user, member_user,
+                                f"👥 {username}", content[:100],
+                            )
                 else:
                     await manager.send_to_user(msg_payload, username)
                     if target != username:
-                        await manager.send_to_user(msg_payload, target)
+                        ok = await manager.send_to_user(msg_payload, target)
+                        if not ok:
+                            await asyncio.to_thread(
+                                send_push_to_user, target,
+                                f"💬 {username}", content[:100],
+                            )
 
             # ------------------------------------------------
             # 2. ОТМЕТКА "ПРОЧИТАНО"
