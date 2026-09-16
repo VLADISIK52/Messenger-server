@@ -80,13 +80,33 @@
         .user-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; display: flex; align-items: center; }
         .btn-logout { background: transparent; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); }
 
-        .add-user-bar { padding: 12px 16px; display: flex; gap: 8px; border-bottom: 1px solid var(--border); }
+        .add-user-bar { padding: 12px 16px; display: flex; gap: 8px; border-bottom: 1px solid var(--border); position: relative; }
         .add-user-bar input { flex: 1; padding: 10px 14px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-primary); outline: none; }
         .add-user-bar button { background: var(--accent-grad); color: #fff; border: none; border-radius: var(--radius-pill); padding: 0 14px; font-weight: bold; cursor: pointer; }
 
+        /* Dropdown честного поиска */
+        .search-suggestions {
+            position: absolute; top: 100%; left: 16px; right: 16px;
+            background: var(--bg-elevated); border: 1px solid var(--border);
+            border-radius: var(--radius-md); margin-top: 4px;
+            max-height: 240px; overflow-y: auto; z-index: 10;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.5); display: none;
+        }
+        .search-suggestions.open { display: block; }
+        .search-suggestion-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 14px; cursor: pointer; transition: background 0.12s;
+        }
+        .search-suggestion-item:hover, .search-suggestion-item:active { background: var(--bg-input); }
+        .search-suggestion-item:last-child { border-radius: 0 0 var(--radius-md) var(--radius-md); }
+        .search-suggestion-name { flex: 1; font-weight: 600; font-size: 14px; }
+        .search-suggestion-empty { padding: 14px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
         .list-wrapper { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
         .section-title { font-size: 11px; letter-spacing: 0.02em; color: var(--text-muted); font-weight: 700; margin: 8px 4px 4px 4px; }
-        .chat-item { padding: 12px; background: var(--bg-elevated); border-radius: var(--radius-md); cursor: pointer; display: flex; align-items: center; justify-content: space-between; border: 1px solid transparent; border-left: 3px solid transparent; transition: border-color 0.15s, background 0.15s; }
+        .chat-item { padding: 12px; background: var(--bg-elevated); border-radius: var(--radius-md); cursor: pointer; display: flex; align-items: center; justify-content: space-between; border: 1px solid transparent; border-left: 3px solid transparent; transition: border-color 0.15s, background 0.15s, transform 0.12s; }
+        .chat-item:hover { background: #1e1a2c; }
+        .chat-item:active { transform: scale(0.985); }
         .chat-item.active { background: rgba(124,92,255,0.2); border-left: 3px solid var(--accent-b); }
         .chat-item-left { display: flex; align-items: center; gap: 12px; }
         .chat-item-right { display: flex; align-items: center; gap: 8px; }
@@ -130,6 +150,27 @@
         .msg-voice { display: flex; align-items: center; gap: 8px; min-width: 200px; }
         .msg-voice audio { max-width: 200px; height: 34px; }
 
+        /* Видео-кружки */
+        .msg-video-circle {
+            width: 180px; height: 180px; border-radius: 50%;
+            position: relative; overflow: hidden; cursor: pointer;
+            background: #000; margin-top: 4px;
+            box-shadow: 0 0 0 2px var(--accent-b), 0 8px 20px rgba(124,92,255,0.3);
+            transition: transform 0.15s;
+        }
+        .msg-wrapper.my .msg-video-circle { box-shadow: 0 0 0 2px rgba(255,255,255,0.8), 0 8px 20px rgba(255,106,92,0.3); }
+        .msg-video-circle:active { transform: scale(0.96); }
+        .msg-video-circle video {
+            width: 100%; height: 100%; object-fit: cover;
+        }
+        .msg-video-play-icon {
+            position: absolute; inset: 0; display: flex;
+            align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.35); color: #fff;
+            font-size: 38px; transition: opacity 0.15s;
+        }
+        .msg-video-circle.playing .msg-video-play-icon { opacity: 0; }
+
         .msg-reply-quote { border-left: 3px solid rgba(255,255,255,0.5); padding: 4px 8px; margin-bottom: 6px; border-radius: 6px; background: rgba(0,0,0,0.15); font-size: 12px; opacity: 0.9; cursor: pointer; }
         .msg-wrapper.other .msg-reply-quote { border-left-color: var(--accent-b); background: rgba(124,92,255,0.08); }
         .msg-reply-quote-sender { font-weight: 700; margin-bottom: 1px; }
@@ -145,7 +186,8 @@
 
         .reactions-row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
         .msg-wrapper.my .reactions-row { justify-content: flex-end; }
-        .reaction-pill { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 2px 8px; font-size: 12px; display: flex; align-items: center; gap: 3px; cursor: pointer; }
+        .reaction-pill { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 2px 8px; font-size: 12px; display: flex; align-items: center; gap: 3px; cursor: pointer; transition: transform 0.12s; }
+        .reaction-pill:active { transform: scale(0.93); }
         .reaction-pill.mine { border-color: var(--accent-b); background: var(--accent-soft); }
         .reaction-picker { display: none; gap: 4px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 4px 8px; position: absolute; top: -38px; z-index: 5; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
         .msg-wrapper.my .reaction-picker { right: 0; }
@@ -192,6 +234,29 @@
         #rec-timer { font-size: 14px; color: var(--text-secondary); flex: 1; }
         .btn-cancel-rec { background: transparent; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; }
 
+        /* Превью видеокружка при записи */
+        #video-recording-preview {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.85); z-index: 1500;
+            flex-direction: column; justify-content: center; align-items: center; gap: 16px;
+        }
+        #video-recording-preview.active { display: flex; }
+        .video-preview-circle {
+            width: 240px; height: 240px; border-radius: 50%;
+            overflow: hidden; background: #000;
+            box-shadow: 0 0 0 4px var(--danger), 0 0 60px rgba(255,84,112,0.5);
+        }
+        .video-preview-circle video { width: 100%; height: 100%; object-fit: cover; }
+        .video-rec-timer { color: #fff; font-size: 18px; font-weight: 700; }
+        .video-rec-controls { display: flex; gap: 20px; }
+        .video-rec-btn {
+            width: 56px; height: 56px; border-radius: 50%; border: none;
+            font-size: 22px; cursor: pointer; display: flex;
+            align-items: center; justify-content: center;
+        }
+        .video-rec-btn.cancel { background: rgba(255,255,255,0.15); color: #fff; }
+        .video-rec-btn.send { background: var(--accent-grad); color: #fff; }
+
         .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(6,4,10,0.75); backdrop-filter: blur(4px); justify-content: center; align-items: center; z-index: 1500; animation: overlayFadeIn 0.2s ease; }
         @keyframes overlayFadeIn { from { opacity: 0; } to { opacity: 1; } }
         .modal-box { background: rgba(26,22,38,0.85); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); padding: 26px; border-radius: var(--radius-xl); border: 1px solid rgba(255,255,255,0.08); width: 90%; max-width: 380px; max-height: 85vh; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 30px 80px rgba(0,0,0,0.5); animation: modalPopIn 0.28s cubic-bezier(0.34, 1.56, 0.64, 1); }
@@ -217,7 +282,7 @@
         }
 
         #toast-container { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 4000; display: flex; flex-direction: column; gap: 8px; width: 90%; max-width: 380px; }
-        .toast { background: rgba(26,22,38,0.9); border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius-md); padding: 10px 14px; display: flex; align-items: center; gap: 10px; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.45); animation: toastIn 0.25s ease; }
+        .toast { background: rgba(26,22,38,0.95); border: 1px solid rgba(124,92,255,0.3); border-radius: var(--radius-md); padding: 10px 14px; display: flex; align-items: center; gap: 10px; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 12px 30px rgba(0,0,0,0.55); animation: toastIn 0.25s ease; backdrop-filter: blur(10px); }
         @keyframes toastIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
         .toast-text { flex: 1; overflow: hidden; }
         .toast-title { font-weight: 700; font-size: 13px; }
@@ -230,6 +295,8 @@
             #app.mobile-chat-active #chat-area { transform: translateX(0); }
             .btn-back { display: block; }
             .btn-reply-hover { display: none; }
+            .msg-video-circle { width: 160px; height: 160px; }
+            .video-preview-circle { width: 200px; height: 200px; }
         }
     </style>
 </head>
@@ -307,6 +374,17 @@
     </div>
 </div>
 
+<div id="video-recording-preview">
+    <div class="video-preview-circle">
+        <video id="video-preview-el" autoplay muted playsinline></video>
+    </div>
+    <div class="video-rec-timer" id="video-rec-timer">0:00</div>
+    <div class="video-rec-controls">
+        <button class="video-rec-btn cancel" onclick="cancelVideoRecording()">✖</button>
+        <button class="video-rec-btn send" onclick="stopVideoAndSend()">➤</button>
+    </div>
+</div>
+
 <div id="app">
     <div id="sidebar">
         <div class="sidebar-header">
@@ -321,9 +399,10 @@
         </div>
 
         <div class="add-user-bar">
-            <input type="text" id="new-chat-input" placeholder="Логин друга..." onkeypress="if(event.key==='Enter') startNewChat()">
+            <input type="text" id="new-chat-input" placeholder="Поиск пользователя..." oninput="onSearchInputDebounce()" onfocus="onSearchInputDebounce()" onkeypress="if(event.key==='Enter') startNewChat()">
             <button onclick="startNewChat()">+</button>
             <button onclick="openModal('modal-group')" title="Создать группу">👥 +</button>
+            <div class="search-suggestions" id="search-suggestions"></div>
         </div>
 
         <div class="list-wrapper" id="users-list"></div>
@@ -373,6 +452,7 @@
                     <div id="rec-timer">0:00</div>
                     <button class="btn-cancel-rec" onclick="cancelRecording()">✖</button>
                 </div>
+                <button class="btn-icon" id="btn-video" onclick="startVideoRecording()" title="Видео-кружок">📹</button>
                 <button class="btn-icon" id="btn-mic" onclick="toggleRecording()">🎤</button>
                 <button class="btn-send" id="btn-send" onclick="sendMessage()">➤</button>
             </div>
@@ -405,6 +485,13 @@
     let recordingTimerHandle = null;
     let recordingCancelled = false;
 
+    let videoRecorder = null;
+    let videoChunks = [];
+    let videoStream = null;
+    let videoSeconds = 0;
+    let videoTimerHandle = null;
+    let videoCancelled = false;
+
     let replyTarget = null;
     let typingSendTimer = null;
     let typingUsersInChat = {};
@@ -414,6 +501,8 @@
     let oldestLoadedMessageId = null;
     let noMoreOlderMessages = false;
     let isLoadingOlder = false;
+
+    let searchDebounceTimer = null;
 
     // ── PING/PONG ──────────────────────────────────────────────
     let pingInterval = null;
@@ -425,13 +514,12 @@
             if (!ws || ws.readyState !== WebSocket.OPEN) return;
             try {
                 ws.send(JSON.stringify({ type: 'ping' }));
-                // Если сервер не ответил pong за 10 сек — считаем соединение мёртвым
                 pongTimeout = setTimeout(() => {
                     console.warn('[WS] Pong не получен, переподключение...');
                     ws.close();
                 }, 10000);
             } catch(e) {}
-        }, 25000); // пингуем каждые 25 секунд
+        }, 25000);
     }
 
     function stopPing() {
@@ -459,6 +547,13 @@
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js').catch(() => {});
         }
+
+        // Закрытие dropdown поиска при клике вне его
+        document.addEventListener('click', (e) => {
+            const box = document.querySelector('.add-user-bar');
+            const dropdown = document.getElementById('search-suggestions');
+            if (box && !box.contains(e.target)) dropdown.classList.remove('open');
+        });
     });
 
     // ==========================================================
@@ -522,6 +617,12 @@
             formData.append('token', currentToken);
             await fetch('/logout', { method: 'POST', body: formData });
         } catch (e) {}
+        // Отписка от push
+        try {
+            const reg = await navigator.serviceWorker.ready;
+            const sub = await reg.pushManager.getSubscription();
+            if (sub) await sub.unsubscribe();
+        } catch(e) {}
         localStorage.removeItem('messenger_currentUser');
         localStorage.removeItem('messenger_token');
         location.reload();
@@ -534,6 +635,7 @@
         knownUsers = JSON.parse(localStorage.getItem('chats_' + currentUser) || '[]');
         await loadMyProfile();
         requestNotificationPermission();
+        await setupPushNotifications();
         initWS();
         await fetchUserGroups();
         updateOnlineStatus();
@@ -551,6 +653,38 @@
                 if (perm === "granted") showToast('🔔 Уведомления включены', 'Вы будете получать уведомления о новых сообщениях');
             });
         }
+    }
+
+    // ── PUSH: подписка на Web Push ──
+    async function setupPushNotifications() {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+        try {
+            const reg = await navigator.serviceWorker.ready;
+            if (!reg.pushManager) return;
+            let sub = await reg.pushManager.getSubscription();
+            if (!sub) {
+                const keyRes = await fetch('/push/publickey');
+                if (!keyRes.ok) return;
+                const { publicKey } = await keyRes.json();
+                sub = await reg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(publicKey),
+                });
+            }
+            const form = new FormData();
+            form.append('token', currentToken);
+            form.append('subscription', JSON.stringify(sub.toJSON()));
+            await fetch('/push/subscribe', { method: 'POST', body: form });
+        } catch (e) {
+            console.warn('[PUSH] Ошибка подписки:', e);
+        }
+    }
+
+    function urlBase64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        return new Uint8Array([...rawData].map(char => char.charCodeAt(0)));
     }
 
     function showToast(title, body, onClick) {
@@ -572,6 +706,7 @@
         let previewText = data.msg_type === 'text' ? data.content
             : data.msg_type === 'image' ? '📷 Фото'
             : data.msg_type === 'voice' ? '🎤 Голосовое сообщение'
+            : data.msg_type === 'video' ? '📹 Видео-кружок'
             : data.msg_type === 'sticker' ? `Стикер ${data.content}`
             : '📁 Файл';
 
@@ -586,14 +721,13 @@
 
         showToast('@' + data.sender + (data.is_group ? ` (${chatTitle})` : ''), previewText, goToChat);
 
-        // Системное уведомление когда вкладка скрыта
         if (document.hidden && "Notification" in window && Notification.permission === "granted") {
             try {
                 const n = new Notification('@' + data.sender + (data.is_group ? ` (${chatTitle})` : ''), {
                     body: previewText,
                     icon: '/static/icon-192.png',
                     badge: '/static/icon-96.png',
-                    tag: chatKey, // группирует уведомления от одного чата
+                    tag: chatKey,
                     renotify: true,
                 });
                 n.onclick = () => { window.focus(); goToChat(); n.close(); };
@@ -621,7 +755,7 @@
 
         ws.onopen = () => {
             setConnIndicator('🟢 онлайн', 'rgba(16,185,129,0.6)');
-            startPing(); // ← запускаем пинг после подключения
+            startPing();
         };
 
         ws.onclose = (e) => {
@@ -642,7 +776,6 @@
             let data;
             try { data = JSON.parse(event.data); } catch (e) { return; }
 
-            // ── обработка pong ──
             if (data.type === 'pong') {
                 if (pongTimeout) { clearTimeout(pongTimeout); pongTimeout = null; }
                 return;
@@ -932,13 +1065,81 @@
         }
     }
 
-    function startNewChat() {
-        let user = document.getElementById('new-chat-input').value.trim().replace('@', '');
-        if (user && user !== currentUser) {
-            addKnownUser(user);
-            selectChat(user, false);
-            document.getElementById('new-chat-input').value = '';
+    // ── Честный поиск аккаунтов ──
+    function onSearchInputDebounce() {
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = setTimeout(performAccountSearch, 300);
+    }
+
+    async function performAccountSearch() {
+        const input = document.getElementById('new-chat-input');
+        const dropdown = document.getElementById('search-suggestions');
+        const q = input.value.trim();
+        if (!q) { dropdown.classList.remove('open'); return; }
+
+        try {
+            const res = await fetch(`/search?q=${encodeURIComponent(q)}&token=${encodeURIComponent(currentToken)}`);
+            if (!res.ok) { dropdown.classList.remove('open'); return; }
+            const results = await res.json();
+            renderSearchSuggestions(results, q);
+        } catch (e) {
+            dropdown.classList.remove('open');
         }
+    }
+
+    function renderSearchSuggestions(results, query) {
+        const dropdown = document.getElementById('search-suggestions');
+        dropdown.innerHTML = '';
+
+        if (results.length === 0) {
+            dropdown.innerHTML = '<div class="search-suggestion-empty">Пользователь не найден</div>';
+            dropdown.classList.add('open');
+            return;
+        }
+
+        results.forEach(u => {
+            const item = document.createElement('div');
+            item.className = 'search-suggestion-item';
+            const avatarHtml = u.avatar_url && u.avatar_url !== '/uploads/default.png'
+                ? `<div class="avatar avatar-sm"><img src="${u.avatar_url}"></div>`
+                : `<div class="avatar avatar-sm">${u.username.charAt(0).toUpperCase()}</div>`;
+            item.innerHTML = `${avatarHtml}<div class="search-suggestion-name">@${u.username}</div>`;
+            item.onclick = () => {
+                addKnownUser(u.username);
+                selectChat(u.username, false);
+                document.getElementById('new-chat-input').value = '';
+                dropdown.classList.remove('open');
+            };
+            dropdown.appendChild(item);
+        });
+        dropdown.classList.add('open');
+    }
+
+    async function startNewChat() {
+        const input = document.getElementById('new-chat-input');
+        let user = input.value.trim().replace('@', '');
+        if (!user) return;
+        if (user === currentUser) { input.value = ''; return; }
+
+        // Проверяем существование
+        try {
+            const res = await fetch(`/search?q=${encodeURIComponent(user)}&token=${encodeURIComponent(currentToken)}`);
+            const results = await res.json();
+            const exact = results.find(u => u.username.toLowerCase() === user.toLowerCase());
+            if (!exact) {
+                showToast('❌ Не найдено', `Пользователь @${user} не существует`);
+                return;
+            }
+            user = exact.username;
+        } catch (e) {
+            showToast('Ошибка', 'Не удалось проверить пользователя');
+            return;
+        }
+
+        addKnownUser(user);
+        selectChat(user, false);
+        input.value = '';
+        document.getElementById('search-suggestions').classList.remove('open');
     }
 
     async function submitCreateGroup() {
@@ -1153,6 +1354,7 @@
         let previewText = msg.msg_type === 'text' ? msg.content
             : msg.msg_type === 'image' ? '📷 Фото'
             : msg.msg_type === 'voice' ? '🎤 Голосовое сообщение'
+            : msg.msg_type === 'video' ? '📹 Видео-кружок'
             : msg.msg_type === 'sticker' ? 'Стикер ' + msg.content : '📁 Файл';
         document.getElementById('reply-bar-sender').innerText = '@' + msg.sender;
         document.getElementById('reply-bar-content').innerText = previewText;
@@ -1230,7 +1432,7 @@
             ws.send(JSON.stringify({
                 type: 'message', target: activeChatTarget, sender: currentUser,
                 content: data.file_url,
-                msg_type: file.type.startsWith("image/") ? 'image' : 'file',
+                msg_type: file.type.startsWith("image/") ? 'image' : file.type.startsWith("video/") ? 'video' : 'file',
                 is_group: isCurrentGroup,
                 reply_to: replyTarget ? replyTarget.id : null
             }));
@@ -1354,6 +1556,83 @@
         } catch (e) { alert("Не удалось отправить голосовое"); }
     }
 
+    // ── ВИДЕО-КРУЖКИ ──
+    async function startVideoRecording() {
+        if (!activeChatTarget) return;
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert("Ваш браузер не поддерживает запись видео."); return;
+        }
+        try {
+            videoStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 320 } },
+                audio: true
+            });
+            const videoEl = document.getElementById('video-preview-el');
+            videoEl.srcObject = videoStream;
+
+            const videoMime = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+                .find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
+            videoRecorder = videoMime
+                ? new MediaRecorder(videoStream, { mimeType: videoMime })
+                : new MediaRecorder(videoStream);
+            videoChunks = [];
+            videoCancelled = false;
+            videoRecorder.ondataavailable = (e) => { if (e.data.size > 0) videoChunks.push(e.data); };
+            videoRecorder.onstop = () => {
+                videoStream.getTracks().forEach(t => t.stop());
+                videoEl.srcObject = null;
+                if (!videoCancelled) uploadAndSendVideo();
+            };
+            videoRecorder.start();
+            videoSeconds = 0;
+            document.getElementById('video-recording-preview').classList.add('active');
+            updateVideoTimer();
+            videoTimerHandle = setInterval(() => { videoSeconds++; updateVideoTimer(); }, 1000);
+        } catch (e) {
+            alert("Не удалось получить доступ к камере: " + (e.message || ''));
+        }
+    }
+
+    function updateVideoTimer() {
+        const m = Math.floor(videoSeconds / 60);
+        const s = videoSeconds % 60;
+        document.getElementById('video-rec-timer').innerText = `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    function cancelVideoRecording() {
+        videoCancelled = true;
+        if (videoRecorder && videoRecorder.state === 'recording') videoRecorder.stop();
+        clearInterval(videoTimerHandle);
+        document.getElementById('video-recording-preview').classList.remove('active');
+    }
+
+    function stopVideoAndSend() {
+        if (videoRecorder && videoRecorder.state === 'recording') videoRecorder.stop();
+        clearInterval(videoTimerHandle);
+        document.getElementById('video-recording-preview').classList.remove('active');
+    }
+
+    async function uploadAndSendVideo() {
+        if (videoChunks.length === 0 || !activeChatTarget) return;
+        const blob = new Blob(videoChunks, { type: (videoRecorder && videoRecorder.mimeType) || 'video/webm' });
+        const file = new File([blob], `video_${Date.now()}.webm`, { type: blob.type });
+        const formData = new FormData();
+        formData.append("token", currentToken);
+        formData.append("file", file);
+        try {
+            const res = await fetch("/upload", { method: "POST", body: formData });
+            if (!res.ok) { const err = await res.json().catch(() => ({})); alert(err.detail || "Не удалось отправить видео"); return; }
+            const data = await res.json();
+            if (!ws || ws.readyState !== WebSocket.OPEN) { alert("Нет соединения."); return; }
+            ws.send(JSON.stringify({
+                type: 'message', target: activeChatTarget, sender: currentUser,
+                content: data.file_url, msg_type: 'video', is_group: isCurrentGroup,
+                duration: videoSeconds, reply_to: replyTarget ? replyTarget.id : null
+            }));
+            cancelReply();
+        } catch (e) { alert("Не удалось отправить видео"); }
+    }
+
     function toggleReactionPicker(messageId) {
         document.querySelectorAll('.reaction-picker.open').forEach(el => {
             if (el.dataset.msgId !== String(messageId)) el.classList.remove('open');
@@ -1423,6 +1702,11 @@
         if (msg.msg_type === 'text') contentHtml = `<div>${escapeHtml(msg.content)}</div>`;
         else if (msg.msg_type === 'image') contentHtml = `<img src="${msg.content}" class="msg-img" onclick="document.getElementById('lightbox-img').src=this.src; document.getElementById('lightbox').style.display='flex'">`;
         else if (msg.msg_type === 'voice') contentHtml = `<div class="msg-voice">🎤 <audio controls src="${msg.content}"></audio></div>`;
+        else if (msg.msg_type === 'video') contentHtml = `
+            <div class="msg-video-circle" onclick="playVideoCircle(this, '${msg.content}')">
+                <video src="${msg.content}" muted playsinline preload="metadata"></video>
+                <div class="msg-video-play-icon">▶</div>
+            </div>`;
         else if (msg.msg_type === 'sticker') contentHtml = `<div class="msg-sticker-emoji">${msg.content}</div>`;
         else contentHtml = `<a href="${msg.content}" target="_blank" style="color:var(--accent-b)">📁 Файл</a>`;
 
@@ -1431,6 +1715,7 @@
             let replyPreview = msg.reply_to.msg_type === 'text' ? escapeHtml(msg.reply_to.content)
                 : msg.reply_to.msg_type === 'image' ? '📷 Фото'
                 : msg.reply_to.msg_type === 'voice' ? '🎤 Голосовое'
+                : msg.reply_to.msg_type === 'video' ? '📹 Видео'
                 : msg.reply_to.msg_type === 'sticker' ? 'Стикер ' + msg.reply_to.content : '📁 Файл';
             replyHtml = `
                 <div class="msg-reply-quote" onclick="scrollToMessage(${msg.reply_to.id})">
@@ -1470,6 +1755,20 @@
         attachSwipeToReply(bubbleTouchZone, { id: msg.id, sender: msg.sender, content: msg.content, msg_type: msg.msg_type });
 
         return wrapper;
+    }
+
+    function playVideoCircle(wrapperEl, src) {
+        const video = wrapperEl.querySelector('video');
+        if (!video) return;
+        if (video.paused) {
+            video.muted = false;
+            video.play();
+            wrapperEl.classList.add('playing');
+            video.onended = () => { wrapperEl.classList.remove('playing'); };
+        } else {
+            video.pause();
+            wrapperEl.classList.remove('playing');
+        }
     }
 
     function appendMessageToUI(msg, skipAnim) {
