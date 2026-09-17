@@ -655,17 +655,29 @@
         }
     }
 
-    // ── PUSH: подписка на Web Push ──
+    // ── PUSH: подписка на Web Push с авто-переподпиской при смене ключа ──
     async function setupPushNotifications() {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
         try {
             const reg = await navigator.serviceWorker.ready;
             if (!reg.pushManager) return;
+            const keyRes = await fetch('/push/publickey');
+            if (!keyRes.ok) return;
+            const { publicKey } = await keyRes.json();
             let sub = await reg.pushManager.getSubscription();
+            if (sub) {
+                // Проверяем, совпадает ли ключ подписки с актуальным серверным
+                const raw = new Uint8Array(sub.options.applicationServerKey || []);
+                let bin = '';
+                raw.forEach(b => bin += String.fromCharCode(b));
+                const existingKey = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+                if (existingKey !== publicKey) {
+                    // Ключи не совпадают — сервер перезапустился, переподписываемся
+                    await sub.unsubscribe();
+                    sub = null;
+                }
+            }
             if (!sub) {
-                const keyRes = await fetch('/push/publickey');
-                if (!keyRes.ok) return;
-                const { publicKey } = await keyRes.json();
                 sub = await reg.pushManager.subscribe({
                     userVisibleOnly: true,
                     applicationServerKey: urlBase64ToUint8Array(publicKey),
