@@ -78,7 +78,7 @@ _VAPID_PRIVATE_PEM = _VAPID.private_key.private_bytes(
     Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
 ).decode()
 _VAPID_PUBLIC_B64 = base64.urlsafe_b64encode(
-    _VAPID.public_key.public_bytes(Encoding.X9_62, PublicFormat.UncompressedPoint)
+   _VAPID.public_key.public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
 ).decode().rstrip("=")
 VAPID_CLAIMS = {"sub": "mailto:admin@nexus-messenger.local"}
 
