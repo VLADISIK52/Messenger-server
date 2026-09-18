@@ -54,7 +54,7 @@
         #splash-screen.hidden::before { animation-play-state: paused; }
         .splash-icon { width: 96px; height: 96px; border-radius: 28px; background: var(--accent-grad); display: flex; align-items: center; justify-content: center; font-size: 44px; position: relative; z-index: 1; box-shadow: 0 20px 50px rgba(124,92,255,0.35); }
 
-        #auth-screen { display: none; position: fixed; inset: 0; z-index: 100; background: transparent; justify-content: center; align-items: center; overflow: hidden; }
+        #auth-screen { display: none; position: fixed; inset: 0; z-index: 100; background: var(--bg-void); justify-content: center; align-items: center; overflow: hidden; }
         .auth-box { background: rgba(18,15,28,0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); padding: 40px 32px; border-radius: 32px; border: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; gap: 14px; width: 90%; max-width: 400px; position: relative; z-index: 1; box-shadow: 0 30px 80px rgba(0,0,0,0.5); }
         .auth-title { font-family: 'Sora', sans-serif; font-size: 26px; font-weight: 800; text-align: center; }
         .auth-hint { text-align: center; font-size: 12px; color: var(--text-muted); margin-top: -6px; }
@@ -213,7 +213,6 @@
         #char-counter { text-align: right; font-size: 11px; color: var(--text-muted); padding: 2px 16px 0 0; height: 14px; }
         #char-counter.warn { color: var(--danger); }
 
-        /* Компактное меню вложений */
         .attach-menu {
             position: absolute; left: 14px; bottom: 66px;
             background: rgba(26,22,38,0.94); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
@@ -498,6 +497,7 @@
     let isLoadingOlder = false;
 
     let searchDebounceTimer = null;
+    let lastOnlineSnapshot = '';
 
     // ── PING/PONG ──────────────────────────────────────────────
     let pingInterval = null;
@@ -639,7 +639,7 @@
         initWS();
         await fetchUserGroups();
         updateOnlineStatus();
-        setInterval(updateOnlineStatus, 5000);
+        setInterval(updateOnlineStatus, 10000);
     }
 
     // ==========================================================
@@ -807,6 +807,10 @@
         let chatTarget;
         if (data.is_group) {
             chatTarget = data.target;
+            // Если группа ещё не известна — подтянем список групп один раз
+            if (!userGroups.find(g => g.group_id === chatTarget)) {
+                fetchUserGroups().then(() => renderUserList());
+            }
         } else if (data.sender === currentUser) {
             chatTarget = data.target;
         } else {
@@ -1015,7 +1019,7 @@
             getProfile(member).then(p => {
                 if (p.avatar_url && p.avatar_url !== '/uploads/default.png') {
                     const av = row.querySelector('.avatar');
-                    if (av) av.innerHTML = `<img src="${p.avatar_url}">`;
+                    if (av) av.innerHTML = `<img src="${p.avatar_url}" loading="lazy">`;
                 }
             });
         });
@@ -1075,15 +1079,20 @@
         } catch(e) {}
     }
 
+    // ── ОПТИМИЗАЦИЯ: опрос онлайна раз в 10 сек, без лишней перерисовки ──
     async function updateOnlineStatus() {
+        if (document.hidden) return; // вкладка свёрнута — не тратим запросы
         try {
             const res = await fetch('/users');
-            onlineUsers = await res.json();
+            const list = await res.json();
+            const snap = list.slice().sort().join(',');
+            if (snap === lastOnlineSnapshot) return; // ничего не изменилось — не перерисовываем
+            lastOnlineSnapshot = snap;
+            onlineUsers = list;
+            onlineUsers.forEach(u => { if (u !== currentUser) addKnownUser(u); });
+            renderUserList();
+            updateHeaderStatus();
         } catch (e) {}
-        await fetchUserGroups();
-        onlineUsers.forEach(u => { if(u !== currentUser) addKnownUser(u); });
-        renderUserList();
-        updateHeaderStatus();
     }
 
     function addKnownUser(user) {
@@ -1131,7 +1140,7 @@
             const item = document.createElement('div');
             item.className = 'search-suggestion-item';
             const avatarHtml = u.avatar_url && u.avatar_url !== '/uploads/default.png'
-                ? `<div class="avatar avatar-sm"><img src="${u.avatar_url}"></div>`
+                ? `<div class="avatar avatar-sm"><img src="${u.avatar_url}" loading="lazy"></div>`
                 : `<div class="avatar avatar-sm">${u.username.charAt(0).toUpperCase()}</div>`;
             item.innerHTML = `${avatarHtml}<div class="search-suggestion-name">@${u.username}</div>`;
             item.onclick = () => {
@@ -1256,7 +1265,7 @@
             getProfile(user).then(p => {
                 if (p.avatar_url && p.avatar_url !== '/uploads/default.png') {
                     const av = document.getElementById(`avatar-list-${cssSafe(user)}`);
-                    if (av) av.innerHTML = `<img src="${p.avatar_url}">`;
+                    if (av) av.innerHTML = `<img src="${p.avatar_url}" loading="lazy">`;
                 }
             });
         });
@@ -1473,10 +1482,10 @@
     }
 
     const STICKERS = [
-        '😂','🤣','','🥳','','🤩','','😱',
-        '🥶','🤔','😴','🙈','','😇','','🤯',
-        '❤️','💯','🔥','✨','🎉','👍','','',
-        '','💩','','🐶','🍕','☕','','⚡'
+        '😂','','😍','','😎','🤩','😭','😱',
+        '🥶','','😴','','🤡','😇','😡','🤯',
+        '❤️','💯','🔥','✨','🎉','','👎','',
+        '👀','💩','🐱','🐶','','☕','','⚡'
     ];
 
     function openStickerPicker() {
@@ -1729,8 +1738,8 @@
 
         let contentHtml;
         if (msg.msg_type === 'text') contentHtml = `<div>${escapeHtml(msg.content)}</div>`;
-        else if (msg.msg_type === 'image') contentHtml = `<img src="${msg.content}" class="msg-img" onclick="document.getElementById('lightbox-img').src=this.src; document.getElementById('lightbox').style.display='flex'">`;
-        else if (msg.msg_type === 'voice') contentHtml = `<div class="msg-voice">🎤 <audio controls src="${msg.content}"></audio></div>`;
+        else if (msg.msg_type === 'image') contentHtml = `<img src="${msg.content}" class="msg-img" loading="lazy" onclick="document.getElementById('lightbox-img').src=this.src; document.getElementById('lightbox').style.display='flex'">`;
+        else if (msg.msg_type === 'voice') contentHtml = `<div class="msg-voice">🎤 <audio controls preload="metadata" src="${msg.content}"></audio></div>`;
         else if (msg.msg_type === 'video') contentHtml = `
             <div class="msg-video-circle" onclick="playVideoCircle(this, '${msg.content}')">
                 <video src="${msg.content}" muted playsinline preload="metadata"></video>
