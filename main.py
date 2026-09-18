@@ -16,9 +16,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # ==========================================================
 #                    КОНФИГУРАЦИЯ ПУТЕЙ
-# На Render диск монтируется в /data —
-# там данные сохраняются между перезапусками.
-# Локально (при разработке) всё лежит рядом с main.py.
 # ==========================================================
 IS_RENDER = os.path.isdir("/data")
 DATA_DIR = "/data" if IS_RENDER else "."
@@ -36,8 +33,6 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    # VAPID-ключи генерируются в памяти при импорте модуля (см. секцию WEB PUSH),
-    # запись на диск не требуется — на Render файловая система только для чтения.
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -64,7 +59,6 @@ MESSAGES_PAGE_SIZE = 50
 
 # ==========================================================
 #          WEB PUSH (уведомления) — ключи в памяти
-# (без записи на диск: на Render файловая система только для чтения)
 # ==========================================================
 from pywebpush import webpush, WebPushException
 from py_vapid import Vapid
@@ -77,9 +71,12 @@ _VAPID.generate_keys()
 _VAPID_PRIVATE_PEM = _VAPID.private_key.private_bytes(
     Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
 ).decode()
-_VAPID_PUBLIC_B64 = base64.urlsafe_b64encode(
-    _VAPID.public_key.public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
-).decode().rstrip("=")
+# Сырой публичный ключ (65 байт): берём хвост стандартного DER-представления.
+# Работает на любой версии cryptography, без хрупких констант X962/X9_62.
+_VAPID_PUBLIC_RAW = _VAPID.public_key.public_bytes(
+    Encoding.DER, PublicFormat.SubjectPublicKeyInfo
+)[-65:]
+_VAPID_PUBLIC_B64 = base64.urlsafe_b64encode(_VAPID_PUBLIC_RAW).decode().rstrip("=")
 VAPID_CLAIMS = {"sub": "mailto:admin@nexus-messenger.local"}
 
 
@@ -136,13 +133,12 @@ def send_push_to_user(username: str, title: str, body: str) -> None:
 
 def get_db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-    conn.execute("PRAGMA journal_mode=WAL")   # БАГ-ФИХ: WAL режим для параллельных запросов
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
 
 def safe_alter(cursor: sqlite3.Cursor, sql: str) -> None:
-    """Выполняет ALTER TABLE, игнорируя ошибку если колонка уже существует."""
     try:
         cursor.execute(sql)
     except sqlite3.OperationalError:
@@ -182,7 +178,6 @@ def init_db() -> None:
         )
     ''')
     safe_alter(cursor, "ALTER TABLE messages ADD COLUMN reply_to INTEGER")
-    # Индексы для ускорения выборки истории
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id, id)")
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS reactions (
@@ -367,7 +362,6 @@ class ConnectionManager:
             return True
         except Exception as e:
             print(f"[WS] Ошибка отправки '{target_user}': {e}")
-            # БАГ-ФИХ: удаляем мёртвое соединение из словаря
             self.active_connections.pop(target_user, None)
             return False
 
@@ -380,8 +374,6 @@ manager = ConnectionManager()
 
 @app.get("/")
 def get_index():
-    # ФИКС: запрещаем браузеру кэшировать страницу —
-    # всегда отдаём свежий index.html
     return FileResponse(
         "index.html",
         headers={
@@ -398,7 +390,6 @@ def get_manifest():
 
 @app.get("/sw.js")
 def get_sw():
-    # Сервис-воркер тоже всегда должен быть свежим
     return FileResponse(
         "sw.js",
         media_type="application/javascript",
@@ -406,7 +397,6 @@ def get_sw():
     )
 
 
-# Иконки PWA: файлы лежат в корне репозитория — отдаём их по корневым адресам
 @app.get("/icon-192.png")
 def get_icon192():
     return FileResponse("icon-192.png", media_type="image/png")
@@ -424,8 +414,6 @@ def get_apple_icon():
 
 @app.get("/search")
 def search_users(q: str, token: str):
-    """Честный поиск: только реально существующие аккаунты,
-    регистронезависимо (включая кириллицу), топ-10."""
     require_auth(token)
     q = q.strip()
     if not q:
@@ -493,7 +481,6 @@ async def register(
             raise HTTPException(status_code=400, detail="Этот никнейм уже занят")
         avatar_url = "/uploads/default.png"
         if avatar and avatar.filename:
-            # БАГ-ФИХ: безопасное имя файла + проверка расширения
             ext = os.path.splitext(avatar.filename)[1].lower()
             if ext not in ALLOWED_UPLOAD_EXTENSIONS:
                 raise HTTPException(status_code=400, detail="Недопустимый тип файла для аватара")
@@ -526,7 +513,6 @@ async def login(username: str = Form(...), password: str = Form(...)):
         if not row:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
         if not row[0]:
-            # Старый аккаунт без пароля — задаём пароль сейчас
             conn.execute(
                 "UPDATE users SET password_hash = ? WHERE username = ?",
                 (hash_password(password), username),
@@ -578,7 +564,6 @@ async def update_profile(
     avatar: UploadFile = File(None),
 ):
     username = require_auth(token)
-    # БАГ-ФИХ: обрезаем bio до 150 символов на сервере тоже
     bio = bio[:150]
     conn = get_db()
     try:
@@ -642,7 +627,6 @@ async def create_group(
     member_list = [m.strip() for m in members.split(",") if m.strip()]
     if owner not in member_list:
         member_list.append(owner)
-    # БАГ-ФИХ: проверяем что участники существуют
     conn = get_db()
     try:
         for m in member_list:
@@ -722,7 +706,6 @@ async def add_group_member(
             raise HTTPException(status_code=404, detail="Группа не найдена")
         if row[0] != requester:
             raise HTTPException(status_code=403, detail="Только создатель может добавлять участников")
-        # БАГ-ФИХ: проверяем что пользователь существует
         if not conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
             raise HTTPException(status_code=404, detail=f"Пользователь @{username} не найден")
         conn.execute(
@@ -904,9 +887,6 @@ async def websocket_endpoint(
             data = await websocket.receive_json()
             msg_type = data.get("type", "message")
 
-            # ------------------------------------------------
-            # 1. НОВОЕ СООБЩЕНИЕ
-            # ------------------------------------------------
             if msg_type == "message":
                 is_group = bool(data.get("is_group", False))
                 target = data.get("target")
@@ -917,7 +897,6 @@ async def websocket_endpoint(
 
                 if not target or not content:
                     continue
-                # БАГ-ФИХ: ограничение длины сообщения на сервере
                 if len(content) > 2000:
                     continue
                 if is_group and not is_group_member(target, username):
@@ -975,9 +954,6 @@ async def websocket_endpoint(
                                 f"💬 {username}", content[:100],
                             )
 
-            # ------------------------------------------------
-            # 2. ОТМЕТКА "ПРОЧИТАНО"
-            # ------------------------------------------------
             elif msg_type == "read_receipt":
                 chat_id = data.get("chat_id")
                 sender_to_notify = data.get("sender")
@@ -997,9 +973,6 @@ async def websocket_endpoint(
                     sender_to_notify,
                 )
 
-            # ------------------------------------------------
-            # 3. РЕАКЦИЯ НА СООБЩЕНИЕ
-            # ------------------------------------------------
             elif msg_type == "reaction":
                 message_id = data.get("message_id")
                 target = data.get("target")
@@ -1048,16 +1021,10 @@ async def websocket_endpoint(
                     if target != username:
                         await manager.send_to_user(update_payload, target)
 
-            # ------------------------------------------------
-            # 4. PING / PONG — держим соединение живым
-            # ------------------------------------------------
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
                 continue
 
-            # ------------------------------------------------
-            # 5. ИНДИКАТОР "ПЕЧАТАЕТ..."
-            # ------------------------------------------------
             elif msg_type == "typing":
                 is_group = bool(data.get("is_group", False))
                 target = data.get("target")
