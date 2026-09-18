@@ -300,6 +300,254 @@
             .attach-menu { left: 12px; bottom: 64px; }
         }
     </style>
+
+<style id="neon-glass-redesign">
+/* ===== NEON GLASS / EMERALD MESSENGER — visual layer only ===== */
+:root{
+  --bg-void:#010b08!important;
+  --bg-panel:rgba(5,25,19,.72)!important;
+  --bg-elevated:rgba(8,38,28,.82)!important;
+  --bg-input:rgba(225,255,245,.075)!important;
+  --accent-a:#ffd36a!important;
+  --accent-b:#39f4df!important;
+  --accent-grad:linear-gradient(135deg,#ffe08a 0%,#ffb56f 32%,#35f5df 100%)!important;
+  --accent-soft:rgba(57,244,223,.13)!important;
+  --text-primary:#effff9!important;
+  --text-secondary:#a9cfc1!important;
+  --text-muted:#648d7e!important;
+  --border:rgba(176,255,231,.14)!important;
+  --glass:rgba(255,255,255,.045)!important;
+  --glow-mint:0 0 24px rgba(57,244,223,.28),0 0 70px rgba(57,244,223,.12)!important;
+  --glow-peach:0 0 24px rgba(255,211,106,.28),0 0 70px rgba(57,244,223,.12)!important;
+  --online:#62f3bd!important;
+  --shadow-soft:0 18px 60px rgba(0,0,0,.48)!important;
+}
+html,body{
+  background:
+    radial-gradient(900px 500px at 78% -10%,rgba(38,245,211,.10),transparent 62%),
+    radial-gradient(700px 500px at -10% 110%,rgba(255,194,94,.08),transparent 65%),
+    radial-gradient(500px 300px at 50% 45%,rgba(15,120,91,.06),transparent 70%),
+    #010b08!important;
+}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  opacity:.75;
+  background:
+    radial-gradient(5px 5px at 8% 17%,rgba(255,220,139,.8),transparent 70%),
+    radial-gradient(3px 3px at 17% 67%,rgba(255,220,139,.55),transparent 70%),
+    radial-gradient(4px 4px at 29% 24%,rgba(255,220,139,.7),transparent 70%),
+    radial-gradient(3px 3px at 43% 79%,rgba(255,220,139,.6),transparent 70%),
+    radial-gradient(5px 5px at 58% 12%,rgba(255,220,139,.65),transparent 70%),
+    radial-gradient(3px 3px at 73% 72%,rgba(255,220,139,.65),transparent 70%),
+    radial-gradient(4px 4px at 87% 25%,rgba(255,220,139,.65),transparent 70%),
+    radial-gradient(3px 3px at 94% 84%,rgba(255,220,139,.55),transparent 70%);
+  filter:blur(.15px);
+}
+#app{position:relative;z-index:1;gap:0}
+#sidebar{
+  width:340px;min-width:340px;
+  background:linear-gradient(180deg,rgba(4,23,17,.82),rgba(2,16,12,.76))!important;
+  border-right:1px solid rgba(102,255,218,.13)!important;
+  box-shadow:14px 0 50px rgba(0,0,0,.24),inset -1px 0 rgba(255,255,255,.025);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+}
+.sidebar-header{
+  padding:17px 17px!important;
+  background:linear-gradient(180deg,rgba(255,255,255,.025),transparent)!important;
+}
+.user-header-left{gap:11px}
+.avatar{
+  background:linear-gradient(145deg,#ffe29a 0%,#ffb778 42%,#38eed9 100%)!important;
+  color:#062019!important;
+  box-shadow:0 0 18px rgba(255,196,110,.30),0 0 34px rgba(57,244,223,.12),inset 0 1px 0 rgba(255,255,255,.65)!important;
+}
+.avatar-sm{box-shadow:0 0 14px rgba(57,244,223,.18)!important}
+.btn-logout{transition:.18s;color:#789b90!important}
+.btn-logout:hover{color:#fff;transform:translateY(-1px)}
+.add-user-bar{
+  padding:13px 15px!important;
+  background:rgba(1,14,10,.25);
+}
+.add-user-bar input,
+#search-input,
+.input-container input[type="text"]#msg-input,
+input[type="text"],input[type="password"],textarea{
+  background:rgba(211,255,243,.055)!important;
+  border-color:rgba(155,255,229,.13)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 0 0 1px rgba(0,0,0,.12)!important;
+}
+.add-user-bar input:focus,#search-input:focus,#msg-input:focus,input:focus,textarea:focus{
+  border-color:rgba(57,244,223,.55)!important;
+  box-shadow:0 0 0 3px rgba(57,244,223,.08),0 0 24px rgba(57,244,223,.08),inset 0 1px 0 rgba(255,255,255,.10)!important;
+}
+.add-user-bar button,.btn-primary,.btn-send,.voice-play,.btn-stop-rec,.video-rec-btn.send{
+  background:linear-gradient(135deg,#ffd978 0%,#ffb775 30%,#43f2dc 100%)!important;
+  color:#062018!important;
+  box-shadow:0 0 22px rgba(255,205,111,.22),0 0 42px rgba(57,244,223,.12),inset 0 1px 0 rgba(255,255,255,.65)!important;
+}
+.list-wrapper{padding:10px 11px!important;gap:6px}
+.chat-item{
+  min-height:68px;
+  padding:11px 12px!important;
+  border:1px solid transparent!important;
+  border-left:2px solid transparent!important;
+  border-radius:18px!important;
+  background:rgba(255,255,255,.028)!important;
+}
+.chat-item:hover{background:rgba(100,255,220,.055)!important;border-color:rgba(110,255,224,.08)!important}
+.chat-item.active{
+  background:linear-gradient(90deg,rgba(48,244,218,.12),rgba(48,244,218,.035))!important;
+  border:1px solid rgba(73,244,220,.10)!important;
+  border-left:2px solid #4bf2dc!important;
+  box-shadow:0 0 24px rgba(44,238,210,.08),inset 0 0 20px rgba(44,238,210,.025)!important;
+}
+.unread-badge{
+  background:linear-gradient(135deg,#ffe08a,#3ef0dc)!important;color:#062018!important;
+}
+#chat-area{
+  position:relative;
+  background:transparent!important;
+}
+#chat-area::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:
+   radial-gradient(650px 420px at 70% 20%,rgba(50,242,216,.055),transparent 70%),
+   radial-gradient(500px 350px at 20% 85%,rgba(255,201,107,.045),transparent 70%);
+}
+.chat-header{
+  background:rgba(3,20,15,.66)!important;
+  border-bottom:1px solid rgba(145,255,227,.10)!important;
+  backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);
+  box-shadow:0 10px 35px rgba(0,0,0,.12);
+}
+.chat-header::after{
+  background:linear-gradient(90deg,transparent,rgba(57,244,223,.42),rgba(255,211,106,.22),transparent)!important;
+}
+.btn-header-icon,.btn-icon{
+  background:rgba(255,255,255,.035)!important;
+  border-color:rgba(150,255,230,.12)!important;
+  color:#9eece0!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+}
+.btn-header-icon:hover,.btn-icon:hover{background:rgba(57,244,223,.08)!important}
+#messages{
+  padding:24px 24px 20px!important;
+  gap:3px!important;
+  position:relative;z-index:1;
+}
+.msg-wrapper{max-width:min(78%,620px);margin-bottom:9px}
+.msg-bubble{
+  padding:11px 15px!important;
+  border-radius:19px!important;
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+}
+.msg-wrapper.my .msg-bubble{
+  background:
+    linear-gradient(145deg,rgba(255,255,255,.22),rgba(255,255,255,0) 45%),
+    linear-gradient(135deg,rgba(255,215,123,.95),rgba(255,169,111,.94) 38%,rgba(80,240,218,.94))!important;
+  color:#061b15!important;
+  box-shadow:0 0 24px rgba(255,194,102,.20),0 0 55px rgba(57,244,223,.10),inset 0 1px 0 rgba(255,255,255,.65)!important;
+}
+.msg-wrapper.my .msg-bubble::after{background:#50e9d5!important}
+.msg-wrapper.other .msg-bubble{
+  background:linear-gradient(145deg,rgba(194,255,241,.105),rgba(76,189,164,.065))!important;
+  border:1px solid rgba(181,255,235,.17)!important;
+  color:#eafff7!important;
+  box-shadow:0 0 22px rgba(57,244,223,.08),inset 0 1px 0 rgba(255,255,255,.10),inset 0 0 24px rgba(80,255,224,.025)!important;
+}
+.msg-wrapper.other .msg-bubble::after{background:rgba(112,222,194,.20)!important}
+.msg-sender{color:#72a99a!important}
+.msg-footer{color:rgba(232,255,247,.68)}
+.reaction-pill{
+  background:rgba(4,26,19,.86)!important;
+  border-color:rgba(130,247,222,.12)!important;
+  box-shadow:0 4px 15px rgba(0,0,0,.16);
+}
+.reaction-pill.mine{border-color:rgba(57,244,223,.42)!important;background:rgba(57,244,223,.10)!important}
+#reply-bar{
+  background:rgba(7,35,26,.78)!important;
+  border-left-color:#45efd9!important;
+  box-shadow:0 0 20px rgba(57,244,223,.06);
+  backdrop-filter:blur(14px);
+}
+.input-container{
+  background:rgba(2,16,12,.72)!important;
+  border-top:1px solid rgba(150,255,229,.10)!important;
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  padding:13px 15px!important;
+}
+.input-row{gap:9px}
+.input-container input[type="text"]#msg-input{height:48px}
+.btn-icon,.btn-send{height:48px}
+.btn-icon{width:48px}
+.btn-send{width:48px}
+.attach-menu,.search-suggestions,.reaction-picker{
+  background:rgba(4,25,18,.93)!important;
+  border-color:rgba(137,255,228,.13)!important;
+  box-shadow:0 20px 60px rgba(0,0,0,.48),0 0 30px rgba(57,244,223,.06)!important;
+  backdrop-filter:blur(20px);
+}
+.attach-item:hover,.attach-item:active{background:rgba(57,244,223,.08)!important}
+.attach-ico,.sticker-item{
+  background:rgba(255,255,255,.035)!important;
+  border-color:rgba(150,255,230,.10)!important;
+}
+.modal-overlay{
+  background:rgba(0,7,5,.72)!important;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+}
+.modal-box,.auth-box{
+  background:linear-gradient(145deg,rgba(7,35,26,.94),rgba(2,18,13,.94))!important;
+  border-color:rgba(160,255,233,.15)!important;
+  box-shadow:0 25px 90px rgba(0,0,0,.58),0 0 45px rgba(57,244,223,.07),inset 0 1px 0 rgba(255,255,255,.08)!important;
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+}
+.auth-title{
+  background:linear-gradient(90deg,#f3fff9,#ffd77c 48%,#42f0db)!important;
+  -webkit-background-clip:text!important;background-clip:text!important;
+}
+#auth-screen{
+  background:
+    radial-gradient(700px 420px at 50% 0%,rgba(57,244,223,.10),transparent 65%),
+    radial-gradient(600px 400px at 50% 100%,rgba(255,205,112,.06),transparent 65%),
+    #010b08!important;
+}
+#splash-screen::before,#auth-screen::before{
+  background:radial-gradient(circle,rgba(57,244,223,.18) 0%,rgba(255,204,111,.12) 42%,transparent 70%)!important;
+}
+.splash-icon{
+  background:linear-gradient(135deg,#ffe08b,#ffb677 36%,#3cf1dc)!important;
+  color:#052019;
+  box-shadow:0 0 38px rgba(57,244,223,.22),0 0 70px rgba(255,204,111,.16)!important;
+}
+#splash-screen>div:last-child{
+  text-shadow:0 0 30px rgba(57,244,223,.15);
+}
+#lightbox{
+  background:rgba(0,7,5,.94)!important;
+  backdrop-filter:blur(12px);
+}
+#conn-indicator{
+  background:rgba(3,22,16,.78)!important;
+  border-color:rgba(104,255,224,.12)!important;
+  box-shadow:0 0 18px rgba(57,244,223,.08)!important;
+}
+.toast{
+  background:rgba(4,26,19,.94)!important;
+  border-color:rgba(57,244,223,.16)!important;
+  box-shadow:0 15px 50px rgba(0,0,0,.48),0 0 22px rgba(57,244,223,.08)!important;
+}
+::-webkit-scrollbar-thumb{background:linear-gradient(#2cebd3,#ffc96e)!important}
+::-webkit-scrollbar-track{background:transparent!important}
+@media (max-width:768px){
+  #sidebar{width:100%;min-width:100%;background:rgba(2,16,12,.92)!important}
+  #messages{padding:18px 12px!important}
+  .msg-wrapper{max-width:88%}
+  .chat-header{padding:11px 12px!important}
+  .input-container{padding:10px 10px!important}
+}
+</style>
+
 </head>
 <body>
 <div id="splash-screen">
