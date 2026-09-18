@@ -28,21 +28,15 @@ DB_FILE = os.path.join(DATA_DIR, "chat.db")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
 
-# Ник администратора (Render → Environment → ADMIN_USERNAME)
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
 
-# Штамп версии вычисляется сам: хеш коммита деплоя на Render
-# (или время изменения index.html локально). Используется для
-# «самолечения» страниц: старая страница видит несовпадение и чинит себя.
 try:
     APP_VERSION = os.environ.get("RENDER_GIT_COMMIT", "") or str(int(os.path.getmtime("index.html")))
 except Exception:
     APP_VERSION = "dev"
 
-# Московское время для журналов админ-панели
 MSK = timezone(timedelta(hours=3))
 
-# Журнал подключений (последние 100 событий) для админ-панели
 CONNECT_LOG = deque(maxlen=100)
 
 # ==========================================================
@@ -68,7 +62,7 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 USERNAME_RE = re.compile(r'^[A-Za-zА-Яа-яЁё0-9]{3,20}$')
-MAX_UPLOAD_SIZE = 25 * 1024 * 1024  # 25 МБ
+MAX_UPLOAD_SIZE = 25 * 1024 * 1024
 ALLOWED_UPLOAD_EXTENSIONS = {
     '.jpg', '.jpeg', '.png', '.gif', '.webp',
     '.mp3', '.wav', '.ogg', '.webm', '.m4a',
@@ -268,7 +262,6 @@ def is_admin(username: str) -> bool:
 
 
 def utc_str_to_msk(s: Optional[str]) -> str:
-    """Преобразует время SQLite (UTC) в московское."""
     if not s:
         return ""
     try:
@@ -451,8 +444,6 @@ manager = ConnectionManager()
 
 @app.get("/")
 def get_index():
-    # Отдаём index.html, подставляя актуальный штамп версии вместо заглушки.
-    # Благодаря этому самолечение страницы работает автоматически при каждом деплое.
     with open("index.html", "r", encoding="utf-8") as f:
         html = f.read()
     html = html.replace("__APP_VERSION__", APP_VERSION)
@@ -1116,6 +1107,9 @@ async def websocket_endpoint(
 ):
     verified_username = get_username_by_token(token)
     if not verified_username or verified_username != username:
+        # ВАЖНО: сначала принимаем рукопожатие, потом закрываем с кодом 4001 —
+        # только так браузер получит наш код и клиент сам сбросит мёртвый токен
+        await websocket.accept()
         await websocket.close(code=4001)
         return
 
