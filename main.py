@@ -7,13 +7,13 @@ import json
 import base64
 import asyncio
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 from typing import Dict, List, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 # ==========================================================
@@ -28,8 +28,19 @@ DB_FILE = os.path.join(DATA_DIR, "chat.db")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
 
-# Ник администратора (задаётся в Render → Environment → ADMIN_USERNAME)
+# Ник администратора (Render → Environment → ADMIN_USERNAME)
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
+
+# Штамп версии ВЫЧИСЛЯЕТСЯ САМ: хеш коммита деплоя на Render
+# (или время изменения index.html локально). Используется для
+# «самолечения» страниц: старая страница видит несовпадение и чинит себя.
+try:
+    APP_VERSION = os.environ.get("RENDER_GIT_COMMIT", "") or str(int(os.path.getmtime("index.html")))
+except Exception:
+    APP_VERSION = "dev"
+
+# Московское время для журналов админ-панели
+MSK = timezone(timedelta(hours=3))
 
 # Журнал подключений (последние 100 событий) для админ-панели
 CONNECT_LOG = deque(maxlen=100)
@@ -233,7 +244,6 @@ def get_chat_id(user1: str, user2: str) -> str:
 
 
 def chat_recipients(chat_id: str) -> List[str]:
-    """Кому показывать сообщение: участники группы или двое из лички."""
     if chat_id.startswith("group_"):
         return get_group_member_usernames(chat_id)
     parts = chat_id.split("_")
@@ -254,6 +264,17 @@ def is_blocked(blocker: str, blocked: str) -> bool:
 
 def is_admin(username: str) -> bool:
     return bool(ADMIN_USERNAME) and username == ADMIN_USERNAME
+
+
+def utc_str_to_msk(s: Optional[str]) -> str:
+    """Преобразует время SQLite (UTC) в московское."""
+    if not s:
+        return ""
+    try:
+        dt = datetime.strptime(s[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+        return dt.astimezone(MSK).strftime("%d.%m.%Y %H:%M")
+    except Exception:
+        return s
 
 # ==========================================================
 #                    ПАРОЛИ И АВТОРИЗАЦИЯ
@@ -391,7 +412,7 @@ class ConnectionManager:
         await websocket.accept()
         print(f"[WS] + connect: {username}", flush=True)
         CONNECT_LOG.appendleft({
-            "time": datetime.now().strftime("%d.%m %H:%M:%S"),
+            "time": datetime.now(MSK).strftime("%d.%m %H:%M:%S"),
             "user": username, "action": "connect",
         })
         self.active_connections[username] = websocket
@@ -399,7 +420,7 @@ class ConnectionManager:
     def disconnect(self, username: str) -> None:
         print(f"[WS] - disconnect: {username}", flush=True)
         CONNECT_LOG.appendleft({
-            "time": datetime.now().strftime("%d.%m %H:%M:%S"),
+            "time": datetime.now(MSK).strftime("%d.%m %H:%M:%S"),
             "user": username, "action": "disconnect",
         })
         self.active_connections.pop(username, None)
@@ -428,12 +449,26 @@ manager = ConnectionManager()
 
 @app.get("/")
 def get_index():
-    return FileResponse(
-        "index.html",
+    # Отдаём index.html, подставляя актуальный штамп версии вместо заглушки.
+    # Благодаря этому самолечение страницы работает автоматически при каждом деплое.
+    with open("index.html", "r", encoding="utf-8") as f:
+        html = f.read()
+    html = html.replace("__APP_VERSION__", APP_VERSION)
+    return Response(
+        content=html,
+        media_type="text/html; charset=utf-8",
         headers={
             "Cache-Control": "no-store, no-cache, must-revalidate",
             "Pragma": "no-cache",
         },
+    )
+
+
+@app.get("/version")
+def get_version():
+    return JSONResponse(
+        {"version": APP_VERSION},
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
     )
 
 
@@ -796,7 +831,7 @@ def admin_stats(token: str):
                 "username": r[0],
                 "avatar_url": r[1] or "/uploads/default.png",
                 "status_text": r[2] or "",
-                "created_at": r[3] or "",
+                "created_at": utc_str_to_msk(r[3]),
             }
             for r in conn.execute(
                 "SELECT username, avatar_url, status_text, created_at FROM users ORDER BY rowid"
@@ -1102,7 +1137,6 @@ async def websocket_endpoint(
                     continue
                 if is_group and not is_group_member(target, username):
                     continue
-                # Чёрный список: в личку заблокировавшему — нельзя
                 if not is_group and is_blocked(target, username):
                     await websocket.send_json({
                         "type": "error",
