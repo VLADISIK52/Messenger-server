@@ -145,16 +145,22 @@
         .msg-row { display: flex; align-items: center; gap: 6px; }
         .msg-wrapper.my .msg-row { flex-direction: row-reverse; }
         .msg-bubble-touch-zone { touch-action: pan-y; }
-        /* ОПТИМИЗАЦИЯ: убран backdrop-filter с каждого пузыря — это главный источник лагов на длинных переписках */
         .msg-bubble { padding: 10px 16px; font-size: 14px; line-height: 1.45; word-break: break-word; position: relative; transition: transform 0.15s ease; }
         .msg-wrapper.my .msg-bubble { background: var(--accent-grad); color: #fff; border-radius: 22px 22px 6px 22px; box-shadow: 0 6px 20px rgba(124,92,255,0.28); }
         .msg-wrapper.other .msg-bubble { background: #1a1626; border: 1px solid var(--border); border-radius: 22px 22px 22px 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.25); }
         .msg-sender { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; }
         .msg-img { max-width: 240px; border-radius: 16px; margin-top: 4px; cursor: pointer; display: block; }
-        .msg-voice { display: flex; align-items: center; gap: 8px; min-width: 200px; }
-        .msg-voice audio { max-width: 200px; height: 34px; }
         .msg-deleted { opacity: 0.65; font-style: italic; }
         .msg-edited { font-size: 10px; opacity: 0.7; margin-right: 4px; }
+
+        /* Новый тёмный плеер голосовых */
+        .msg-voice2 { display: flex; align-items: center; gap: 10px; min-width: 210px; }
+        .msg-voice2 audio { display: none; }
+        .voice-play { width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--accent-grad); color: #fff; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 4px 12px rgba(124,92,255,0.35); }
+        .voice-bar { flex: 1; height: 4px; background: rgba(255,255,255,0.25); border-radius: 2px; position: relative; overflow: hidden; }
+        .msg-wrapper.other .voice-bar { background: rgba(124,92,255,0.25); }
+        .voice-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: var(--accent-grad); border-radius: 2px; }
+        .voice-time { font-size: 11px; opacity: 0.85; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 
         .msg-video-circle { width: 180px; height: 180px; border-radius: 50%; position: relative; overflow: hidden; cursor: pointer; background: #000; margin-top: 4px; box-shadow: 0 0 0 2px var(--accent-b), 0 8px 20px rgba(124,92,255,0.3); transition: transform 0.15s; }
         .msg-wrapper.my .msg-video-circle { box-shadow: 0 0 0 2px rgba(255,255,255,0.8), 0 8px 20px rgba(255,106,92,0.3); }
@@ -504,10 +510,7 @@
 <div id="toast-container"></div>
 
 <script>
-    // ── САМОЛЕЧЕНИЕ: если страница старее сервера (приехала из кэша),
-    // сама удаляет старые сервис-воркеры/кэши и перезагружается.
-    // Версию подставляет сервер автоматически при каждом деплое —
-    // вручную менять ничего не нужно никогда.
+    // ── САМОЛЕЧЕНИЕ: старая страница сама себя чинит при несовпадении версии ──
     const APP_VERSION = "__APP_VERSION__";
     (function selfHeal() {
         try {
@@ -577,6 +580,7 @@
 
     let searchDebounceTimer = null;
     let lastOnlineSnapshot = '';
+    let onlineTick = 0;
 
     // ── PING/PONG ──────────────────────────────────────────────
     let pingInterval = null;
@@ -602,7 +606,12 @@
     }
     // ───────────────────────────────────────────────────────────
 
-    const REACTION_EMOJIS = ['👍', '❤️', '😂', '', '😢', ''];
+    const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+
+    function fmtDuration(s) {
+        s = Math.max(0, Math.round(s || 0));
+        return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }
 
     document.addEventListener("DOMContentLoaded", () => {
         let savedUser = localStorage.getItem('messenger_currentUser');
@@ -703,6 +712,7 @@
         } catch(e) {}
         localStorage.removeItem('messenger_currentUser');
         localStorage.removeItem('messenger_token');
+        localStorage.removeItem('lastChat_' + currentUser);
         location.reload();
     }
 
@@ -716,12 +726,16 @@
         if (myProfile.is_admin) document.getElementById('btn-admin').style.display = '';
         renderMyStatusLine();
         requestNotificationPermission();
-        // ВАЖНО: сначала сокет (живые сообщения), push — фоном и никогда не блокирует сокет
         initWS();
         setupPushNotifications();
         await fetchUserGroups();
         updateOnlineStatus();
         setInterval(updateOnlineStatus, 10000);
+        // Восстанавливаем последний открытый чат после перезагрузки страницы
+        try {
+            const lc = JSON.parse(localStorage.getItem('lastChat_' + currentUser) || 'null');
+            if (lc && lc.target) selectChat(lc.target, !!lc.isGroup, lc.title || '');
+        } catch (e) {}
     }
 
     // ==========================================================
@@ -740,7 +754,6 @@
     async function setupPushNotifications() {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
         try {
-            // Ждём сервис-воркер максимум 5 секунд — никогда не зависаем навсегда
             const reg = await Promise.race([
                 navigator.serviceWorker.ready,
                 new Promise((_, reject) => setTimeout(() => reject(new Error('sw-ready-timeout')), 5000)),
@@ -1116,6 +1129,7 @@
             const res = await fetch(`/profile/${currentUser}`);
             myProfile = await res.json();
         } catch (e) { myProfile = { avatar_url: '/uploads/default.png', bio: '', status_text: '', is_admin: false }; }
+        profileCache[currentUser] = { data: myProfile, ts: Date.now() };
         renderMyAvatar();
     }
 
@@ -1138,14 +1152,18 @@
         }
     }
 
-    async function getProfile(username) {
-        if (profileCache[username]) return profileCache[username];
+    // Кэш профилей с TTL 60 секунд: статусы и аватарки освежаются сами
+    async function getProfile(username, force) {
+        const c = profileCache[username];
+        if (c && !force && (Date.now() - c.ts) < 60000) return c.data;
         try {
             const res = await fetch(`/profile/${username}`);
             const data = await res.json();
-            profileCache[username] = data;
+            profileCache[username] = { data, ts: Date.now() };
             return data;
-        } catch (e) { return { username, avatar_url: '/uploads/default.png', bio: '', status_text: '' }; }
+        } catch (e) {
+            return c ? c.data : { username, avatar_url: '/uploads/default.png', bio: '', status_text: '' };
+        }
     }
 
     function openMyProfile() {
@@ -1179,7 +1197,7 @@
         try {
             const res = await fetch('/profile/update', { method: 'POST', body: formData });
             myProfile = await res.json();
-            profileCache[currentUser] = myProfile;
+            profileCache[currentUser] = { data: myProfile, ts: Date.now() };
             renderMyAvatar();
             renderMyStatusLine();
             if (myProfile.is_admin) document.getElementById('btn-admin').style.display = '';
@@ -1190,7 +1208,7 @@
 
     async function openUserProfile(username) {
         viewedUsername = username;
-        const profile = await getProfile(username);
+        const profile = await getProfile(username, true);
         document.getElementById('view-profile-name').innerText = '@' + username;
         document.getElementById('view-profile-bio').innerText = profile.bio && profile.bio.length > 0
             ? profile.bio : 'Пользователь пока ничего о себе не написал';
@@ -1358,6 +1376,14 @@
 
     async function updateOnlineStatus() {
         if (document.hidden) return;
+        // Раз в минуту освежаем профили: новые статусы и аватарки подтягиваются сами
+        onlineTick++;
+        if (onlineTick % 6 === 0 && knownUsers.length > 0) {
+            Promise.all(knownUsers.slice(0, 30).map(u => getProfile(u, true))).then(() => {
+                renderUserList();
+                updateHeaderStatus();
+            });
+        }
         try {
             const res = await fetch('/users');
             const list = await res.json();
@@ -1517,7 +1543,8 @@
 
         sortedUsers.forEach(user => {
             let isOnline = onlineUsers.includes(user);
-            const customStatus = profileCache[user] && profileCache[user].status_text;
+            const pc = profileCache[user];
+            const customStatus = pc && pc.data ? pc.data.status_text : '';
             let statusHtml = customStatus
                 ? escapeHtml(customStatus)
                 : (isOnline
@@ -1561,6 +1588,7 @@
         toggleAttachMenu(false);
         oldestLoadedMessageId = null;
         noMoreOlderMessages = false;
+        localStorage.setItem('lastChat_' + currentUser, JSON.stringify({ target, isGroup, title: groupTitle }));
 
         if (isGroup) {
             document.getElementById('target-username').innerText = groupTitle;
@@ -1592,7 +1620,8 @@
             return;
         }
         if (isCurrentGroup) { document.getElementById('target-status').innerText = 'Группа'; return; }
-        const customStatus = profileCache[activeChatTarget] && profileCache[activeChatTarget].status_text;
+        const pc = profileCache[activeChatTarget];
+        const customStatus = pc && pc.data ? pc.data.status_text : '';
         const el = document.getElementById('target-status');
         if (customStatus) {
             el.innerHTML = escapeHtml(customStatus);
@@ -1611,6 +1640,7 @@
         document.getElementById('app').classList.remove('mobile-chat-active');
         document.getElementById('conn-indicator').style.display = 'block';
         activeChatTarget = "";
+        localStorage.removeItem('lastChat_' + currentUser);
         cancelReply();
         closeSearchBar();
         toggleAttachMenu(false);
@@ -1770,10 +1800,10 @@
     }
 
     const STICKERS = [
-        '😂','','😍','🥳','😎','','😭','',
+        '😂','🤣','','🥳','😎','🤩','','😱',
         '🥶','🤔','😴','🙈','','😇','😡','🤯',
-        '❤️','💯','🔥','✨','🎉','👍','👎','🙌',
-        '👀','','🐱','','🍕','','🌈','⚡'
+        '❤️','💯','','✨','','👍','👎','🙌',
+        '👀','💩','🐱','🐶','🍕','☕','🌈',''
     ];
 
     function openStickerPicker() {
@@ -1893,6 +1923,9 @@
                 video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 320 } },
                 audio: true
             });
+            if (videoStream.getAudioTracks().length === 0) {
+                showToast('⚠️ Без микрофона', 'Кружок запишется без звука');
+            }
             const videoEl = document.getElementById('video-preview-el');
             videoEl.srcObject = videoStream;
 
@@ -2029,10 +2062,16 @@
         if (msg.msg_type === 'deleted') contentHtml = `<div class="msg-deleted">🚫 Сообщение удалено</div>`;
         else if (msg.msg_type === 'text') contentHtml = `<div class="msg-text">${escapeHtml(msg.content)}</div>`;
         else if (msg.msg_type === 'image') contentHtml = `<img src="${msg.content}" class="msg-img" loading="lazy" onclick="document.getElementById('lightbox-img').src=this.src; document.getElementById('lightbox').style.display='flex'">`;
-        else if (msg.msg_type === 'voice') contentHtml = `<div class="msg-voice">🎤 <audio controls preload="metadata" src="${msg.content}"></audio></div>`;
+        else if (msg.msg_type === 'voice') contentHtml = `
+            <div class="msg-voice2">
+                <button class="voice-play">▶</button>
+                <div class="voice-bar"><div class="voice-fill"></div></div>
+                <span class="voice-time">${msg.duration ? fmtDuration(msg.duration) : '–:––'}</span>
+                <audio preload="metadata" src="${msg.content}"></audio>
+            </div>`;
         else if (msg.msg_type === 'video') contentHtml = `
-            <div class="msg-video-circle" onclick="playVideoCircle(this, '${msg.content}')">
-                <video src="${msg.content}" muted playsinline preload="metadata"></video>
+            <div class="msg-video-circle" onclick="playVideoCircle(this)">
+                <video src="${msg.content}" playsinline preload="metadata"></video>
                 <div class="msg-video-play-icon">▶</div>
             </div>`;
         else if (msg.msg_type === 'sticker') contentHtml = `<div class="msg-sticker-emoji">${msg.content}</div>`;
@@ -2077,6 +2116,47 @@
             <div class="reaction-picker" id="picker-${msg.id}" data-msg-id="${msg.id}">${pickerButtonsHtml}</div>
         `;
 
+        // ── wiring нового плеера голосовых ──
+        const vwrap = wrapper.querySelector('.msg-voice2');
+        if (vwrap) {
+            const audio = vwrap.querySelector('audio');
+            const playBtn = vwrap.querySelector('.voice-play');
+            const fill = vwrap.querySelector('.voice-fill');
+            const timeEl = vwrap.querySelector('.voice-time');
+            let infFixed = false;
+            audio.addEventListener('loadedmetadata', () => {
+                if (!msg.duration && isFinite(audio.duration) && audio.duration > 0 && audio.duration < 3600) {
+                    timeEl.innerText = fmtDuration(audio.duration);
+                }
+                // webm иногда отдаёт duration=Infinity — чиним трюком
+                if (!infFixed && audio.duration === Infinity) {
+                    infFixed = true;
+                    audio.currentTime = 1e9;
+                    setTimeout(() => {
+                        audio.currentTime = 0;
+                        if (!msg.duration && isFinite(audio.duration) && audio.duration < 3600) timeEl.innerText = fmtDuration(audio.duration);
+                    }, 150);
+                }
+            });
+            audio.addEventListener('timeupdate', () => {
+                const total = (msg.duration && msg.duration > 0) ? msg.duration : audio.duration;
+                if (isFinite(total) && total > 0) {
+                    fill.style.width = Math.min(100, (audio.currentTime / total) * 100) + '%';
+                    timeEl.innerText = fmtDuration(audio.currentTime) + '/' + fmtDuration(total);
+                }
+            });
+            audio.addEventListener('ended', () => {
+                playBtn.innerText = '▶';
+                fill.style.width = '0%';
+                timeEl.innerText = msg.duration ? fmtDuration(msg.duration) : timeEl.innerText;
+            });
+            playBtn.onclick = (e) => {
+                e.stopPropagation();
+                if (audio.paused) { audio.play(); playBtn.innerText = '⏸'; }
+                else { audio.pause(); playBtn.innerText = '▶'; }
+            };
+        }
+
         const bubbleTouchZone = wrapper.querySelector('.msg-bubble-touch-zone');
         const bubbleEl = wrapper.querySelector('.msg-bubble');
         let pressTimer = null;
@@ -2089,13 +2169,19 @@
         return wrapper;
     }
 
-    function playVideoCircle(wrapperEl, src) {
+    function playVideoCircle(wrapperEl) {
         const video = wrapperEl.querySelector('video');
         if (!video) return;
+        video.volume = 1;
         if (video.paused) {
-            video.muted = false;
-            video.play();
-            wrapperEl.classList.add('playing');
+            video.play().then(() => {
+                wrapperEl.classList.add('playing');
+            }).catch(() => {
+                // если браузер запретил звук — показываем хотя бы видео
+                video.muted = true;
+                video.play().catch(() => {});
+                wrapperEl.classList.add('playing');
+            });
             video.onended = () => { wrapperEl.classList.remove('playing'); };
         } else {
             video.pause();
