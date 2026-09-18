@@ -548,6 +548,43 @@ input[type="text"],input[type="password"],textarea{
 }
 </style>
 
+
+<style id="performance-fix">
+/* ===== PERFORMANCE + STARTUP FIXES ===== */
+#app{visibility:hidden;opacity:0;pointer-events:none;transition:opacity .12s ease}
+#app.ready{visibility:visible;opacity:1;pointer-events:auto}
+#splash-screen{background:#010b08!important;transition:opacity .18s ease,visibility .18s!important}
+#splash-screen::before,#auth-screen::before{animation:none!important;filter:none!important}
+#chat-area::before{display:none!important}
+#messages{transition:none!important}
+.msg-wrapper{animation:none!important}
+.chat-item{transition:background .12s,border-color .12s!important}
+.btn-icon,.btn-send,.btn-header-icon,.btn-primary,.btn-stop-rec{transition:background .12s,transform .1s!important}
+.btn-send,.btn-icon,.btn-header-icon{box-shadow:none!important}
+#sidebar,#chat-area,.chat-header,.input-container,.modal-box,.auth-box,.attach-menu,.search-suggestions,.reaction-picker{
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+}
+#sidebar{box-shadow:8px 0 28px rgba(0,0,0,.18)!important}
+.chat-header{box-shadow:0 5px 18px rgba(0,0,0,.10)!important}
+.msg-bubble{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:0 5px 18px rgba(0,0,0,.12)!important}
+.msg-wrapper.my .msg-bubble{box-shadow:0 5px 20px rgba(0,0,0,.14)!important}
+.input-container{box-shadow:0 -5px 18px rgba(0,0,0,.12)!important}
+.modal-box,.auth-box{box-shadow:0 18px 45px rgba(0,0,0,.42)!important}
+.attach-menu,.search-suggestions,.reaction-picker{box-shadow:0 14px 35px rgba(0,0,0,.38)!important}
+#messages{contain:layout paint;will-change:scroll-position}
+#users-list{contain:layout paint}
+.input-container{position:relative;z-index:80}
+.input-row{position:relative;z-index:81}
+#btn-plus,#btn-send,.attach-item,.sticker-item,.btn-stop-rec,.btn-cancel-rec{position:relative;z-index:82;pointer-events:auto}
+.attach-menu{z-index:200!important;pointer-events:auto!important}
+.modal-overlay{z-index:300!important}
+#video-recording-preview{z-index:500!important}
+#lightbox{z-index:450!important}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+</style>
+
 </head>
 <body>
 <div id="splash-screen">
@@ -796,7 +833,7 @@ input[type="text"],input[type="password"],textarea{
             } else {
                 document.getElementById('auth-screen').style.display = 'flex';
             }
-        }, 800);
+        }, 120);
         if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
         document.addEventListener('click', (e) => {
             const box = document.querySelector('.add-user-bar');
@@ -867,10 +904,8 @@ input[type="text"],input[type="password"],textarea{
         await fetchUserGroups();
         updateOnlineStatus();
         setInterval(updateOnlineStatus, 10000);
-        try {
-            const lc = JSON.parse(localStorage.getItem('lastChat_' + currentUser) || 'null');
-            if (lc && lc.target) selectChat(lc.target, !!lc.isGroup, lc.title || '');
-        } catch (e) {}
+        // Не открываем автоматически старый/тестовый чат при запуске.
+        // Пользователь сам выбирает нужный диалог из списка.
     }
 
     function requestNotificationPermission() {
@@ -2006,5 +2041,79 @@ input[type="text"],input[type="password"],textarea{
         renderUserList();
     }
 </script>
+
+<script id="startup-and-controls-fix">
+(function(){
+  function ready(){
+    const app=document.getElementById('app');
+    if(!app) return;
+    app.classList.add('ready');
+  }
+
+  // Never show the guest UI underneath the splash/auth screen.
+  const auth=document.getElementById('auth-screen');
+  const splash=document.getElementById('splash-screen');
+  const savedUser=localStorage.getItem('messenger_currentUser');
+  const savedToken=localStorage.getItem('messenger_token');
+
+  // Remove the stale "restore last chat" behavior: opening the messenger starts
+  // on the chat list, not on an old/placeholder conversation.
+  if(!savedUser || !savedToken){
+    // Nothing to restore for a logged-out visitor.
+  }
+
+  // Make the startup splash short and opaque so @Гость cannot flash.
+  if(splash){
+    splash.style.background='#010b08';
+    setTimeout(function(){
+      splash.classList.add('hidden');
+      if(savedUser && savedToken) ready();
+    }, 120);
+  }
+
+  // The original setupUserInterface remains the source of truth. Wrap it only
+  // to reveal the already-authenticated app after its UI has been initialized.
+  if(typeof window.setupUserInterface === 'function'){
+    const originalSetup=window.setupUserInterface;
+    window.setupUserInterface=async function(){
+      const result=await originalSetup.apply(this,arguments);
+      ready();
+      return result;
+    };
+  } else {
+    document.addEventListener('DOMContentLoaded',ready,{once:true});
+  }
+
+  // Extra direct bindings make the attachment controls reliable even on
+  // mobile browsers where inline handlers can be affected by stale DOM/cache.
+  document.addEventListener('DOMContentLoaded',function(){
+    const plus=document.getElementById('btn-plus');
+    const send=document.getElementById('btn-send');
+    const file=document.getElementById('file-input');
+
+    if(plus) plus.addEventListener('click',function(e){
+      e.preventDefault(); e.stopPropagation();
+      if(typeof toggleAttachMenu==='function') toggleAttachMenu();
+    });
+
+    if(send) send.addEventListener('click',function(e){
+      e.preventDefault();
+      if(typeof sendMessage==='function') sendMessage();
+    });
+
+    document.querySelectorAll('.attach-item').forEach(function(item){
+      item.addEventListener('click',function(e){
+        e.preventDefault(); e.stopPropagation();
+        const text=(item.textContent||'').toLowerCase();
+        const kind=text.includes('стик')?'sticker':
+                   text.includes('голос')?'voice':
+                   text.includes('круж')?'circle':'file';
+        if(typeof pickAttach==='function') pickAttach(kind);
+      });
+    });
+  });
+})();
+</script>
+
 </body>
 </html>
