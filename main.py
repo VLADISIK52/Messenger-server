@@ -6,6 +6,8 @@ import sqlite3
 import json
 import base64
 import asyncio
+from collections import deque
+from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Dict, List, Optional
 
@@ -25,6 +27,12 @@ DB_FILE = os.path.join(DATA_DIR, "chat.db")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
+
+# Ник администратора (задаётся в Render → Environment → ADMIN_USERNAME)
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
+
+# Журнал подключений (последние 100 событий) для админ-панели
+CONNECT_LOG = deque(maxlen=100)
 
 # ==========================================================
 #                    ПРИЛОЖЕНИЕ FASTAPI
@@ -71,8 +79,6 @@ _VAPID.generate_keys()
 _VAPID_PRIVATE_PEM = _VAPID.private_key.private_bytes(
     Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
 ).decode()
-# Сырой публичный ключ (65 байт): берём хвост стандартного DER-представления.
-# Работает на любой версии cryptography, без хрупких констант X962/X9_62.
 _VAPID_PUBLIC_RAW = _VAPID.public_key.public_bytes(
     Encoding.DER, PublicFormat.SubjectPublicKeyInfo
 )[-65:]
@@ -81,12 +87,10 @@ VAPID_CLAIMS = {"sub": "mailto:admin@nexus-messenger.local"}
 
 
 def get_vapid_public_b64() -> str:
-    """Публичный VAPID-ключ для браузера (base64url)."""
     return _VAPID_PUBLIC_B64
 
 
 def send_push_to_user(username: str, title: str, body: str) -> None:
-    """Шлёт Web Push всем подпискам пользователя; мёртвые подписки чистит."""
     conn = get_db()
     try:
         subs = conn.execute(
@@ -158,6 +162,8 @@ def init_db() -> None:
     ''')
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''")
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN password_hash TEXT")
+    safe_alter(cursor, "ALTER TABLE users ADD COLUMN status_text TEXT DEFAULT ''")
+    safe_alter(cursor, "ALTER TABLE users ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sessions (
             token      TEXT PRIMARY KEY,
@@ -178,6 +184,7 @@ def init_db() -> None:
         )
     ''')
     safe_alter(cursor, "ALTER TABLE messages ADD COLUMN reply_to INTEGER")
+    safe_alter(cursor, "ALTER TABLE messages ADD COLUMN edited_at DATETIME")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id, id)")
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS reactions (
@@ -210,12 +217,43 @@ def init_db() -> None:
             auth     TEXT NOT NULL
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS blocks (
+            blocker TEXT NOT NULL,
+            blocked TEXT NOT NULL,
+            PRIMARY KEY (blocker, blocked)
+        )
+    ''')
     conn.commit()
     conn.close()
 
 
 def get_chat_id(user1: str, user2: str) -> str:
     return "_".join(sorted([user1, user2]))
+
+
+def chat_recipients(chat_id: str) -> List[str]:
+    """Кому показывать сообщение: участники группы или двое из лички."""
+    if chat_id.startswith("group_"):
+        return get_group_member_usernames(chat_id)
+    parts = chat_id.split("_")
+    return parts if len(parts) == 2 else []
+
+
+def is_blocked(blocker: str, blocked: str) -> bool:
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM blocks WHERE blocker = ? AND blocked = ?",
+            (blocker, blocked),
+        ).fetchone()
+    finally:
+        conn.close()
+    return row is not None
+
+
+def is_admin(username: str) -> bool:
+    return bool(ADMIN_USERNAME) and username == ADMIN_USERNAME
 
 # ==========================================================
 #                    ПАРОЛИ И АВТОРИЗАЦИЯ
@@ -273,6 +311,13 @@ def require_auth(token: Optional[str]) -> str:
     return username
 
 
+def require_admin(token: Optional[str]) -> str:
+    username = require_auth(token)
+    if not is_admin(username):
+        raise HTTPException(status_code=403, detail="Только для администратора")
+    return username
+
+
 def is_group_member(group_id: str, username: str) -> bool:
     conn = get_db()
     try:
@@ -307,7 +352,7 @@ def rows_to_messages(cursor: sqlite3.Cursor, rows) -> List[dict]:
     result = []
     for r in rows:
         (msg_id, chat_id, sender, content, msg_type, status, reply_to,
-         timestamp, reply_sender, reply_content, reply_msg_type) = r
+         timestamp, edited_at, reply_sender, reply_content, reply_msg_type) = r
         reply_preview = None
         if reply_to and reply_sender is not None:
             reply_preview = {
@@ -317,7 +362,8 @@ def rows_to_messages(cursor: sqlite3.Cursor, rows) -> List[dict]:
         result.append({
             "id": msg_id, "chat_id": chat_id, "sender": sender,
             "content": content, "msg_type": msg_type, "status": status,
-            "timestamp": timestamp, "reply_to": reply_preview,
+            "timestamp": timestamp, "edited": edited_at is not None,
+            "reply_to": reply_preview,
             "reactions": reactions_map.get(msg_id, []),
         })
     return result
@@ -344,10 +390,18 @@ class ConnectionManager:
     async def connect(self, username: str, websocket: WebSocket) -> None:
         await websocket.accept()
         print(f"[WS] + connect: {username}", flush=True)
+        CONNECT_LOG.appendleft({
+            "time": datetime.now().strftime("%d.%m %H:%M:%S"),
+            "user": username, "action": "connect",
+        })
         self.active_connections[username] = websocket
 
     def disconnect(self, username: str) -> None:
         print(f"[WS] - disconnect: {username}", flush=True)
+        CONNECT_LOG.appendleft({
+            "time": datetime.now().strftime("%d.%m %H:%M:%S"),
+            "user": username, "action": "disconnect",
+        })
         self.active_connections.pop(username, None)
 
     def is_online(self, username: str) -> bool:
@@ -493,14 +547,14 @@ async def register(
                 f.write(content)
             avatar_url = f"/uploads/{safe_name}"
         conn.execute(
-            "INSERT INTO users (username, password_hash, avatar_url, bio) VALUES (?, ?, ?, ?)",
+            "INSERT INTO users (username, password_hash, avatar_url, bio, status_text) VALUES (?, ?, ?, ?, '')",
             (username, hash_password(password), avatar_url, ""),
         )
         conn.commit()
     finally:
         conn.close()
     token = create_session(username)
-    return {"status": "ok", "username": username, "avatar_url": avatar_url, "bio": "", "token": token}
+    return {"status": "ok", "username": username, "avatar_url": avatar_url, "bio": "", "status_text": "", "token": token}
 
 
 @app.post("/login")
@@ -508,7 +562,7 @@ async def login(username: str = Form(...), password: str = Form(...)):
     conn = get_db()
     try:
         row = conn.execute(
-            "SELECT password_hash, avatar_url, bio FROM users WHERE username = ?", (username,)
+            "SELECT password_hash, avatar_url, bio, status_text FROM users WHERE username = ?", (username,)
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
@@ -528,6 +582,7 @@ async def login(username: str = Form(...), password: str = Form(...)):
         "username": username,
         "avatar_url": row[1] or "/uploads/default.png",
         "bio": row[2] or "",
+        "status_text": row[3] or "",
         "token": token,
     }
 
@@ -548,23 +603,31 @@ def get_profile(username: str):
     conn = get_db()
     try:
         row = conn.execute(
-            "SELECT avatar_url, bio FROM users WHERE username = ?", (username,)
+            "SELECT avatar_url, bio, status_text FROM users WHERE username = ?", (username,)
         ).fetchone()
     finally:
         conn.close()
     if not row:
-        return {"username": username, "avatar_url": "/uploads/default.png", "bio": ""}
-    return {"username": username, "avatar_url": row[0] or "/uploads/default.png", "bio": row[1] or ""}
+        return {"username": username, "avatar_url": "/uploads/default.png", "bio": "", "status_text": "", "is_admin": is_admin(username)}
+    return {
+        "username": username,
+        "avatar_url": row[0] or "/uploads/default.png",
+        "bio": row[1] or "",
+        "status_text": row[2] or "",
+        "is_admin": is_admin(username),
+    }
 
 
 @app.post("/profile/update")
 async def update_profile(
     token: str = Form(...),
     bio: str = Form(""),
+    status_text: str = Form(""),
     avatar: UploadFile = File(None),
 ):
     username = require_auth(token)
     bio = bio[:150]
+    status_text = status_text[:40]
     conn = get_db()
     try:
         row = conn.execute(
@@ -584,13 +647,13 @@ async def update_profile(
                 f.write(content)
             avatar_url = f"/uploads/{safe_name}"
         conn.execute(
-            "UPDATE users SET avatar_url = ?, bio = ? WHERE username = ?",
-            (avatar_url, bio, username),
+            "UPDATE users SET avatar_url = ?, bio = ?, status_text = ? WHERE username = ?",
+            (avatar_url, bio, status_text, username),
         )
         conn.commit()
     finally:
         conn.close()
-    return {"status": "ok", "username": username, "avatar_url": avatar_url, "bio": bio}
+    return {"status": "ok", "username": username, "avatar_url": avatar_url, "bio": bio, "status_text": status_text, "is_admin": is_admin(username)}
 
 
 @app.post("/upload")
@@ -612,6 +675,144 @@ async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
 @app.get("/users")
 def get_online_users():
     return list(manager.active_connections.keys())
+
+# ==========================================================
+#                    ЧЁРНЫЙ СПИСОК
+# ==========================================================
+
+@app.post("/blocks/add")
+async def blocks_add(token: str = Form(...), username: str = Form(...)):
+    me = require_auth(token)
+    if username == me:
+        raise HTTPException(status_code=400, detail="Нельзя заблокировать самого себя")
+    conn = get_db()
+    try:
+        if not conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        conn.execute(
+            "INSERT OR IGNORE INTO blocks (blocker, blocked) VALUES (?, ?)", (me, username)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"status": "ok"}
+
+
+@app.post("/blocks/remove")
+async def blocks_remove(token: str = Form(...), username: str = Form(...)):
+    me = require_auth(token)
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM blocks WHERE blocker = ? AND blocked = ?", (me, username))
+        conn.commit()
+    finally:
+        conn.close()
+    return {"status": "ok"}
+
+
+@app.get("/blocks/my/{username}")
+def blocks_my(username: str, token: str):
+    me = require_auth(token)
+    if me != username:
+        raise HTTPException(status_code=403, detail="Нет доступа")
+    conn = get_db()
+    try:
+        rows = conn.execute("SELECT blocked FROM blocks WHERE blocker = ?", (me,)).fetchall()
+    finally:
+        conn.close()
+    return [r[0] for r in rows]
+
+# ==========================================================
+#              РЕДАКТИРОВАНИЕ И УДАЛЕНИЕ СООБЩЕНИЙ
+# ==========================================================
+
+@app.post("/messages/{msg_id}/edit")
+async def message_edit(msg_id: int, token: str = Form(...), content: str = Form(...)):
+    me = require_auth(token)
+    content = content.strip()
+    if not content or len(content) > 2000:
+        raise HTTPException(status_code=400, detail="Некорректный текст сообщения")
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT chat_id, sender, msg_type FROM messages WHERE id = ?", (msg_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Сообщение не найдено")
+        chat_id, sender, msg_type = row
+        if sender != me:
+            raise HTTPException(status_code=403, detail="Можно редактировать только свои сообщения")
+        if msg_type != "text":
+            raise HTTPException(status_code=400, detail="Редактировать можно только текстовые сообщения")
+        conn.execute(
+            "UPDATE messages SET content = ?, edited_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (content, msg_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    payload = {"type": "message_edit", "message_id": msg_id, "content": content}
+    for user in chat_recipients(chat_id):
+        await manager.send_to_user(payload, user)
+    return {"status": "ok"}
+
+
+@app.post("/messages/{msg_id}/delete")
+async def message_delete(msg_id: int, token: str = Form(...)):
+    me = require_auth(token)
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT chat_id, sender FROM messages WHERE id = ?", (msg_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Сообщение не найдено")
+        chat_id, sender = row
+        if sender != me:
+            raise HTTPException(status_code=403, detail="Можно удалять только свои сообщения")
+        conn.execute(
+            "UPDATE messages SET msg_type = 'deleted', content = '', edited_at = NULL WHERE id = ?",
+            (msg_id,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    payload = {"type": "message_delete", "message_id": msg_id}
+    for user in chat_recipients(chat_id):
+        await manager.send_to_user(payload, user)
+    return {"status": "ok"}
+
+# ==========================================================
+#                    АДМИН-ПАНЕЛЬ
+# ==========================================================
+
+@app.get("/admin/stats")
+def admin_stats(token: str):
+    require_admin(token)
+    conn = get_db()
+    try:
+        users = [
+            {
+                "username": r[0],
+                "avatar_url": r[1] or "/uploads/default.png",
+                "status_text": r[2] or "",
+                "created_at": r[3] or "",
+            }
+            for r in conn.execute(
+                "SELECT username, avatar_url, status_text, created_at FROM users ORDER BY rowid"
+            ).fetchall()
+        ]
+        messages_total = conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE msg_type != 'deleted'"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    return {
+        "online": list(manager.active_connections.keys()),
+        "users": users,
+        "messages_total": messages_total,
+        "log": list(CONNECT_LOG),
+    }
 
 # ==========================================================
 #                    РАБОТА С ГРУППАМИ
@@ -806,7 +1007,7 @@ def delete_group(group_id: str, token: str):
 # ==========================================================
 
 MSG_SELECT_SQL = '''
-SELECT m.id, m.chat_id, m.sender, m.content, m.msg_type, m.status, m.reply_to, m.timestamp,
+SELECT m.id, m.chat_id, m.sender, m.content, m.msg_type, m.status, m.reply_to, m.timestamp, m.edited_at,
        r.sender, r.content, r.msg_type
 FROM messages m
 LEFT JOIN messages r ON m.reply_to = r.id
@@ -901,6 +1102,13 @@ async def websocket_endpoint(
                     continue
                 if is_group and not is_group_member(target, username):
                     continue
+                # Чёрный список: в личку заблокировавшему — нельзя
+                if not is_group and is_blocked(target, username):
+                    await websocket.send_json({
+                        "type": "error",
+                        "detail": f"@{target} ограничил(а) вам сообщения",
+                    })
+                    continue
 
                 chat_id = target if is_group else get_chat_id(username, target)
                 initial_status = "delivered" if (not is_group and manager.is_online(target)) else "sent"
@@ -931,7 +1139,7 @@ async def websocket_endpoint(
                     "type": "message", "id": msg_id, "chat_id": chat_id,
                     "target": target, "sender": username, "content": content,
                     "msg_type": content_type, "status": initial_status,
-                    "is_group": is_group, "duration": duration,
+                    "is_group": is_group, "duration": duration, "edited": False,
                     "reply_to": reply_preview, "reactions": [],
                 }
                 if is_group:
