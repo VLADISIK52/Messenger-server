@@ -138,8 +138,10 @@
         .msg-wrapper.my .msg-video-circle { box-shadow: 0 0 0 2px rgba(255,255,255,0.8), 0 8px 20px rgba(255,106,92,0.3); }
         .msg-video-circle:active { transform: scale(0.96); }
         .msg-video-circle video { width: 100%; height: 100%; object-fit: cover; }
-        .msg-video-play-icon { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.35); color: #fff; font-size: 38px; transition: opacity 0.15s; }
+        .msg-video-circle video.mirror { transform: scaleX(-1); }
+        .msg-video-play-icon { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.25); color: #fff; font-size: 30px; transition: opacity 0.15s; }
         .msg-video-circle.playing .msg-video-play-icon { opacity: 0; }
+        .msg-video-rect { max-width: 260px; width: 100%; border-radius: 16px; display: block; background: #000; border: 1px solid var(--border); margin-top: 4px; }
         .msg-reply-quote { border-left: 3px solid rgba(255,255,255,0.5); padding: 4px 8px; margin-bottom: 6px; border-radius: 6px; background: rgba(0,0,0,0.15); font-size: 12px; opacity: 0.9; cursor: pointer; }
         .msg-wrapper.other .msg-reply-quote { border-left-color: var(--accent-b); background: rgba(124,92,255,0.08); }
         .msg-reply-quote-sender { font-weight: 700; margin-bottom: 1px; }
@@ -208,10 +210,12 @@
         #video-recording-preview.active { display: flex; }
         .video-preview-circle { width: 240px; height: 240px; border-radius: 50%; overflow: hidden; background: #000; box-shadow: 0 0 0 4px var(--danger), 0 0 60px rgba(255,84,112,0.5); }
         .video-preview-circle video { width: 100%; height: 100%; object-fit: cover; }
+        .video-preview-circle video.mirror { transform: scaleX(-1); }
         .video-rec-timer { color: #fff; font-size: 18px; font-weight: 700; }
         .video-rec-controls { display: flex; gap: 20px; }
         .video-rec-btn { width: 56px; height: 56px; border-radius: 50%; border: none; font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .video-rec-btn.cancel { background: rgba(255,255,255,0.15); color: #fff; }
+        .video-rec-btn.switch { background: rgba(255,255,255,0.15); color: #fff; }
         .video-rec-btn.send { background: var(--accent-grad); color: #fff; }
         .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(6,4,10,0.75); backdrop-filter: blur(4px); justify-content: center; align-items: center; z-index: 1500; animation: overlayFadeIn 0.2s ease; }
         @keyframes overlayFadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -356,8 +360,9 @@
     </div>
     <div class="video-rec-timer" id="video-rec-timer">0:00</div>
     <div class="video-rec-controls">
-        <button class="video-rec-btn cancel" onclick="cancelVideoRecording()">✖</button>
-        <button class="video-rec-btn send" onclick="stopVideoAndSend()">➤</button>
+        <button class="video-rec-btn cancel" onclick="cancelVideoRecording()" title="Отмена">✖</button>
+        <button class="video-rec-btn switch" onclick="switchCamera()" title="Переключить камеру">🔄</button>
+        <button class="video-rec-btn send" onclick="stopVideoAndSend()" title="Отправить">➤</button>
     </div>
 </div>
 <div id="app">
@@ -468,6 +473,7 @@
     let myBlocks = [], messageCache = {}, viewedUsername = "", editMessageId = null, adminTimer = null;
     let mediaRecorder = null, recordedChunks = [], recordingSeconds = 0, recordingTimerHandle = null, recordingCancelled = false;
     let videoRecorder = null, videoChunks = [], videoStream = null, videoSeconds = 0, videoTimerHandle = null, videoCancelled = false;
+    let currentFacing = 'user';
     let replyTarget = null, typingSendTimer = null, typingUsersInChat = {}, searchMatches = [], searchCurrentIndex = -1;
     let oldestLoadedMessageId = null, noMoreOlderMessages = false, isLoadingOlder = false;
     let searchDebounceTimer = null, lastOnlineSnapshot = '', onlineTick = 0;
@@ -641,6 +647,7 @@
             : data.msg_type === 'image' ? '📷 Фото'
             : data.msg_type === 'voice' ? '🎤 Голосовое сообщение'
             : data.msg_type === 'video' ? '📹 Видео-кружок'
+            : data.msg_type === 'videofile' ? '🎬 Видео'
             : data.msg_type === 'sticker' ? `Стикер ${data.content}` : '📁 Файл';
         const goToChat = () => {
             if (data.is_group) selectChat(chatKey, true, chatTitle);
@@ -1296,7 +1303,7 @@
     function getChatId(user1, user2) { return [user1, user2].sort().join("_"); }
     function setReplyTarget(msg) {
         replyTarget = msg;
-        let previewText = msg.msg_type === 'text' ? msg.content : msg.msg_type === 'image' ? '📷 Фото' : msg.msg_type === 'voice' ? '🎤 Голосовое сообщение' : msg.msg_type === 'video' ? '📹 Видео-кружок' : msg.msg_type === 'sticker' ? 'Стикер ' + msg.content : '📁 Файл';
+        let previewText = msg.msg_type === 'text' ? msg.content : msg.msg_type === 'image' ? '📷 Фото' : msg.msg_type === 'voice' ? '🎤 Голосовое сообщение' : msg.msg_type === 'video' ? '📹 Видео-кружок' : msg.msg_type === 'videofile' ? '🎬 Видео' : msg.msg_type === 'sticker' ? 'Стикер ' + msg.content : '📁 Файл';
         document.getElementById('reply-bar-sender').innerText = '@' + msg.sender;
         document.getElementById('reply-bar-content').innerText = previewText;
         document.getElementById('reply-bar').classList.add('active');
@@ -1350,13 +1357,25 @@
             if (!res.ok) { const err = await res.json().catch(() => ({})); alert(err.detail || "Не удалось загрузить файл"); input.value = ''; return; }
             const data = await res.json();
             if (!ws || ws.readyState !== WebSocket.OPEN) { alert("Нет соединения."); return; }
-            ws.send(JSON.stringify({ type: 'message', target: activeChatTarget, sender: currentUser, content: data.file_url, msg_type: file.type.startsWith("image/") ? 'image' : file.type.startsWith("video/") ? 'video' : 'file', is_group: isCurrentGroup, reply_to: replyTarget ? replyTarget.id : null }));
+            const isImage = file.type.startsWith("image/");
+            const isVideo = file.type.startsWith("video/");
+            ws.send(JSON.stringify({
+                type: 'message', target: activeChatTarget, sender: currentUser,
+                content: data.file_url,
+                msg_type: isImage ? 'image' : isVideo ? 'videofile' : 'file',
+                is_group: isCurrentGroup,
+                reply_to: replyTarget ? replyTarget.id : null
+            }));
             cancelReply();
         } catch(e) { alert("Ошибка загрузки файла"); }
         input.value = '';
     }
 
-    const STICKERS = ['😂','🤣','','🥳','😎','🤩','','😱','','🤔','😴','','','😇','','🤯','❤️','💯','🔥','✨','🎉','👍','👎','🙌','👀','','🐱','🐶','🍕','☕','🌈',''];
+    const STICKERS = [
+        '😀','😂','🤣','😊','😍','','😎','','😭','😱',
+        '🥶','','😴','','🤡','😇','😡','🤯','','🔥',
+        '✨','🎉','👍','','🙌','','💩','🐱','🐶','🍕'
+    ];
     function openStickerPicker() {
         if (!activeChatTarget) return;
         const grid = document.getElementById('sticker-grid');
@@ -1432,14 +1451,19 @@
         } catch (e) { alert("Не удалось отправить голосовое"); }
     }
 
+    // ── ВИДЕО-КРУЖКИ + переключение камер ──
     async function startVideoRecording() {
         if (!activeChatTarget) return;
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { alert("Ваш браузер не поддерживает запись видео."); return; }
         try {
-            videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 320 } }, audio: true });
+            videoStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: currentFacing, width: { ideal: 480 }, height: { ideal: 480 } },
+                audio: true
+            });
             if (videoStream.getAudioTracks().length === 0) showToast('⚠️ Без микрофона', 'Кружок запишется без звука');
             const videoEl = document.getElementById('video-preview-el');
             videoEl.srcObject = videoStream;
+            videoEl.classList.toggle('mirror', currentFacing === 'user');
             const videoMime = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
             videoRecorder = videoMime ? new MediaRecorder(videoStream, { mimeType: videoMime }) : new MediaRecorder(videoStream);
             videoChunks = []; videoCancelled = false;
@@ -1451,6 +1475,17 @@
             updateVideoTimer();
             videoTimerHandle = setInterval(() => { videoSeconds++; updateVideoTimer(); }, 1000);
         } catch (e) { alert("Не удалось получить доступ к камере: " + (e.message || '')); }
+    }
+    async function switchCamera() {
+        currentFacing = currentFacing === 'user' ? 'environment' : 'user';
+        if (videoRecorder && videoRecorder.state === 'recording') {
+            videoCancelled = true;
+            try { videoRecorder.stop(); } catch (e) {}
+        }
+        clearInterval(videoTimerHandle);
+        document.getElementById('video-recording-preview').classList.remove('active');
+        await startVideoRecording();
+        showToast('📷 Камера переключена', 'Запись начата заново');
     }
     function updateVideoTimer() {
         const m = Math.floor(videoSeconds / 60); const s = videoSeconds % 60;
@@ -1538,14 +1573,16 @@
             </div>`;
         else if (msg.msg_type === 'video') contentHtml = `
             <div class="msg-video-circle" onclick="playVideoCircle(this)">
-                <video src="${msg.content}" playsinline preload="metadata"></video>
+                <video src="${msg.content}" playsinline preload="metadata" class="${isMy ? 'mirror' : ''}"></video>
                 <div class="msg-video-play-icon">▶</div>
             </div>`;
+        else if (msg.msg_type === 'videofile') contentHtml = `
+            <video src="${msg.content}" controls playsinline preload="metadata" class="msg-video-rect"></video>`;
         else if (msg.msg_type === 'sticker') contentHtml = `<div class="msg-sticker-emoji">${msg.content}</div>`;
         else contentHtml = `<a href="${msg.content}" target="_blank" style="color:var(--accent-b)">📁 Файл</a>`;
         let replyHtml = '';
         if (msg.reply_to) {
-            let replyPreview = msg.reply_to.msg_type === 'text' ? escapeHtml(msg.reply_to.content) : msg.reply_to.msg_type === 'image' ? '📷 Фото' : msg.reply_to.msg_type === 'voice' ? '🎤 Голосовое' : msg.reply_to.msg_type === 'video' ? '📹 Видео' : msg.reply_to.msg_type === 'sticker' ? 'Стикер ' + msg.reply_to.content : '📁 Файл';
+            let replyPreview = msg.reply_to.msg_type === 'text' ? escapeHtml(msg.reply_to.content) : msg.reply_to.msg_type === 'image' ? '📷 Фото' : msg.reply_to.msg_type === 'voice' ? '🎤 Голосовое' : msg.reply_to.msg_type === 'video' ? '📹 Видео' : msg.reply_to.msg_type === 'videofile' ? '🎬 Видео' : msg.reply_to.msg_type === 'sticker' ? 'Стикер ' + msg.reply_to.content : '📁 Файл';
             replyHtml = `<div class="msg-reply-quote" onclick="scrollToMessage(${msg.reply_to.id})"><div class="msg-reply-quote-sender">@${msg.reply_to.sender}</div><div>${replyPreview}</div></div>`;
         }
         let statusHtml = isMy && !isCurrentGroup ? getStatusIconHtml(msg.status || 'sent') : '';
