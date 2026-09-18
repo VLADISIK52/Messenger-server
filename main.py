@@ -396,44 +396,61 @@ def get_group_member_usernames(group_id: str) -> List[str]:
     return [r[0] for r in rows]
 
 # ==========================================================
-#             МЕНЕДЖЕР WEBSOCKET-СОЕДИНЕНИЙ
+#     МЕНЕДЖЕР WEBSOCKET-СОЕДИНЕНИЙ (МУЛЬТИ-ВКЛАДОЧНЫЙ)
 # ==========================================================
 
 class ConnectionManager:
+    """Держит ВСЕ соединения каждого пользователя:
+    несколько вкладок, телефон и APK получают сообщения одновременно."""
+
     def __init__(self):
-        self.active_connections: Dict[str, WebSocket] = {}
+        self.active_connections: Dict[str, set] = {}
 
     async def connect(self, username: str, websocket: WebSocket) -> None:
         await websocket.accept()
-        print(f"[WS] + connect: {username}", flush=True)
+        print(f"[WS] + connect: {username} (всего соединений: {len(self.active_connections.get(username, ())) + 1})", flush=True)
         CONNECT_LOG.appendleft({
             "time": datetime.now(MSK).strftime("%d.%m %H:%M:%S"),
             "user": username, "action": "connect",
         })
-        self.active_connections[username] = websocket
+        self.active_connections.setdefault(username, set()).add(websocket)
 
-    def disconnect(self, username: str) -> None:
-        print(f"[WS] - disconnect: {username}", flush=True)
+    def disconnect(self, username: str, websocket: Optional[WebSocket] = None) -> None:
+        socks = self.active_connections.get(username)
+        if socks is None:
+            return
+        if websocket is None:
+            socks.discard(websocket) if False else None
+            self.active_connections.pop(username, None)
+        else:
+            socks.discard(websocket)
+            if not socks:
+                self.active_connections.pop(username, None)
+        print(f"[WS] - disconnect: {username} (осталось: {len(self.active_connections.get(username, ()))})", flush=True)
         CONNECT_LOG.appendleft({
             "time": datetime.now(MSK).strftime("%d.%m %H:%M:%S"),
             "user": username, "action": "disconnect",
         })
-        self.active_connections.pop(username, None)
 
     def is_online(self, username: str) -> bool:
-        return username in self.active_connections
+        return bool(self.active_connections.get(username))
 
     async def send_to_user(self, message: dict, target_user: str) -> bool:
-        ws = self.active_connections.get(target_user)
-        if ws is None:
+        socks = list(self.active_connections.get(target_user, ()))
+        if not socks:
             return False
-        try:
-            await ws.send_json(message)
-            return True
-        except Exception as e:
-            print(f"[WS] Ошибка отправки '{target_user}': {e}")
-            self.active_connections.pop(target_user, None)
-            return False
+        ok = False
+        dead = []
+        for ws in socks:
+            try:
+                await ws.send_json(message)
+                ok = True
+            except Exception as e:
+                print(f"[WS] Ошибка отправки '{target_user}': {e}")
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(target_user, ws)
+        return ok
 
 
 manager = ConnectionManager()
@@ -1107,8 +1124,6 @@ async def websocket_endpoint(
 ):
     verified_username = get_username_by_token(token)
     if not verified_username or verified_username != username:
-        # ВАЖНО: сначала принимаем рукопожатие, потом закрываем с кодом 4001 —
-        # только так браузер получит наш код и клиент сам сбросит мёртвый токен
         await websocket.accept()
         await websocket.close(code=4001)
         return
@@ -1183,7 +1198,6 @@ async def websocket_endpoint(
                                 f"👥 {username}", content[:100],
                             )
                 else:
-                    await manager.send_to_user(msg_payload, username)
                     if target != username:
                         ok = await manager.send_to_user(msg_payload, target)
                         if not ok:
@@ -1191,6 +1205,8 @@ async def websocket_endpoint(
                                 send_push_to_user, target,
                                 f"💬 {username}", content[:100],
                             )
+                    # Эхо отправителю — во ВСЕ его вкладки/устройства
+                    await manager.send_to_user(msg_payload, username)
 
             elif msg_type == "read_receipt":
                 chat_id = data.get("chat_id")
@@ -1284,7 +1300,7 @@ async def websocket_endpoint(
                         await manager.send_to_user(typing_payload, target)
 
     except WebSocketDisconnect:
-        manager.disconnect(username)
+        manager.disconnect(username, websocket)
     except Exception as e:
         print(f"[WS] Неожиданная ошибка у '{username}': {e}")
-        manager.disconnect(username)
+        manager.disconnect(username, websocket)
