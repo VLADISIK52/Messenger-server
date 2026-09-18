@@ -31,7 +31,7 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 # Ник администратора (Render → Environment → ADMIN_USERNAME)
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
 
-# Штамп версии ВЫЧИСЛЯЕТСЯ САМ: хеш коммита деплоя на Render
+# Штамп версии вычисляется сам: хеш коммита деплоя на Render
 # (или время изменения index.html локально). Используется для
 # «самолечения» страниц: старая страница видит несовпадение и чинит себя.
 try:
@@ -196,6 +196,7 @@ def init_db() -> None:
     ''')
     safe_alter(cursor, "ALTER TABLE messages ADD COLUMN reply_to INTEGER")
     safe_alter(cursor, "ALTER TABLE messages ADD COLUMN edited_at DATETIME")
+    safe_alter(cursor, "ALTER TABLE messages ADD COLUMN duration INTEGER")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id, id)")
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS reactions (
@@ -373,7 +374,7 @@ def rows_to_messages(cursor: sqlite3.Cursor, rows) -> List[dict]:
     result = []
     for r in rows:
         (msg_id, chat_id, sender, content, msg_type, status, reply_to,
-         timestamp, edited_at, reply_sender, reply_content, reply_msg_type) = r
+         timestamp, edited_at, duration, reply_sender, reply_content, reply_msg_type) = r
         reply_preview = None
         if reply_to and reply_sender is not None:
             reply_preview = {
@@ -384,6 +385,7 @@ def rows_to_messages(cursor: sqlite3.Cursor, rows) -> List[dict]:
             "id": msg_id, "chat_id": chat_id, "sender": sender,
             "content": content, "msg_type": msg_type, "status": status,
             "timestamp": timestamp, "edited": edited_at is not None,
+            "duration": duration,
             "reply_to": reply_preview,
             "reactions": reactions_map.get(msg_id, []),
         })
@@ -1042,7 +1044,7 @@ def delete_group(group_id: str, token: str):
 # ==========================================================
 
 MSG_SELECT_SQL = '''
-SELECT m.id, m.chat_id, m.sender, m.content, m.msg_type, m.status, m.reply_to, m.timestamp, m.edited_at,
+SELECT m.id, m.chat_id, m.sender, m.content, m.msg_type, m.status, m.reply_to, m.timestamp, m.edited_at, m.duration,
        r.sender, r.content, r.msg_type
 FROM messages m
 LEFT JOIN messages r ON m.reply_to = r.id
@@ -1150,8 +1152,8 @@ async def websocket_endpoint(
                 try:
                     cursor = conn.cursor()
                     cursor.execute(
-                        "INSERT INTO messages (chat_id, sender, content, msg_type, status, reply_to) VALUES (?, ?, ?, ?, ?, ?)",
-                        (chat_id, username, content, content_type, initial_status, reply_to_id),
+                        "INSERT INTO messages (chat_id, sender, content, msg_type, status, reply_to, duration) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (chat_id, username, content, content_type, initial_status, reply_to_id, duration if isinstance(duration, int) else None),
                     )
                     conn.commit()
                     msg_id = cursor.lastrowid
