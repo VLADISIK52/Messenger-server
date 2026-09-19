@@ -40,7 +40,6 @@
             --online: #2fbf71;
             --shadow-soft: 0 8px 30px rgba(80,90,140,0.15);
         }
-        /* ── Эко-режим: гасим все анимации ── */
         html.eco *, html.eco *::before, html.eco *::after { animation: none !important; transition: none !important; }
         html.eco body::before { display: none; }
         html[data-theme="light"] body { background:
@@ -532,6 +531,10 @@
         <div id="admin-users" style="display:flex; flex-direction:column; gap:6px;"></div>
         <div class="section-title">Журнал подключений</div>
         <div id="admin-log" style="display:flex; flex-direction:column; gap:4px;"></div>
+        <div class="section-title">Рассылка</div>
+        <input type="text" id="broadcast-title" placeholder="Заголовок (например: Обновление сервера)">
+        <textarea id="broadcast-body" rows="2" placeholder="Текст объявления..."></textarea>
+        <button class="btn-primary" onclick="adminBroadcast()">&#x1F4E2; Отправить всем</button>
         <button class="btn-secondary" onclick="closeAdmin()">Закрыть</button>
     </div>
 </div>
@@ -911,7 +914,7 @@
         toast.innerHTML = `<div class="toast-text"><div class="toast-title">${escapeHtml(title)}</div><div class="toast-body">${escapeHtml(body)}</div></div>`;
         toast.onclick = () => { toast.remove(); if (onClick) onClick(); };
         container.appendChild(toast);
-        setTimeout(() => toast.remove(), 4000);
+        setTimeout(() => toast.remove(), 6000);
     }
 
     function notifyNewMessage(data, chatKey, chatTitle) {
@@ -983,6 +986,17 @@
             else if (data.type === 'typing') handleTypingEvent(data);
             else if (data.type === 'message_edit') handleMessageEdit(data);
             else if (data.type === 'message_delete') handleMessageDelete(data);
+            else if (data.type === 'broadcast') {
+                showToast(data.title || '\u{1F4E2} Объявление', data.body || '');
+                if (document.hidden && "Notification" in window && Notification.permission === "granted") {
+                    try {
+                        const n = new Notification(data.title || '\u{1F4E2} Объявление', {
+                            body: data.body || '', icon: '/static/icon-192.png', badge: '/static/icon-96.png', tag: 'broadcast', renotify: true,
+                        });
+                        n.onclick = () => { window.focus(); n.close(); };
+                    } catch (e) {}
+                }
+            }
             else if (data.type === 'error') showToast('\u{26D4} Не отправлено', data.detail || 'Ошибка отправки');
         };
     }
@@ -1386,6 +1400,23 @@
             showToast('\u{2705} Разбанен', `@${username} снова может войти`);
             refreshAdmin();
         } catch (e) { showToast('\u{26D4} Ошибка', 'Не удалось разбанить'); }
+    }
+    async function adminBroadcast() {
+        const title = document.getElementById('broadcast-title').value.trim();
+        const body = document.getElementById('broadcast-body').value.trim();
+        if (!title && !body) { showToast('\u{26A0}\u{FE0F} Пусто', 'Введите заголовок или текст'); return; }
+        const formData = new FormData();
+        formData.append('token', currentToken);
+        formData.append('title', title || '\u{1F4E2} Объявление');
+        formData.append('body', body);
+        try {
+            const res = await fetch('/admin/broadcast', { method: 'POST', body: formData });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) { showToast('\u{26D4} Ошибка', data.detail || 'Не удалось отправить'); return; }
+            document.getElementById('broadcast-title').value = '';
+            document.getElementById('broadcast-body').value = '';
+            showToast('\u{1F4E2} Рассылка отправлена', `Онлайн получили: ${data.online || 0} · Push ушло: ${data.pushed || 0}`);
+        } catch (e) { showToast('\u{26D4} Ошибка', 'Не удалось отправить рассылку'); }
     }
 
     async function openGroupProfile() {
