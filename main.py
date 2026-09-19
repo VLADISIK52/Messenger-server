@@ -819,7 +819,7 @@ def get_online_users():
     return list(manager.active_connections.keys())
 
 # ==========================================================
-#                    АДМИН: БАНЫ
+#                    АДМИН: БАНЫ И РАССЫЛКА
 # ==========================================================
 
 @app.post("/admin/ban")
@@ -855,6 +855,36 @@ async def admin_unban(token: str = Form(...), username: str = Form(...)):
     finally:
         conn.close()
     return {"status": "ok"}
+
+
+@app.post("/admin/broadcast")
+async def admin_broadcast(
+    token: str = Form(...),
+    title: str = Form(...),
+    body: str = Form(...),
+):
+    """Рассылка всем: WS-событие онлайн-пользователям + Web Push всем подписанным."""
+    require_admin(token)
+    title = title.strip()[:80] or "📢 Объявление"
+    body = body.strip()[:300]
+    # 1) Онлайн-пользователи получают событие мгновенно
+    payload = {"type": "broadcast", "title": title, "body": body}
+    online_count = 0
+    for uname in list(manager.active_connections.keys()):
+        if await manager.send_to_user(payload, uname):
+            online_count += 1
+    # 2) Всем с push-подпиской уходит системное уведомление
+    conn = get_db()
+    try:
+        users = [r[0] for r in conn.execute(
+            "SELECT DISTINCT username FROM push_subs"
+        ).fetchall()]
+    finally:
+        conn.close()
+    for uname in users:
+        await asyncio.to_thread(send_push_to_user, uname, f"📢 {title}", body)
+    print(f"[ADMIN] broadcast: online={online_count}, push={len(users)}", flush=True)
+    return {"status": "ok", "online": online_count, "pushed": len(users)}
 
 # ==========================================================
 #                    ЧЁРНЫЙ СПИСОК
