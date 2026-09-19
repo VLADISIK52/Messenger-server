@@ -9,7 +9,7 @@ import asyncio
 from collections import deque
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -28,19 +28,15 @@ DB_FILE = os.path.join(DATA_DIR, "chat.db")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
 
-# Ник администратора (Render → Environment → ADMIN_USERNAME)
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
 
-# Штамп версии для «самолечения» клиентов: хеш коммита деплоя
 try:
     APP_VERSION = os.environ.get("RENDER_GIT_COMMIT", "") or str(int(os.path.getmtime("index.html")))
 except Exception:
     APP_VERSION = "dev"
 
-# Московское время для журналов админ-панели
 MSK = timezone(timedelta(hours=3))
 
-# Журнал подключений (последние 100 событий)
 CONNECT_LOG = deque(maxlen=100)
 
 # ==========================================================
@@ -66,7 +62,7 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 USERNAME_RE = re.compile(r'^[A-Za-zА-Яа-яЁё0-9]{3,20}$')
-MAX_UPLOAD_SIZE = 25 * 1024 * 1024  # 25 МБ
+MAX_UPLOAD_SIZE = 25 * 1024 * 1024
 ALLOWED_UPLOAD_EXTENSIONS = {
     '.jpg', '.jpeg', '.png', '.gif', '.webp',
     '.mp3', '.wav', '.ogg', '.webm', '.m4a',
@@ -88,7 +84,6 @@ _VAPID.generate_keys()
 _VAPID_PRIVATE_PEM = _VAPID.private_key.private_bytes(
     Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
 ).decode()
-# Сырой публичный ключ (65 байт) из DER — работает на любой версии cryptography
 _VAPID_PUBLIC_RAW = _VAPID.public_key.public_bytes(
     Encoding.DER, PublicFormat.SubjectPublicKeyInfo
 )[-65:]
@@ -177,7 +172,6 @@ def init_db() -> None:
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN last_seen DATETIME")
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0")
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN theme TEXT DEFAULT 'dark'")
-    safe_alter(cursor, "ALTER TABLE users ADD COLUMN hide_online INTEGER DEFAULT 0")
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sessions (
             token      TEXT PRIMARY KEY,
@@ -248,7 +242,6 @@ def get_chat_id(user1: str, user2: str) -> str:
 
 
 def chat_recipients(chat_id: str) -> List[str]:
-    """Кому показывать сообщение: участники группы или двое из лички."""
     if chat_id.startswith("group_"):
         return get_group_member_usernames(chat_id)
     parts = chat_id.split("_")
@@ -271,16 +264,6 @@ def is_admin(username: str) -> bool:
     return bool(ADMIN_USERNAME) and username == ADMIN_USERNAME
 
 
-def get_founder() -> Optional[str]:
-    """Самый первый зарегистрированный пользователь — основатель."""
-    conn = get_db()
-    try:
-        row = conn.execute("SELECT username FROM users ORDER BY rowid LIMIT 1").fetchone()
-    finally:
-        conn.close()
-    return row[0] if row else None
-
-
 def is_banned(username: str) -> bool:
     conn = get_db()
     try:
@@ -288,17 +271,6 @@ def is_banned(username: str) -> bool:
     finally:
         conn.close()
     return bool(row and row[0])
-
-
-def get_hidden_set() -> set:
-    """Пользователи в режиме невидимки."""
-    conn = get_db()
-    try:
-        return {r[0] for r in conn.execute(
-            "SELECT username FROM users WHERE hide_online = 1"
-        ).fetchall()}
-    finally:
-        conn.close()
 
 
 def touch_last_seen(username: str) -> None:
@@ -311,7 +283,6 @@ def touch_last_seen(username: str) -> None:
 
 
 def utc_str_to_msk(s: Optional[str]) -> str:
-    """Преобразует время SQLite (UTC) в московское."""
     if not s:
         return ""
     try:
@@ -448,12 +419,12 @@ def get_group_member_usernames(group_id: str) -> List[str]:
     return [r[0] for r in rows]
 
 # ==========================================================
-#             МЕНЕДЖЕР WEBSOCKET-СОЕДИНЕНИЙ
+#   МЕНЕДЖЕР WEBSOCKET: МУЛЬТИ-СОЕДИНЕНИЯ (все вкладки получают)
 # ==========================================================
 
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: Dict[str, WebSocket] = {}
+        self.active_connections: Dict[str, Set[WebSocket]] = {}
 
     async def connect(self, username: str, websocket: WebSocket) -> None:
         await websocket.accept()
@@ -462,32 +433,45 @@ class ConnectionManager:
             "time": datetime.now(MSK).strftime("%d.%m %H:%M:%S"),
             "user": username, "action": "connect",
         })
-        self.active_connections[username] = websocket
+        self.active_connections.setdefault(username, set()).add(websocket)
         touch_last_seen(username)
 
-    def disconnect(self, username: str) -> None:
+    def disconnect(self, username: str, websocket: Optional[WebSocket] = None) -> None:
+        socks = self.active_connections.get(username)
+        if socks is None:
+            return
+        if websocket is None:
+            self.active_connections.pop(username, None)
+        else:
+            socks.discard(websocket)
+            if not socks:
+                self.active_connections.pop(username, None)
         print(f"[WS] - disconnect: {username}", flush=True)
         CONNECT_LOG.appendleft({
             "time": datetime.now(MSK).strftime("%d.%m %H:%M:%S"),
             "user": username, "action": "disconnect",
         })
-        self.active_connections.pop(username, None)
         touch_last_seen(username)
 
     def is_online(self, username: str) -> bool:
-        return username in self.active_connections
+        return bool(self.active_connections.get(username))
 
     async def send_to_user(self, message: dict, target_user: str) -> bool:
-        ws = self.active_connections.get(target_user)
-        if ws is None:
+        socks = list(self.active_connections.get(target_user, ()))
+        if not socks:
             return False
-        try:
-            await ws.send_json(message)
-            return True
-        except Exception as e:
-            print(f"[WS] Ошибка отправки '{target_user}': {e}")
-            self.active_connections.pop(target_user, None)
-            return False
+        ok = False
+        dead = []
+        for ws in socks:
+            try:
+                await ws.send_json(message)
+                ok = True
+            except Exception as e:
+                print(f"[WS] Ошибка отправки '{target_user}': {e}")
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(target_user, ws)
+        return ok
 
 
 manager = ConnectionManager()
@@ -498,7 +482,6 @@ manager = ConnectionManager()
 
 @app.get("/")
 def get_index():
-    # Отдаём index.html, подставляя актуальный штамп версии вместо заглушки
     with open("index.html", "r", encoding="utf-8") as f:
         html = f.read()
     html = html.replace("__APP_VERSION__", APP_VERSION)
@@ -692,28 +675,22 @@ def get_profile(username: str):
     conn = get_db()
     try:
         row = conn.execute(
-            "SELECT avatar_url, bio, status_text, last_seen, theme, banned, hide_online FROM users WHERE username = ?", (username,)
+            "SELECT avatar_url, bio, status_text, last_seen, theme, banned FROM users WHERE username = ?", (username,)
         ).fetchone()
     finally:
         conn.close()
-    founder = get_founder()
     if not row:
         return {"username": username, "avatar_url": "/uploads/default.png", "bio": "", "status_text": "",
-                "last_seen": None, "theme": "dark", "banned": 0, "hide_online": False,
-                "is_admin": is_admin(username), "is_founder": username == founder}
-    hidden = bool(row[6])
+                "last_seen": None, "theme": "dark", "banned": 0, "is_admin": is_admin(username)}
     return {
         "username": username,
         "avatar_url": row[0] or "/uploads/default.png",
         "bio": row[1] or "",
         "status_text": row[2] or "",
-        # Невидимка: остальные видят только «был(а) недавно»
-        "last_seen": None if hidden else row[3],
+        "last_seen": row[3],
         "theme": row[4] or "dark",
         "banned": row[5] or 0,
-        "hide_online": hidden,
         "is_admin": is_admin(username),
-        "is_founder": username == founder,
     }
 
 
@@ -723,14 +700,12 @@ async def update_profile(
     bio: str = Form(""),
     status_text: str = Form(""),
     theme: str = Form("dark"),
-    hide_online: str = Form("0"),
     avatar: UploadFile = File(None),
 ):
     username = require_auth(token)
     bio = bio[:150]
     status_text = status_text[:40]
     theme = theme if theme in ("dark", "light", "auto") else "dark"
-    ho = 1 if hide_online in ("1", "true", "True", "on") else 0
     conn = get_db()
     try:
         row = conn.execute(
@@ -750,15 +725,15 @@ async def update_profile(
                 f.write(content)
             avatar_url = f"/uploads/{safe_name}"
         conn.execute(
-            "UPDATE users SET avatar_url = ?, bio = ?, status_text = ?, theme = ?, hide_online = ? WHERE username = ?",
-            (avatar_url, bio, status_text, theme, ho, username),
+            "UPDATE users SET avatar_url = ?, bio = ?, status_text = ?, theme = ? WHERE username = ?",
+            (avatar_url, bio, status_text, theme, username),
         )
         conn.commit()
     finally:
         conn.close()
     return {"status": "ok", "username": username, "avatar_url": avatar_url,
             "bio": bio, "status_text": status_text, "theme": theme,
-            "hide_online": bool(ho), "is_admin": is_admin(username)}
+            "is_admin": is_admin(username)}
 
 
 @app.post("/password/change")
@@ -833,10 +808,7 @@ async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
 
 @app.get("/users")
 def get_online_users():
-    # Онлайн-список с учётом невидимок: скрытые пользователи не светятся
-    online = list(manager.active_connections.keys())
-    hidden = get_hidden_set()
-    return [u for u in online if u not in hidden]
+    return list(manager.active_connections.keys())
 
 # ==========================================================
 #                    АДМИН: БАНЫ И РАССЫЛКА
@@ -856,12 +828,12 @@ async def admin_ban(token: str = Form(...), username: str = Form(...)):
         conn.commit()
     finally:
         conn.close()
-    ws = manager.active_connections.get(username)
-    if ws is not None:
+    for ws in list(manager.active_connections.get(username, ())):
         try:
             await ws.close(code=4003)
         except Exception:
             pass
+    manager.disconnect(username)
     return {"status": "ok"}
 
 
@@ -883,17 +855,14 @@ async def admin_broadcast(
     title: str = Form(...),
     body: str = Form(...),
 ):
-    """Рассылка всем: WS-событие онлайн-пользователям + Web Push всем подписанным."""
     require_admin(token)
     title = title.strip()[:80] or "📢 Объявление"
     body = body.strip()[:300]
-    # 1) Онлайн-пользователи получают событие мгновенно
     payload = {"type": "broadcast", "title": title, "body": body}
     online_count = 0
     for uname in list(manager.active_connections.keys()):
         if await manager.send_to_user(payload, uname):
             online_count += 1
-    # 2) Всем с push-подпиской уходит системное уведомление
     conn = get_db()
     try:
         users = [r[0] for r in conn.execute(
@@ -1490,7 +1459,7 @@ async def websocket_endpoint(
                         await manager.send_to_user(typing_payload, target)
 
     except WebSocketDisconnect:
-        manager.disconnect(username)
+        manager.disconnect(username, websocket)
     except Exception as e:
         print(f"[WS] Неожиданная ошибка у '{username}': {e}")
-        manager.disconnect(username)
+        manager.disconnect(username, websocket)
