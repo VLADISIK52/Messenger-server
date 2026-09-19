@@ -312,8 +312,9 @@
         .msg-wrapper.my .msg-bubble { background: linear-gradient(120deg, rgba(255,255,255,0.32), rgba(255,255,255,0) 45%), var(--accent-grad); color: #fff; border-radius: 22px 22px 6px 22px; box-shadow: 0 0 22px var(--glow-a), inset 0 1px 0 rgba(255,255,255,0.45); }
         .msg-wrapper.other .msg-bubble { background: linear-gradient(160deg, rgba(224,255,246,0.42), rgba(146,214,190,0.22)); border: 1px solid rgba(220,255,240,0.55); border-radius: 22px 22px 22px 6px; box-shadow: 0 0 18px rgba(190,255,230,0.25), inset 0 1px 0 rgba(255,255,255,0.35); }
         .msg-sender { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; }
-        .msg-img { max-width: 240px; border-radius: 16px; margin-top: 4px; cursor: pointer; display: block; transition: transform 0.2s ease; }
+        .msg-img { max-width: 240px; width: 100%; border-radius: 16px; margin-top: 4px; cursor: pointer; display: block; transition: transform 0.2s ease; }
         .msg-img:hover { transform: scale(1.02); }
+        .msg-caption { margin-top: 6px; font-size: 13px; line-height: 1.4; }
         .msg-deleted { opacity: 0.65; font-style: italic; }
         .msg-edited { font-size: 10px; opacity: 0.7; margin-right: 2px; }
         .msg-time { font-size: 10px; opacity: 0.75; margin-right: 2px; }
@@ -634,7 +635,7 @@
             <button class="accent-swatch" style="background:#7ef0c0" data-col="#7ef0c0"></button>
             <button class="accent-swatch" style="background:#fbbf24" data-col="#fbbf24"></button>
         </div>
-        <input type="text" id="photo-caption" placeholder="Подпись поверх фото..." maxlength="80">
+        <input type="text" id="photo-caption" placeholder="Подпись (будет текстом под фото, как в TG)..." maxlength="120">
         <button class="btn-primary" onclick="sendEditedPhoto()">Отправить</button>
         <button class="btn-secondary" onclick="closePhotoEditor()">Отмена</button>
     </div>
@@ -917,10 +918,6 @@
         if (d.toDateString() === now.toDateString()) return 'был(а) в ' + hh;
         return 'был(а) ' + String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + ' в ' + hh;
     }
-    function badgeFor(p) {
-        if (!p) return '';
-        return (p.is_founder ? '\u{1F48E}' : '') + (p.is_admin ? '\u{1F6E1}' : '');
-    }
 
     document.addEventListener("DOMContentLoaded", () => {
         let savedUser = localStorage.getItem('messenger_currentUser');
@@ -1093,7 +1090,7 @@
         } catch (e) { showToast('\u{26D4} Ошибка', 'Не удалось очистить кэш'); }
     }
 
-    // ── Редактор фото ──
+    // ── Редактор фото: подпись НЕ жжётся на фото, идёт текстом снизу ──
     function openPhotoEditor(img) {
         photoState = { img, filter: '', crop: 'orig', caption: '', strokes: [], drawMode: false, color: '#ff5470' };
         document.getElementById('photo-caption').value = '';
@@ -1139,17 +1136,6 @@
             st.points.forEach((p, i) => { const x = p.x * w, y = p.y * h; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
             ctx.stroke();
         });
-        if (photoState.caption) {
-            const fs = Math.max(16, Math.round(h * 0.06));
-            ctx.font = `700 ${fs}px Inter, sans-serif`;
-            const tw2 = ctx.measureText(photoState.caption).width;
-            const pad = fs * 0.6;
-            ctx.fillStyle = 'rgba(0,0,0,0.55)';
-            ctx.fillRect((w - tw2) / 2 - pad, h - fs - pad * 2, tw2 + pad * 2, fs + pad * 2);
-            ctx.fillStyle = '#fff';
-            ctx.textBaseline = 'bottom';
-            ctx.fillText(photoState.caption, (w - tw2) / 2, h - pad);
-        }
     }
     function wirePhotoEditor() {
         const cv = document.getElementById('photo-canvas');
@@ -1195,12 +1181,13 @@
             cv.style.cursor = e.target.checked ? 'crosshair' : 'default';
         });
         document.getElementById('photo-caption').addEventListener('input', (e) => {
-            if (photoState) { photoState.caption = e.target.value; renderPhotoCanvas(); }
+            if (photoState) photoState.caption = e.target.value;
         });
     }
     function sendEditedPhoto() {
         if (!photoState || !activeChatTarget) return;
         const canvas = document.getElementById('photo-canvas');
+        const caption = (photoState.caption || '').trim();
         canvas.toBlob(async (blob) => {
             if (!blob) { showToast('\u{26D4} Ошибка', 'Не удалось подготовить фото'); return; }
             const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
@@ -1211,7 +1198,9 @@
                 if (!res.ok) { alert('Не удалось загрузить фото'); return; }
                 const d = await res.json();
                 if (!ws || ws.readyState !== WebSocket.OPEN) { alert('Нет соединения.'); return; }
-                ws.send(JSON.stringify({ type: 'message', target: activeChatTarget, sender: currentUser, content: d.file_url, msg_type: 'image', is_group: isCurrentGroup, reply_to: replyTarget ? replyTarget.id : null }));
+                // Как в TG: фото + подпись текстом снизу в одном сообщении
+                const content = caption ? (d.file_url + '\n' + caption) : d.file_url;
+                ws.send(JSON.stringify({ type: 'message', target: activeChatTarget, sender: currentUser, content, msg_type: 'image', is_group: isCurrentGroup, reply_to: replyTarget ? replyTarget.id : null }));
                 cancelReply();
                 closePhotoEditor();
             } catch (e) { alert('Ошибка отправки фото'); }
@@ -1223,7 +1212,7 @@
         const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SR) { showToast('\u{26A0}\u{FE0F} Не поддерживается', 'Твой браузер не умеет распознавать речь'); return; }
         box.style.display = 'block';
-        box.innerText = '\u{1F399} Слушаю... говори громче (голосовое играет вслух)';
+        box.innerText = '\u{1F399} Слушаю... (голосовое играет вслух)';
         const rec = new SR();
         rec.lang = 'ru-RU';
         rec.interimResults = true;
@@ -1240,7 +1229,7 @@
         rec.onerror = () => { box.innerText = finalText || 'Не удалось распознать'; };
         rec.onend = () => {
             try { audio.pause(); } catch (e) {}
-            if (!finalText && !box.innerText.includes('Слушаю')) box.innerText = 'Не удалось распознать';
+            if (!finalText && box.innerText.includes('Слушаю')) box.innerText = 'Не удалось распознать';
         };
         try { rec.start(); } catch (e) { box.innerText = 'Не удалось начать распознавание'; return; }
         audio.currentTime = 0;
@@ -2081,7 +2070,6 @@
             let isOnline = onlineUsers.includes(user);
             const pc = profileCache[user];
             const customStatus = pc && pc.data ? pc.data.status_text : '';
-            const badge = badgeFor(pc && pc.data);
             let statusHtml = (isOnline ? `<span class="status-dot online-dot"></span>В сети` : `<span class="status-dot offline-dot"></span>${(pc && pc.data && fmtLastSeen(pc.data.last_seen)) || 'Был(а) недавно'}`)
                 + (customStatus ? ` · <span style="color:var(--accent-b)">${escapeHtml(customStatus)}</span>` : '');
             const unread = unreadCounts[user] || 0;
@@ -2092,7 +2080,7 @@
                 <div class="chat-item-left">
                     <div class="avatar${isOnline ? ' online-ring' : ''}" id="avatar-list-${cssSafe(user)}">${user.charAt(0).toUpperCase()}</div>
                     <div style="min-width:0;">
-                        <div class="user-name">@${user}${badge}${myBlocks.includes(user) ? ' \u{1F6AB}' : ''}</div>
+                        <div class="user-name">@${user}${myBlocks.includes(user) ? ' \u{1F6AB}' : ''}</div>
                         <div class="user-sub">${statusHtml}</div>
                     </div>
                 </div>
@@ -2135,7 +2123,6 @@
             getProfile(target).then(p => {
                 if (p.avatar_url && p.avatar_url !== '/uploads/default.png')
                     document.getElementById('target-avatar-letter').innerHTML = `<img src="${p.avatar_url}">`;
-                document.getElementById('target-username').innerText = '@' + target + badgeFor(p);
                 updateHeaderStatus();
             });
         }
@@ -2292,7 +2279,6 @@
         let file = input.files[0];
         if (!file || !activeChatTarget) return;
         if (file.type.startsWith("image/")) {
-            // Фото открываем в редакторе перед отправкой
             const url = URL.createObjectURL(file);
             const img = new Image();
             img.onload = () => { URL.revokeObjectURL(url); openPhotoEditor(img); };
@@ -2508,7 +2494,13 @@
         let contentHtml;
         if (msg.msg_type === 'deleted') contentHtml = `<div class="msg-deleted">\u{1F6AB} Сообщение удалено</div>`;
         else if (msg.msg_type === 'text') contentHtml = `<div class="msg-text">${escapeHtml(msg.content)}</div>`;
-        else if (msg.msg_type === 'image') contentHtml = `<img src="${msg.content}" class="msg-img" loading="lazy" onclick="document.getElementById('lightbox-img').src=this.src; document.getElementById('lightbox').style.display='flex'">`;
+        else if (msg.msg_type === 'image') {
+            let url = msg.content, caption = '';
+            const nl = String(msg.content).indexOf('\n');
+            if (nl >= 0) { url = String(msg.content).slice(0, nl); caption = String(msg.content).slice(nl + 1); }
+            contentHtml = `<img src="${url}" class="msg-img" loading="lazy" onclick="document.getElementById('lightbox-img').src=this.src; document.getElementById('lightbox').style.display='flex'">`
+                + (caption ? `<div class="msg-caption">${escapeHtml(caption)}</div>` : '');
+        }
         else if (msg.msg_type === 'voice') contentHtml = `
             <div class="msg-voice2">
                 <button class="voice-play">\u{25B6}</button>
