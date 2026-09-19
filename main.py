@@ -177,6 +177,7 @@ def init_db() -> None:
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN last_seen DATETIME")
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0")
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN theme TEXT DEFAULT 'dark'")
+    safe_alter(cursor, "ALTER TABLE users ADD COLUMN hide_online INTEGER DEFAULT 0")
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sessions (
             token      TEXT PRIMARY KEY,
@@ -287,6 +288,17 @@ def is_banned(username: str) -> bool:
     finally:
         conn.close()
     return bool(row and row[0])
+
+
+def get_hidden_set() -> set:
+    """Пользователи в режиме невидимки."""
+    conn = get_db()
+    try:
+        return {r[0] for r in conn.execute(
+            "SELECT username FROM users WHERE hide_online = 1"
+        ).fetchall()}
+    finally:
+        conn.close()
 
 
 def touch_last_seen(username: str) -> None:
@@ -680,23 +692,26 @@ def get_profile(username: str):
     conn = get_db()
     try:
         row = conn.execute(
-            "SELECT avatar_url, bio, status_text, last_seen, theme, banned FROM users WHERE username = ?", (username,)
+            "SELECT avatar_url, bio, status_text, last_seen, theme, banned, hide_online FROM users WHERE username = ?", (username,)
         ).fetchone()
     finally:
         conn.close()
     founder = get_founder()
     if not row:
         return {"username": username, "avatar_url": "/uploads/default.png", "bio": "", "status_text": "",
-                "last_seen": None, "theme": "dark", "banned": 0,
+                "last_seen": None, "theme": "dark", "banned": 0, "hide_online": False,
                 "is_admin": is_admin(username), "is_founder": username == founder}
+    hidden = bool(row[6])
     return {
         "username": username,
         "avatar_url": row[0] or "/uploads/default.png",
         "bio": row[1] or "",
         "status_text": row[2] or "",
-        "last_seen": row[3],
+        # Невидимка: остальные видят только «был(а) недавно»
+        "last_seen": None if hidden else row[3],
         "theme": row[4] or "dark",
         "banned": row[5] or 0,
+        "hide_online": hidden,
         "is_admin": is_admin(username),
         "is_founder": username == founder,
     }
@@ -708,12 +723,14 @@ async def update_profile(
     bio: str = Form(""),
     status_text: str = Form(""),
     theme: str = Form("dark"),
+    hide_online: str = Form("0"),
     avatar: UploadFile = File(None),
 ):
     username = require_auth(token)
     bio = bio[:150]
     status_text = status_text[:40]
-    theme = theme if theme in ("dark", "light") else "dark"
+    theme = theme if theme in ("dark", "light", "auto") else "dark"
+    ho = 1 if hide_online in ("1", "true", "True", "on") else 0
     conn = get_db()
     try:
         row = conn.execute(
@@ -733,15 +750,15 @@ async def update_profile(
                 f.write(content)
             avatar_url = f"/uploads/{safe_name}"
         conn.execute(
-            "UPDATE users SET avatar_url = ?, bio = ?, status_text = ?, theme = ? WHERE username = ?",
-            (avatar_url, bio, status_text, theme, username),
+            "UPDATE users SET avatar_url = ?, bio = ?, status_text = ?, theme = ?, hide_online = ? WHERE username = ?",
+            (avatar_url, bio, status_text, theme, ho, username),
         )
         conn.commit()
     finally:
         conn.close()
     return {"status": "ok", "username": username, "avatar_url": avatar_url,
             "bio": bio, "status_text": status_text, "theme": theme,
-            "is_admin": is_admin(username)}
+            "hide_online": bool(ho), "is_admin": is_admin(username)}
 
 
 @app.post("/password/change")
@@ -816,7 +833,10 @@ async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
 
 @app.get("/users")
 def get_online_users():
-    return list(manager.active_connections.keys())
+    # Онлайн-список с учётом невидимок: скрытые пользователи не светятся
+    online = list(manager.active_connections.keys())
+    hidden = get_hidden_set()
+    return [u for u in online if u not in hidden]
 
 # ==========================================================
 #                    АДМИН: БАНЫ И РАССЫЛКА
