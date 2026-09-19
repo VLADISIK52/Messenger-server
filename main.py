@@ -28,15 +28,19 @@ DB_FILE = os.path.join(DATA_DIR, "chat.db")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
 
+# Ник администратора (Render → Environment → ADMIN_USERNAME)
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
 
+# Штамп версии для «самолечения» клиентов: хеш коммита деплоя
 try:
     APP_VERSION = os.environ.get("RENDER_GIT_COMMIT", "") or str(int(os.path.getmtime("index.html")))
 except Exception:
     APP_VERSION = "dev"
 
+# Московское время для журналов админ-панели
 MSK = timezone(timedelta(hours=3))
 
+# Журнал подключений (последние 100 событий)
 CONNECT_LOG = deque(maxlen=100)
 
 # ==========================================================
@@ -62,7 +66,7 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 USERNAME_RE = re.compile(r'^[A-Za-zА-Яа-яЁё0-9]{3,20}$')
-MAX_UPLOAD_SIZE = 25 * 1024 * 1024
+MAX_UPLOAD_SIZE = 25 * 1024 * 1024  # 25 МБ
 ALLOWED_UPLOAD_EXTENSIONS = {
     '.jpg', '.jpeg', '.png', '.gif', '.webp',
     '.mp3', '.wav', '.ogg', '.webm', '.m4a',
@@ -84,6 +88,7 @@ _VAPID.generate_keys()
 _VAPID_PRIVATE_PEM = _VAPID.private_key.private_bytes(
     Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
 ).decode()
+# Сырой публичный ключ (65 байт) из DER — работает на любой версии cryptography
 _VAPID_PUBLIC_RAW = _VAPID.public_key.public_bytes(
     Encoding.DER, PublicFormat.SubjectPublicKeyInfo
 )[-65:]
@@ -242,6 +247,7 @@ def get_chat_id(user1: str, user2: str) -> str:
 
 
 def chat_recipients(chat_id: str) -> List[str]:
+    """Кому показывать сообщение: участники группы или двое из лички."""
     if chat_id.startswith("group_"):
         return get_group_member_usernames(chat_id)
     parts = chat_id.split("_")
@@ -264,6 +270,16 @@ def is_admin(username: str) -> bool:
     return bool(ADMIN_USERNAME) and username == ADMIN_USERNAME
 
 
+def get_founder() -> Optional[str]:
+    """Самый первый зарегистрированный пользователь — основатель."""
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT username FROM users ORDER BY rowid LIMIT 1").fetchone()
+    finally:
+        conn.close()
+    return row[0] if row else None
+
+
 def is_banned(username: str) -> bool:
     conn = get_db()
     try:
@@ -283,6 +299,7 @@ def touch_last_seen(username: str) -> None:
 
 
 def utc_str_to_msk(s: Optional[str]) -> str:
+    """Преобразует время SQLite (UTC) в московское."""
     if not s:
         return ""
     try:
@@ -469,6 +486,7 @@ manager = ConnectionManager()
 
 @app.get("/")
 def get_index():
+    # Отдаём index.html, подставляя актуальный штамп версии вместо заглушки
     with open("index.html", "r", encoding="utf-8") as f:
         html = f.read()
     html = html.replace("__APP_VERSION__", APP_VERSION)
@@ -527,7 +545,9 @@ def search_users(q: str, token: str):
         return []
     conn = get_db()
     try:
-        rows = conn.execute("SELECT username, avatar_url FROM users WHERE banned = 0 OR banned IS NULL").fetchall()
+        rows = conn.execute(
+            "SELECT username, avatar_url FROM users WHERE banned = 0 OR banned IS NULL"
+        ).fetchall()
     finally:
         conn.close()
     ql = q.lower()
@@ -608,7 +628,8 @@ async def register(
     finally:
         conn.close()
     token = create_session(username)
-    return {"status": "ok", "username": username, "avatar_url": avatar_url, "bio": "", "status_text": "", "token": token}
+    return {"status": "ok", "username": username, "avatar_url": avatar_url,
+            "bio": "", "status_text": "", "token": token}
 
 
 @app.post("/login")
@@ -663,9 +684,11 @@ def get_profile(username: str):
         ).fetchone()
     finally:
         conn.close()
+    founder = get_founder()
     if not row:
         return {"username": username, "avatar_url": "/uploads/default.png", "bio": "", "status_text": "",
-                "last_seen": None, "theme": "dark", "banned": 0, "is_admin": is_admin(username)}
+                "last_seen": None, "theme": "dark", "banned": 0,
+                "is_admin": is_admin(username), "is_founder": username == founder}
     return {
         "username": username,
         "avatar_url": row[0] or "/uploads/default.png",
@@ -675,6 +698,7 @@ def get_profile(username: str):
         "theme": row[4] or "dark",
         "banned": row[5] or 0,
         "is_admin": is_admin(username),
+        "is_founder": username == founder,
     }
 
 
@@ -715,8 +739,9 @@ async def update_profile(
         conn.commit()
     finally:
         conn.close()
-    return {"status": "ok", "username": username, "avatar_url": avatar_url, "bio": bio,
-            "status_text": status_text, "theme": theme, "is_admin": is_admin(username)}
+    return {"status": "ok", "username": username, "avatar_url": avatar_url,
+            "bio": bio, "status_text": status_text, "theme": theme,
+            "is_admin": is_admin(username)}
 
 
 @app.post("/password/change")
