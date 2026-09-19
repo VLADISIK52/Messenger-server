@@ -169,6 +169,9 @@ def init_db() -> None:
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN password_hash TEXT")
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN status_text TEXT DEFAULT ''")
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+    safe_alter(cursor, "ALTER TABLE users ADD COLUMN last_seen DATETIME")
+    safe_alter(cursor, "ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0")
+    safe_alter(cursor, "ALTER TABLE users ADD COLUMN theme TEXT DEFAULT 'dark'")
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sessions (
             token      TEXT PRIMARY KEY,
@@ -261,6 +264,24 @@ def is_admin(username: str) -> bool:
     return bool(ADMIN_USERNAME) and username == ADMIN_USERNAME
 
 
+def is_banned(username: str) -> bool:
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT banned FROM users WHERE username = ?", (username,)).fetchone()
+    finally:
+        conn.close()
+    return bool(row and row[0])
+
+
+def touch_last_seen(username: str) -> None:
+    conn = get_db()
+    try:
+        conn.execute("UPDATE users SET last_seen = CURRENT_TIMESTAMP WHERE username = ?", (username,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def utc_str_to_msk(s: Optional[str]) -> str:
     if not s:
         return ""
@@ -323,6 +344,8 @@ def require_auth(token: Optional[str]) -> str:
     username = get_username_by_token(token)
     if not username:
         raise HTTPException(status_code=401, detail="Не авторизован. Войдите заново.")
+    if is_banned(username):
+        raise HTTPException(status_code=403, detail="Вы забанены администратором")
     return username
 
 
@@ -396,61 +419,46 @@ def get_group_member_usernames(group_id: str) -> List[str]:
     return [r[0] for r in rows]
 
 # ==========================================================
-#     МЕНЕДЖЕР WEBSOCKET-СОЕДИНЕНИЙ (МУЛЬТИ-ВКЛАДОЧНЫЙ)
+#             МЕНЕДЖЕР WEBSOCKET-СОЕДИНЕНИЙ
 # ==========================================================
 
 class ConnectionManager:
-    """Держит ВСЕ соединения каждого пользователя:
-    несколько вкладок, телефон и APK получают сообщения одновременно."""
-
     def __init__(self):
-        self.active_connections: Dict[str, set] = {}
+        self.active_connections: Dict[str, WebSocket] = {}
 
     async def connect(self, username: str, websocket: WebSocket) -> None:
         await websocket.accept()
-        print(f"[WS] + connect: {username} (всего соединений: {len(self.active_connections.get(username, ())) + 1})", flush=True)
+        print(f"[WS] + connect: {username}", flush=True)
         CONNECT_LOG.appendleft({
             "time": datetime.now(MSK).strftime("%d.%m %H:%M:%S"),
             "user": username, "action": "connect",
         })
-        self.active_connections.setdefault(username, set()).add(websocket)
+        self.active_connections[username] = websocket
+        touch_last_seen(username)
 
-    def disconnect(self, username: str, websocket: Optional[WebSocket] = None) -> None:
-        socks = self.active_connections.get(username)
-        if socks is None:
-            return
-        if websocket is None:
-            socks.discard(websocket) if False else None
-            self.active_connections.pop(username, None)
-        else:
-            socks.discard(websocket)
-            if not socks:
-                self.active_connections.pop(username, None)
-        print(f"[WS] - disconnect: {username} (осталось: {len(self.active_connections.get(username, ()))})", flush=True)
+    def disconnect(self, username: str) -> None:
+        print(f"[WS] - disconnect: {username}", flush=True)
         CONNECT_LOG.appendleft({
             "time": datetime.now(MSK).strftime("%d.%m %H:%M:%S"),
             "user": username, "action": "disconnect",
         })
+        self.active_connections.pop(username, None)
+        touch_last_seen(username)
 
     def is_online(self, username: str) -> bool:
-        return bool(self.active_connections.get(username))
+        return username in self.active_connections
 
     async def send_to_user(self, message: dict, target_user: str) -> bool:
-        socks = list(self.active_connections.get(target_user, ()))
-        if not socks:
+        ws = self.active_connections.get(target_user)
+        if ws is None:
             return False
-        ok = False
-        dead = []
-        for ws in socks:
-            try:
-                await ws.send_json(message)
-                ok = True
-            except Exception as e:
-                print(f"[WS] Ошибка отправки '{target_user}': {e}")
-                dead.append(ws)
-        for ws in dead:
-            self.disconnect(target_user, ws)
-        return ok
+        try:
+            await ws.send_json(message)
+            return True
+        except Exception as e:
+            print(f"[WS] Ошибка отправки '{target_user}': {e}")
+            self.active_connections.pop(target_user, None)
+            return False
 
 
 manager = ConnectionManager()
@@ -519,7 +527,7 @@ def search_users(q: str, token: str):
         return []
     conn = get_db()
     try:
-        rows = conn.execute("SELECT username, avatar_url FROM users").fetchall()
+        rows = conn.execute("SELECT username, avatar_url FROM users WHERE banned = 0 OR banned IS NULL").fetchall()
     finally:
         conn.close()
     ql = q.lower()
@@ -574,9 +582,10 @@ async def register(
         raise HTTPException(status_code=400, detail="Пароль должен быть не короче 4 символов")
     conn = get_db()
     try:
-        if conn.execute(
-            "SELECT 1 FROM users WHERE username = ?", (username,)
-        ).fetchone():
+        row = conn.execute("SELECT 1, banned FROM users WHERE username = ?", (username,)).fetchone()
+        if row:
+            if row[1]:
+                raise HTTPException(status_code=403, detail="Этот пользователь забанен")
             raise HTTPException(status_code=400, detail="Этот никнейм уже занят")
         avatar_url = "/uploads/default.png"
         if avatar and avatar.filename:
@@ -607,10 +616,12 @@ async def login(username: str = Form(...), password: str = Form(...)):
     conn = get_db()
     try:
         row = conn.execute(
-            "SELECT password_hash, avatar_url, bio, status_text FROM users WHERE username = ?", (username,)
+            "SELECT password_hash, avatar_url, bio, status_text, banned FROM users WHERE username = ?", (username,)
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
+        if row[4]:
+            raise HTTPException(status_code=403, detail="Вы забанены администратором")
         if not row[0]:
             conn.execute(
                 "UPDATE users SET password_hash = ? WHERE username = ?",
@@ -648,17 +659,21 @@ def get_profile(username: str):
     conn = get_db()
     try:
         row = conn.execute(
-            "SELECT avatar_url, bio, status_text FROM users WHERE username = ?", (username,)
+            "SELECT avatar_url, bio, status_text, last_seen, theme, banned FROM users WHERE username = ?", (username,)
         ).fetchone()
     finally:
         conn.close()
     if not row:
-        return {"username": username, "avatar_url": "/uploads/default.png", "bio": "", "status_text": "", "is_admin": is_admin(username)}
+        return {"username": username, "avatar_url": "/uploads/default.png", "bio": "", "status_text": "",
+                "last_seen": None, "theme": "dark", "banned": 0, "is_admin": is_admin(username)}
     return {
         "username": username,
         "avatar_url": row[0] or "/uploads/default.png",
         "bio": row[1] or "",
         "status_text": row[2] or "",
+        "last_seen": row[3],
+        "theme": row[4] or "dark",
+        "banned": row[5] or 0,
         "is_admin": is_admin(username),
     }
 
@@ -668,11 +683,13 @@ async def update_profile(
     token: str = Form(...),
     bio: str = Form(""),
     status_text: str = Form(""),
+    theme: str = Form("dark"),
     avatar: UploadFile = File(None),
 ):
     username = require_auth(token)
     bio = bio[:150]
     status_text = status_text[:40]
+    theme = theme if theme in ("dark", "light") else "dark"
     conn = get_db()
     try:
         row = conn.execute(
@@ -692,13 +709,68 @@ async def update_profile(
                 f.write(content)
             avatar_url = f"/uploads/{safe_name}"
         conn.execute(
-            "UPDATE users SET avatar_url = ?, bio = ?, status_text = ? WHERE username = ?",
-            (avatar_url, bio, status_text, username),
+            "UPDATE users SET avatar_url = ?, bio = ?, status_text = ?, theme = ? WHERE username = ?",
+            (avatar_url, bio, status_text, theme, username),
         )
         conn.commit()
     finally:
         conn.close()
-    return {"status": "ok", "username": username, "avatar_url": avatar_url, "bio": bio, "status_text": status_text, "is_admin": is_admin(username)}
+    return {"status": "ok", "username": username, "avatar_url": avatar_url, "bio": bio,
+            "status_text": status_text, "theme": theme, "is_admin": is_admin(username)}
+
+
+@app.post("/password/change")
+async def password_change(
+    token: str = Form(...),
+    old_password: str = Form(...),
+    new_password: str = Form(...),
+):
+    username = require_auth(token)
+    if len(new_password) < 4:
+        raise HTTPException(status_code=400, detail="Новый пароль должен быть не короче 4 символов")
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT password_hash FROM users WHERE username = ?", (username,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        if row[0] and not verify_password(old_password, row[0]):
+            raise HTTPException(status_code=401, detail="Неверный текущий пароль")
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE username = ?",
+            (hash_password(new_password), username),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"status": "ok"}
+
+
+@app.get("/sessions/list")
+def sessions_list(token: str):
+    username = require_auth(token)
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT token, created_at FROM sessions WHERE username = ? ORDER BY created_at DESC", (username,)
+        ).fetchall()
+    finally:
+        conn.close()
+    return [
+        {"current": t == token, "token_prefix": (t[:6] + "…"), "created_at": utc_str_to_msk(ca)}
+        for t, ca in rows
+    ]
+
+
+@app.post("/sessions/logout-all")
+async def sessions_logout_all(token: str = Form(...)):
+    username = require_auth(token)
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM sessions WHERE username = ? AND token != ?", (username, token))
+        conn.commit()
+    finally:
+        conn.close()
+    return {"status": "ok"}
 
 
 @app.post("/upload")
@@ -720,6 +792,44 @@ async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
 @app.get("/users")
 def get_online_users():
     return list(manager.active_connections.keys())
+
+# ==========================================================
+#                    АДМИН: БАНЫ
+# ==========================================================
+
+@app.post("/admin/ban")
+async def admin_ban(token: str = Form(...), username: str = Form(...)):
+    require_admin(token)
+    if username == ADMIN_USERNAME:
+        raise HTTPException(status_code=400, detail="Нельзя забанить самого себя")
+    conn = get_db()
+    try:
+        if not conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        conn.execute("UPDATE users SET banned = 1 WHERE username = ?", (username,))
+        conn.execute("DELETE FROM sessions WHERE username = ?", (username,))
+        conn.commit()
+    finally:
+        conn.close()
+    ws = manager.active_connections.get(username)
+    if ws is not None:
+        try:
+            await ws.close(code=4003)
+        except Exception:
+            pass
+    return {"status": "ok"}
+
+
+@app.post("/admin/unban")
+async def admin_unban(token: str = Form(...), username: str = Form(...)):
+    require_admin(token)
+    conn = get_db()
+    try:
+        conn.execute("UPDATE users SET banned = 0 WHERE username = ?", (username,))
+        conn.commit()
+    finally:
+        conn.close()
+    return {"status": "ok"}
 
 # ==========================================================
 #                    ЧЁРНЫЙ СПИСОК
@@ -842,9 +952,10 @@ def admin_stats(token: str):
                 "avatar_url": r[1] or "/uploads/default.png",
                 "status_text": r[2] or "",
                 "created_at": utc_str_to_msk(r[3]),
+                "banned": r[4] or 0,
             }
             for r in conn.execute(
-                "SELECT username, avatar_url, status_text, created_at FROM users ORDER BY rowid"
+                "SELECT username, avatar_url, status_text, created_at, banned FROM users ORDER BY rowid"
             ).fetchall()
         ]
         messages_total = conn.execute(
@@ -1127,6 +1238,10 @@ async def websocket_endpoint(
         await websocket.accept()
         await websocket.close(code=4001)
         return
+    if is_banned(username):
+        await websocket.accept()
+        await websocket.close(code=4003)
+        return
 
     await manager.connect(username, websocket)
     try:
@@ -1185,6 +1300,7 @@ async def websocket_endpoint(
                     "target": target, "sender": username, "content": content,
                     "msg_type": content_type, "status": initial_status,
                     "is_group": is_group, "duration": duration, "edited": False,
+                    "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
                     "reply_to": reply_preview, "reactions": [],
                 }
                 if is_group:
@@ -1198,6 +1314,7 @@ async def websocket_endpoint(
                                 f"👥 {username}", content[:100],
                             )
                 else:
+                    await manager.send_to_user(msg_payload, username)
                     if target != username:
                         ok = await manager.send_to_user(msg_payload, target)
                         if not ok:
@@ -1205,8 +1322,6 @@ async def websocket_endpoint(
                                 send_push_to_user, target,
                                 f"💬 {username}", content[:100],
                             )
-                    # Эхо отправителю — во ВСЕ его вкладки/устройства
-                    await manager.send_to_user(msg_payload, username)
 
             elif msg_type == "read_receipt":
                 chat_id = data.get("chat_id")
@@ -1300,7 +1415,7 @@ async def websocket_endpoint(
                         await manager.send_to_user(typing_payload, target)
 
     except WebSocketDisconnect:
-        manager.disconnect(username, websocket)
+        manager.disconnect(username)
     except Exception as e:
         print(f"[WS] Неожиданная ошибка у '{username}': {e}")
-        manager.disconnect(username, websocket)
+        manager.disconnect(username)
