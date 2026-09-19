@@ -29,7 +29,6 @@
             --online: #7ef0c0;
             --shadow-soft: 0 8px 30px rgba(0,0,0,0.35);
         }
-        /* ── Акцентные пресеты ── */
         html[data-accent="ocean"] { --accent-a: #38bdf8; --accent-b: #6366f1;
             --accent-grad: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 40%, #6366f1 100%);
             --glow-a: rgba(56,189,248,0.45); --glow-b: rgba(99,102,241,0.30);
@@ -42,7 +41,6 @@
             --accent-grad: linear-gradient(135deg, #fbbf24 0%, #f59e0b 40%, #f97316 100%);
             --glow-a: rgba(251,191,36,0.45); --glow-b: rgba(249,115,22,0.30);
             --accent-soft: rgba(249,115,22,0.16); --border: rgba(255,200,120,0.18); }
-        /* ── AMOLED-тема ── */
         html[data-theme="amoled"] { --bg-void: #000000; --bg-panel: #050505; --bg-elevated: #0c0c0c; --bg-input: #141414;
             --text-primary: #f2f2f2; --text-secondary: #b5b5b5; --text-muted: #7a7a7a;
             --border: rgba(255,255,255,0.10); --glass: rgba(255,255,255,0.04);
@@ -71,7 +69,6 @@
         html[data-theme="amoled"] .settings-row, html[data-theme="amoled"] .settings-profile { background: rgba(255,255,255,0.05); }
         html[data-theme="amoled"] .slider { background: rgba(255,255,255,0.15); }
         html[data-theme="amoled"] .seg { background: rgba(255,255,255,0.08); }
-        /* ── Светлая тема ── */
         html[data-theme="light"] {
             --bg-void: #eef0f8; --bg-panel: #f6f7fc; --bg-elevated: #ffffff; --bg-input: #ffffff;
             --accent-soft: rgba(143,122,240,0.12);
@@ -137,7 +134,7 @@
         html[data-theme="light"] .seg { background: rgba(120,110,200,0.12); }
         html[data-theme="light"] .slider { background: rgba(120,110,200,0.25); }
         html[data-theme="light"] .modal-close { background: rgba(120,110,200,0.12); color: #5b6070; }
-        /* ── Компактный режим ── */
+        html[data-theme="light"] .voice-transcript { background: rgba(120,110,200,0.10); }
         html.compact .msg-bubble { padding: 7px 12px; }
         html.compact .msg-wrapper { margin-bottom: 5px; }
         html.compact .msg-img { max-width: 190px; }
@@ -320,10 +317,13 @@
         .msg-deleted { opacity: 0.65; font-style: italic; }
         .msg-edited { font-size: 10px; opacity: 0.7; margin-right: 2px; }
         .msg-time { font-size: 10px; opacity: 0.75; margin-right: 2px; }
-        .msg-voice2 { display: flex; align-items: center; gap: 10px; min-width: 210px; }
+        .msg-voice2 { display: flex; align-items: center; gap: 8px; min-width: 210px; }
         .msg-voice2 audio { display: none; }
         .voice-play { width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--accent-grad); color: #fff; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 0 16px var(--glow-a); transition: transform 0.15s; }
         .voice-play:active { transform: scale(0.9); }
+        .voice-tr-btn { background: transparent; border: none; font-size: 16px; cursor: pointer; flex-shrink: 0; transition: transform 0.12s; }
+        .voice-tr-btn:active { transform: scale(1.2); }
+        .voice-transcript { display: none; margin-top: 6px; font-size: 12px; color: var(--text-secondary); background: rgba(255,255,255,0.06); padding: 6px 10px; border-radius: 10px; }
         .voice-bar { flex: 1; height: 4px; background: rgba(255,255,255,0.22); border-radius: 2px; position: relative; overflow: hidden; }
         .msg-wrapper.other .voice-bar { background: rgba(190,255,230,0.25); }
         .voice-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: var(--accent-grad); border-radius: 2px; box-shadow: 0 0 10px var(--glow-a); }
@@ -430,6 +430,7 @@
         .modal-box { background: rgba(8,36,27,0.92); padding: 26px; border-radius: 32px; border: 1px solid rgba(220,255,240,0.2); width: 90%; max-width: 380px; max-height: 85vh; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 0 30px rgba(190,255,230,0.2), 0 30px 80px rgba(0,0,0,0.5); animation: modalPopIn 0.28s cubic-bezier(0.34, 1.56, 0.64, 1); position: relative; }
         @keyframes modalPopIn { from { opacity: 0; transform: scale(0.9) translateY(10px); } to { opacity: 1; transform: none; } }
         .modal-box h3 { margin-bottom: 4px; font-family: 'Sora', sans-serif; }
+        #photo-canvas { width: 100%; border-radius: 16px; background: #000; display: block; }
         .avatar-edit-wrapper { align-self: center; position: relative; cursor: pointer; transition: transform 0.2s; }
         .avatar-edit-wrapper:hover { transform: scale(1.04); }
         .avatar-edit-badge { position: absolute; bottom: 0; right: 0; background: var(--accent-grad); width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; border: 2px solid var(--bg-panel); }
@@ -466,7 +467,7 @@
         .settings-row > span:first-child { font-size: 14px; font-weight: 600; }
         .settings-chevron { color: var(--text-muted); font-size: 18px; }
         .settings-meta { color: var(--text-muted); font-size: 12px; }
-        .seg { display: flex; background: rgba(255,255,255,0.08); border-radius: 999px; padding: 3px; gap: 2px; }
+        .seg { display: flex; background: rgba(255,255,255,0.08); border-radius: 999px; padding: 3px; gap: 2px; flex-wrap: wrap; }
         .seg button { border: none; background: transparent; color: var(--text-secondary); padding: 6px 10px; border-radius: 999px; cursor: pointer; font-size: 12px; font-weight: 600; transition: background 0.15s, color 0.15s; }
         .seg button.active { background: var(--accent-grad); color: #fff; }
         .accent-swatches { display: flex; gap: 8px; }
@@ -603,6 +604,39 @@
         <div class="settings-row" onclick="closeModal('modal-settings'); openSecurity();"><span>&#x1F511; Пароль и сессии</span><span class="settings-chevron">&#x203A;</span></div>
         <div class="settings-section">О приложении</div>
         <div class="settings-row"><span>&#x2139; Версия</span><span class="settings-meta" id="settings-version"></span></div>
+    </div>
+</div>
+<div class="modal-overlay" id="modal-photo-editor" onclick="if(event.target===this) closePhotoEditor()">
+    <div class="modal-box" style="max-width:420px;">
+        <button class="modal-close" onclick="closePhotoEditor()">&#x2715;</button>
+        <h3 style="text-align:center;">&#x1F5BC; Редактор фото</h3>
+        <canvas id="photo-canvas"></canvas>
+        <div class="settings-section">Фильтр</div>
+        <div class="seg" id="photo-filters">
+            <button data-f="" class="active">Нет</button>
+            <button data-f="grayscale(1)">Ч/Б</button>
+            <button data-f="sepia(0.6) contrast(1.1)">Винтаж</button>
+            <button data-f="saturate(1.8) contrast(1.2)">Неон</button>
+            <button data-f="sepia(0.3) saturate(1.4)">Тёплый</button>
+            <button data-f="hue-rotate(160deg) saturate(1.1)">Холод</button>
+        </div>
+        <div class="settings-section">Кадрирование</div>
+        <div class="seg" id="photo-crops">
+            <button data-c="orig" class="active">Оригинал</button>
+            <button data-c="1:1">1:1</button>
+            <button data-c="4:3">4:3</button>
+            <button data-c="3:4">3:4</button>
+        </div>
+        <div class="settings-row"><span>&#x270F; Рисовать</span><label class="switch"><input type="checkbox" id="photo-draw-switch"><span class="slider"></span></label></div>
+        <div class="accent-swatches" id="photo-colors">
+            <button class="accent-swatch active" style="background:#ff5470" data-col="#ff5470"></button>
+            <button class="accent-swatch" style="background:#ffffff" data-col="#ffffff"></button>
+            <button class="accent-swatch" style="background:#7ef0c0" data-col="#7ef0c0"></button>
+            <button class="accent-swatch" style="background:#fbbf24" data-col="#fbbf24"></button>
+        </div>
+        <input type="text" id="photo-caption" placeholder="Подпись поверх фото..." maxlength="80">
+        <button class="btn-primary" onclick="sendEditedPhoto()">Отправить</button>
+        <button class="btn-secondary" onclick="closePhotoEditor()">Отмена</button>
     </div>
 </div>
 <div class="modal-overlay" id="modal-blocked" onclick="if(event.target===this) closeModal('modal-blocked')">
@@ -829,6 +863,7 @@
     let ecoMode = false;
     let settings = { sound: true, vibro: true, preview: true, fontsize: 14, bubble: 'round', enter: true, accent: '', compact: false };
     let audioCtx = null;
+    let photoState = null;
     let mediaRecorder = null, recordedChunks = [], recordingSeconds = 0, recordingTimerHandle = null, recordingCancelled = false;
     let videoRecorder = null, videoChunks = [], videoStream = null, videoSeconds = 0, videoTimerHandle = null, videoCancelled = false;
     let replyTarget = null, typingSendTimer = null, typingUsersInChat = {}, searchMatches = [], searchCurrentIndex = -1;
@@ -913,6 +948,7 @@
             if (wpm && wpm.classList.contains('open') && !wpm.contains(e.target)) wpm.classList.remove('open');
         });
         wireSettingsControls();
+        wirePhotoEditor();
     });
 
     function loadSettings() {
@@ -1055,6 +1091,161 @@
             if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); }
             showToast('\u{1F9F9} Кэш очищен', 'Кэш браузера для сайта очищен');
         } catch (e) { showToast('\u{26D4} Ошибка', 'Не удалось очистить кэш'); }
+    }
+
+    // ── Редактор фото ──
+    function openPhotoEditor(img) {
+        photoState = { img, filter: '', crop: 'orig', caption: '', strokes: [], drawMode: false, color: '#ff5470' };
+        document.getElementById('photo-caption').value = '';
+        document.getElementById('photo-draw-switch').checked = false;
+        document.querySelectorAll('#photo-filters button').forEach(b => b.classList.toggle('active', b.dataset.f === ''));
+        document.querySelectorAll('#photo-crops button').forEach(b => b.classList.toggle('active', b.dataset.c === 'orig'));
+        document.querySelectorAll('#photo-colors .accent-swatch').forEach(b => b.classList.toggle('active', b.dataset.col === '#ff5470'));
+        const cv = document.getElementById('photo-canvas');
+        cv.style.touchAction = 'auto'; cv.style.cursor = 'default';
+        openModal('modal-photo-editor');
+        requestAnimationFrame(renderPhotoCanvas);
+    }
+    function closePhotoEditor() {
+        photoState = null;
+        closeModal('modal-photo-editor');
+    }
+    function photoCropRect() {
+        const img = photoState.img;
+        const iw = img.naturalWidth, ih = img.naturalHeight;
+        let tw = iw, th = ih;
+        const r = photoState.crop;
+        if (r === '1:1') { const s = Math.min(iw, ih); tw = s; th = s; }
+        else if (r === '4:3') { tw = iw; th = iw * 3 / 4; if (th > ih) { th = ih; tw = ih * 4 / 3; } }
+        else if (r === '3:4') { th = ih; tw = ih * 3 / 4; if (tw > iw) { tw = iw; th = iw * 4 / 3; } }
+        return { sx: (iw - tw) / 2, sy: (ih - th) / 2, tw, th };
+    }
+    function renderPhotoCanvas() {
+        if (!photoState) return;
+        const canvas = document.getElementById('photo-canvas');
+        const ctx = canvas.getContext('2d');
+        const { sx, sy, tw, th } = photoCropRect();
+        const maxDim = 1280;
+        let w = tw, h = th;
+        if (w > maxDim || h > maxDim) { const k = Math.min(maxDim / w, maxDim / h); w = Math.round(w * k); h = Math.round(h * k); }
+        canvas.width = w; canvas.height = h;
+        ctx.filter = photoState.filter || 'none';
+        ctx.drawImage(photoState.img, sx, sy, tw, th, 0, 0, w, h);
+        ctx.filter = 'none';
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        photoState.strokes.forEach(st => {
+            ctx.strokeStyle = st.color; ctx.lineWidth = st.width;
+            ctx.beginPath();
+            st.points.forEach((p, i) => { const x = p.x * w, y = p.y * h; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+            ctx.stroke();
+        });
+        if (photoState.caption) {
+            const fs = Math.max(16, Math.round(h * 0.06));
+            ctx.font = `700 ${fs}px Inter, sans-serif`;
+            const tw2 = ctx.measureText(photoState.caption).width;
+            const pad = fs * 0.6;
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.fillRect((w - tw2) / 2 - pad, h - fs - pad * 2, tw2 + pad * 2, fs + pad * 2);
+            ctx.fillStyle = '#fff';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(photoState.caption, (w - tw2) / 2, h - pad);
+        }
+    }
+    function wirePhotoEditor() {
+        const cv = document.getElementById('photo-canvas');
+        let curStroke = null;
+        const pos = (e) => {
+            const r = cv.getBoundingClientRect();
+            return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+        };
+        cv.addEventListener('pointerdown', (e) => {
+            if (!photoState || !photoState.drawMode) return;
+            e.preventDefault();
+            curStroke = { color: photoState.color, width: Math.max(2, cv.width * 0.012), points: [pos(e)] };
+            photoState.strokes.push(curStroke);
+            try { cv.setPointerCapture(e.pointerId); } catch (e2) {}
+        });
+        cv.addEventListener('pointermove', (e) => {
+            if (!curStroke) return;
+            curStroke.points.push(pos(e));
+            renderPhotoCanvas();
+        });
+        cv.addEventListener('pointerup', () => { curStroke = null; });
+        cv.addEventListener('pointercancel', () => { curStroke = null; });
+        document.querySelectorAll('#photo-filters button').forEach(b => b.addEventListener('click', () => {
+            if (!photoState) return;
+            photoState.filter = b.dataset.f || '';
+            document.querySelectorAll('#photo-filters button').forEach(x => x.classList.toggle('active', x === b));
+            renderPhotoCanvas();
+        }));
+        document.querySelectorAll('#photo-crops button').forEach(b => b.addEventListener('click', () => {
+            if (!photoState) return;
+            photoState.crop = b.dataset.c || 'orig';
+            document.querySelectorAll('#photo-crops button').forEach(x => x.classList.toggle('active', x === b));
+            renderPhotoCanvas();
+        }));
+        document.querySelectorAll('#photo-colors .accent-swatch').forEach(b => b.addEventListener('click', () => {
+            if (!photoState) return;
+            photoState.color = b.dataset.col;
+            document.querySelectorAll('#photo-colors .accent-swatch').forEach(x => x.classList.toggle('active', x === b));
+        }));
+        document.getElementById('photo-draw-switch').addEventListener('change', (e) => {
+            if (photoState) photoState.drawMode = e.target.checked;
+            cv.style.touchAction = e.target.checked ? 'none' : 'auto';
+            cv.style.cursor = e.target.checked ? 'crosshair' : 'default';
+        });
+        document.getElementById('photo-caption').addEventListener('input', (e) => {
+            if (photoState) { photoState.caption = e.target.value; renderPhotoCanvas(); }
+        });
+    }
+    function sendEditedPhoto() {
+        if (!photoState || !activeChatTarget) return;
+        const canvas = document.getElementById('photo-canvas');
+        canvas.toBlob(async (blob) => {
+            if (!blob) { showToast('\u{26D4} Ошибка', 'Не удалось подготовить фото'); return; }
+            const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            const fd = new FormData();
+            fd.append('token', currentToken); fd.append('file', file);
+            try {
+                const res = await fetch('/upload', { method: 'POST', body: fd });
+                if (!res.ok) { alert('Не удалось загрузить фото'); return; }
+                const d = await res.json();
+                if (!ws || ws.readyState !== WebSocket.OPEN) { alert('Нет соединения.'); return; }
+                ws.send(JSON.stringify({ type: 'message', target: activeChatTarget, sender: currentUser, content: d.file_url, msg_type: 'image', is_group: isCurrentGroup, reply_to: replyTarget ? replyTarget.id : null }));
+                cancelReply();
+                closePhotoEditor();
+            } catch (e) { alert('Ошибка отправки фото'); }
+        }, 'image/jpeg', 0.9);
+    }
+
+    // ── Расшифровка голосовых ──
+    function transcribeVoice(msgId, audio, box) {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) { showToast('\u{26A0}\u{FE0F} Не поддерживается', 'Твой браузер не умеет распознавать речь'); return; }
+        box.style.display = 'block';
+        box.innerText = '\u{1F399} Слушаю... говори громче (голосовое играет вслух)';
+        const rec = new SR();
+        rec.lang = 'ru-RU';
+        rec.interimResults = true;
+        rec.continuous = true;
+        let finalText = '';
+        rec.onresult = (e) => {
+            let interim = '';
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+                if (e.results[i].isFinal) finalText += e.results[i][0].transcript + ' ';
+                else interim += e.results[i][0].transcript;
+            }
+            box.innerText = (finalText + interim) || '\u{1F399} Слушаю...';
+        };
+        rec.onerror = () => { box.innerText = finalText || 'Не удалось распознать'; };
+        rec.onend = () => {
+            try { audio.pause(); } catch (e) {}
+            if (!finalText && !box.innerText.includes('Слушаю')) box.innerText = 'Не удалось распознать';
+        };
+        try { rec.start(); } catch (e) { box.innerText = 'Не удалось начать распознавание'; return; }
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+        audio.onended = () => { try { rec.stop(); } catch (e) {} };
     }
 
     async function login() {
@@ -2100,7 +2291,16 @@
     async function sendFile(input) {
         let file = input.files[0];
         if (!file || !activeChatTarget) return;
-        if (file.type.startsWith("image/")) file = await compressImage(file);
+        if (file.type.startsWith("image/")) {
+            // Фото открываем в редакторе перед отправкой
+            const url = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = () => { URL.revokeObjectURL(url); openPhotoEditor(img); };
+            img.onerror = () => { URL.revokeObjectURL(url); alert('Не удалось открыть изображение'); };
+            img.src = url;
+            input.value = '';
+            return;
+        }
         const formData = new FormData();
         formData.append("token", currentToken); formData.append("file", file);
         try {
@@ -2108,12 +2308,11 @@
             if (!res.ok) { const err = await res.json().catch(() => ({})); alert(err.detail || "Не удалось загрузить файл"); input.value = ''; return; }
             const data = await res.json();
             if (!ws || ws.readyState !== WebSocket.OPEN) { alert("Нет соединения."); return; }
-            const isImage = file.type.startsWith("image/");
             const isVideo = file.type.startsWith("video/");
             ws.send(JSON.stringify({
                 type: 'message', target: activeChatTarget, sender: currentUser,
                 content: data.file_url,
-                msg_type: isImage ? 'image' : isVideo ? 'videofile' : 'file',
+                msg_type: isVideo ? 'videofile' : 'file',
                 is_group: isCurrentGroup,
                 reply_to: replyTarget ? replyTarget.id : null
             }));
@@ -2315,8 +2514,10 @@
                 <button class="voice-play">\u{25B6}</button>
                 <div class="voice-bar"><div class="voice-fill"></div></div>
                 <span class="voice-time">${msg.duration ? fmtDuration(msg.duration) : '–:––'}</span>
+                <button class="voice-tr-btn" title="Расшифровать">\u{1F4DD}</button>
                 <audio preload="metadata" src="${msg.content}"></audio>
-            </div>`;
+            </div>
+            <div class="voice-transcript"></div>`;
         else if (msg.msg_type === 'video') contentHtml = `
             <div class="msg-video-circle" onclick="playVideoCircle(this)">
                 <video src="${msg.content}" playsinline preload="metadata" class="${isMy ? 'mirror' : ''}"></video>
@@ -2358,6 +2559,8 @@
             const playBtn = vwrap.querySelector('.voice-play');
             const fill = vwrap.querySelector('.voice-fill');
             const timeEl = vwrap.querySelector('.voice-time');
+            const trBtn = vwrap.querySelector('.voice-tr-btn');
+            const trBox = wrapper.querySelector('.voice-transcript');
             let infFixed = false;
             audio.addEventListener('loadedmetadata', () => {
                 if (!msg.duration && isFinite(audio.duration) && audio.duration > 0 && audio.duration < 3600) timeEl.innerText = fmtDuration(audio.duration);
@@ -2376,6 +2579,7 @@
             });
             audio.addEventListener('ended', () => { playBtn.innerText = '\u{25B6}'; fill.style.width = '0%'; });
             playBtn.onclick = (e) => { e.stopPropagation(); if (audio.paused) { audio.play(); playBtn.innerText = '\u{23F8}'; } else { audio.pause(); playBtn.innerText = '\u{25B6}'; } };
+            if (trBtn && trBox) trBtn.onclick = (e) => { e.stopPropagation(); transcribeVoice(msg.id, audio, trBox); };
         }
         const bubbleTouchZone = wrapper.querySelector('.msg-bubble-touch-zone');
         const bubbleEl = wrapper.querySelector('.msg-bubble');
