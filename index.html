@@ -47,16 +47,6 @@
                 radial-gradient(1200px 600px at 80% -10%, rgba(126,240,192,0.16), transparent 60%),
                 radial-gradient(900px 500px at -10% 110%, rgba(244,169,136,0.16), transparent 60%),
                 var(--bg-void); }
-        body::before {
-            content: ''; position: fixed; inset: -10%; pointer-events: none; z-index: 0;
-            background:
-                radial-gradient(90px 90px at 18% 28%, rgba(255,214,130,0.28), transparent 70%),
-                radial-gradient(120px 120px at 82% 62%, rgba(255,214,130,0.18), transparent 70%),
-                radial-gradient(70px 70px at 62% 18%, rgba(255,214,130,0.24), transparent 70%),
-                radial-gradient(100px 100px at 38% 82%, rgba(255,214,130,0.16), transparent 70%);
-            animation: twinkle 7s ease-in-out infinite;
-        }
-        @keyframes twinkle { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
         h1, h2, h3, .display-font { font-family: 'Sora', 'Inter', sans-serif; }
         #splash-screen { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.8s ease, visibility 0.8s; overflow: hidden;
             background:
@@ -67,16 +57,9 @@
         #splash-screen::before, #auth-screen::before {
             content: ''; position: absolute; width: 480px; height: 480px; border-radius: 50%;
             background: radial-gradient(circle, rgba(244,169,136,0.30) 0%, rgba(126,240,192,0.22) 45%, transparent 70%);
-            animation: auroraDrift 9s ease-in-out infinite; z-index: 0;
+            z-index: 0;
         }
-        @keyframes auroraDrift { 0%, 100% { transform: translate(-10%, -6%) scale(1); } 50% { transform: translate(10%, 8%) scale(1.15); } }
-        #splash-screen.hidden::before { animation-play-state: paused; }
-        .splash-icon { width: 96px; height: 96px; border-radius: 28px; background: var(--accent-grad); display: flex; align-items: center; justify-content: center; font-size: 44px; position: relative; z-index: 1; animation: iconPulse 2.4s ease-in-out infinite, iconFloat 3.6s ease-in-out infinite; }
-        @keyframes iconPulse {
-            0%, 100% { box-shadow: 0 0 40px rgba(244,169,136,0.5), 0 0 90px rgba(169,154,240,0.35); }
-            50% { box-shadow: 0 0 64px rgba(244,169,136,0.8), 0 0 130px rgba(169,154,240,0.55); }
-        }
-        @keyframes iconFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+        .splash-icon { width: 96px; height: 96px; border-radius: 28px; background: var(--accent-grad); display: flex; align-items: center; justify-content: center; font-size: 44px; position: relative; z-index: 1; box-shadow: 0 0 40px rgba(244,169,136,0.5), 0 0 90px rgba(169,154,240,0.35); }
         #auth-screen { display: none; position: fixed; inset: 0; z-index: 100; justify-content: center; align-items: center; overflow: hidden;
             background:
                 radial-gradient(600px 300px at 50% 0%, rgba(126,240,192,0.14), transparent 60%),
@@ -89,10 +72,9 @@
         input[type="text"], input[type="password"], textarea { background: var(--bg-input); color: var(--text-primary); padding: 14px 18px; border: 1.5px solid rgba(220,255,240,0.35); border-radius: var(--radius-md); font-size: 15px; outline: none; width: 100%; transition: border-color 0.15s, box-shadow 0.15s; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25); }
         textarea { resize: none; font-family: inherit; }
         input:focus, textarea:focus { border-color: var(--accent-b); box-shadow: 0 0 0 3px rgba(169,154,240,0.15), inset 0 1px 0 rgba(255,255,255,0.25); }
-        .btn-primary { background: var(--accent-grad); background-size: 200% 200%; animation: gradShift 5s ease-in-out infinite alternate; color: #fff; padding: 14px; border: none; border-radius: var(--radius-pill); font-weight: 700; font-family: 'Sora', sans-serif; cursor: pointer; transition: transform 0.12s, box-shadow 0.12s; box-shadow: 0 0 26px rgba(244,169,136,0.45), inset 0 1px 0 rgba(255,255,255,0.5); }
+        .btn-primary { background: var(--accent-grad); color: #fff; padding: 14px; border: none; border-radius: var(--radius-pill); font-weight: 700; font-family: 'Sora', sans-serif; cursor: pointer; transition: transform 0.12s; box-shadow: 0 0 26px rgba(244,169,136,0.45), inset 0 1px 0 rgba(255,255,255,0.5); }
         .btn-primary:active { transform: scale(0.97); }
         .btn-primary:disabled { opacity: 0.6; }
-        @keyframes gradShift { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
         .btn-secondary { background: transparent; color: var(--text-muted); border: 1px solid var(--border); padding: 12px; border-radius: var(--radius-pill); font-weight: 600; cursor: pointer; transition: background 0.15s, color 0.15s; }
         .btn-secondary:hover { background: var(--accent-soft); color: var(--text-primary); }
         .btn-danger-text { background: transparent; color: var(--danger); border: 1px solid rgba(255,125,146,0.3); padding: 12px; border-radius: var(--radius-pill); font-weight: 600; cursor: pointer; transition: background 0.15s; }
@@ -103,23 +85,22 @@
         .sidebar-header::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: linear-gradient(90deg, transparent, rgba(126,240,192,0.5), transparent); }
         .user-header-left { display: flex; align-items: center; gap: 12px; cursor: pointer; border-radius: var(--radius-md); padding: 4px; margin: -4px; transition: background 0.15s; flex: 1; min-width: 0; }
         .user-header-left:active { background: var(--bg-elevated); }
-        .avatar { width: 42px; height: 42px; border-radius: 50%; background: radial-gradient(circle at 30% 25%, #fff0e4, #f8b294 45%, #e08b6d 80%, #c96f52 100%); display: flex; align-items: center; justify-content: center; font-weight: 800; font-family: 'Sora', sans-serif; font-size: 16px; flex-shrink: 0; overflow: hidden; box-shadow: 0 4px 16px rgba(244,169,136,0.5), inset 0 -3px 6px rgba(0,0,0,0.18); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .avatar { width: 42px; height: 42px; border-radius: 50%; background: radial-gradient(circle at 30% 25%, #fff0e4, #f8b294 45%, #e08b6d 80%, #c96f52 100%); display: flex; align-items: center; justify-content: center; font-weight: 800; font-family: 'Sora', sans-serif; font-size: 16px; flex-shrink: 0; overflow: hidden; box-shadow: 0 4px 16px rgba(244,169,136,0.5), inset 0 -3px 6px rgba(0,0,0,0.18); transition: transform 0.2s ease; }
         .avatar img { width: 100%; height: 100%; object-fit: cover; }
-        .user-header-left:hover .avatar, .chat-header .avatar:hover, .chat-item:hover .avatar { transform: scale(1.06); }
+        .user-header-left:hover .avatar, .chat-item:hover .avatar { transform: scale(1.06); }
         .avatar-sm { width: 30px; height: 30px; font-size: 12px; box-shadow: 0 2px 10px rgba(244,169,136,0.4); }
         .avatar-lg { width: 88px; height: 88px; font-size: 30px; box-shadow: 0 12px 34px rgba(244,169,136,0.5), inset 0 -4px 10px rgba(0,0,0,0.18); }
         .user-info { flex-grow: 1; min-width: 0; }
         .user-name { font-weight: 700; font-size: 15px; }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
-        .online-dot { background: var(--online); animation: dotPulse 2s ease-in-out infinite; }
-        @keyframes dotPulse { 0%, 100% { box-shadow: 0 0 6px rgba(126,240,192,0.5); } 50% { box-shadow: 0 0 14px rgba(126,240,192,0.95); } }
+        .online-dot { background: var(--online); box-shadow: 0 0 8px rgba(126,240,192,0.6); }
         .offline-dot { background: var(--text-muted); }
         .user-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; display: flex; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color 0.2s; }
         .btn-logout { background: transparent; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); flex-shrink: 0; transition: transform 0.15s, color 0.15s; }
         .btn-logout:hover { color: var(--text-primary); transform: scale(1.1); }
         .add-user-bar { padding: 12px 16px; display: flex; gap: 8px; border-bottom: 1px solid var(--border); position: relative; }
         .add-user-bar input { flex: 1; padding: 10px 16px; background: var(--bg-input); border: 1px solid rgba(220,255,240,0.35); border-radius: var(--radius-pill); color: var(--text-primary); outline: none; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25); }
-        .add-user-bar button { background: var(--accent-grad); background-size: 200% 200%; animation: gradShift 5s ease-in-out infinite alternate; color: #fff; border: none; border-radius: var(--radius-pill); padding: 0 14px; font-weight: bold; cursor: pointer; box-shadow: 0 0 18px rgba(244,169,136,0.4); transition: transform 0.15s; }
+        .add-user-bar button { background: var(--accent-grad); color: #fff; border: none; border-radius: var(--radius-pill); padding: 0 14px; font-weight: bold; cursor: pointer; box-shadow: 0 0 18px rgba(244,169,136,0.4); transition: transform 0.15s; }
         .add-user-bar button:hover { transform: scale(1.06); }
         .search-suggestions { position: absolute; top: 100%; left: 16px; right: 16px; background: rgba(8,36,27,0.96); border: 1px solid rgba(220,255,240,0.18); border-radius: var(--radius-md); margin-top: 4px; max-height: 240px; overflow-y: auto; z-index: 10; box-shadow: var(--shadow-soft); display: none; }
         .search-suggestions.open { display: block; animation: fadeUp 0.2s ease; }
@@ -140,7 +121,7 @@
         .btn-delete-chat:hover { color: var(--danger); transform: scale(1.15); }
         .unread-badge { background: var(--accent-grad); color: #fff; font-size: 11px; font-weight: 800; min-width: 20px; height: 20px; border-radius: var(--radius-pill); display: flex; align-items: center; justify-content: center; padding: 0 6px; box-shadow: 0 0 14px rgba(244,169,136,0.5); animation: badgePop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
         @keyframes badgePop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-        #chat-area { flex-grow: 1; display: flex; flex-direction: column; background: transparent; }
+        #chat-area { flex-grow: 1; display: flex; flex-direction: column; background: transparent; position: relative; }
         .chat-header { padding: 12px 16px; background: rgba(8,36,27,0.72); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; flex-shrink: 0; position: relative; }
         .chat-header::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: linear-gradient(90deg, transparent, rgba(126,240,192,0.6), transparent); }
         .chat-header .avatar { box-shadow: 0 0 0 2px rgba(126,240,192,0.35), 0 4px 16px rgba(244,169,136,0.5); }
@@ -160,7 +141,13 @@
         .msg-bubble.search-current { outline: 2px solid #fff; }
         #load-older-indicator { text-align: center; font-size: 12px; color: var(--text-muted); padding: 6px 0; display: none; }
         #load-older-indicator.active { display: block; }
-        #messages { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 4px; transition: opacity 0.15s ease; position: relative; z-index: 1; scroll-behavior: smooth; }
+        #messages { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 4px; transition: opacity 0.15s ease; position: relative; z-index: 1; }
+        #scroll-down-btn { position: absolute; right: 18px; bottom: 92px; width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(220,255,240,0.35); background: rgba(8,36,27,0.92); color: var(--text-secondary); font-size: 20px; font-weight: 700; cursor: pointer; z-index: 30; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(0,0,0,0.45), 0 0 18px rgba(126,240,192,0.18); opacity: 0; transform: translateY(12px) scale(0.8); pointer-events: none; transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.15s; }
+        #scroll-down-btn.show { opacity: 1; transform: none; pointer-events: auto; }
+        #scroll-down-btn:active { transform: scale(0.88); }
+        #scroll-down-btn:hover { color: var(--text-primary); }
+        #scroll-down-badge { position: absolute; top: -6px; right: -6px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-pill); background: var(--accent-grad); color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 12px rgba(244,169,136,0.5); }
+        #scroll-down-badge:empty { display: none; }
         .msg-wrapper { display: flex; flex-direction: column; max-width: 85%; animation-duration: 0.32s; animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); animation-fill-mode: both; position: relative; margin-bottom: 10px; }
         .msg-wrapper.my { align-self: flex-end; animation-name: msgInRight; }
         .msg-wrapper.other { align-self: flex-start; animation-name: msgInLeft; }
@@ -170,15 +157,12 @@
         .msg-row { display: flex; align-items: center; gap: 6px; }
         .msg-wrapper.my .msg-row { flex-direction: row-reverse; }
         .msg-bubble-touch-zone { touch-action: pan-y; }
-        .msg-bubble { padding: 10px 16px; font-size: 14px; line-height: 1.45; word-break: break-word; position: relative; transition: transform 0.15s ease, box-shadow 0.2s ease; }
+        .msg-bubble { padding: 10px 16px; font-size: 14px; line-height: 1.45; word-break: break-word; position: relative; transition: transform 0.15s ease; }
         .msg-wrapper.my .msg-bubble {
             background: linear-gradient(120deg, rgba(255,255,255,0.32), rgba(255,255,255,0) 45%), var(--accent-grad);
-            background-size: 200% 200%;
             color: #fff; border-radius: 22px 22px 6px 22px;
             box-shadow: 0 0 22px rgba(244,169,136,0.35), inset 0 1px 0 rgba(255,255,255,0.45);
         }
-        .msg-wrapper.my .msg-bubble { animation: bubbleGrad 8s ease-in-out infinite alternate; }
-        @keyframes bubbleGrad { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
         .msg-wrapper.other .msg-bubble {
             background: linear-gradient(160deg, rgba(224,255,246,0.42), rgba(146,214,190,0.22));
             border: 1px solid rgba(220,255,240,0.55);
@@ -186,8 +170,8 @@
             box-shadow: 0 0 18px rgba(190,255,230,0.25), inset 0 1px 0 rgba(255,255,255,0.35);
         }
         .msg-sender { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; }
-        .msg-img { max-width: 240px; border-radius: 16px; margin-top: 4px; cursor: pointer; display: block; transition: transform 0.2s ease, box-shadow 0.2s ease; }
-        .msg-img:hover { transform: scale(1.02); box-shadow: 0 0 24px rgba(190,255,230,0.3); }
+        .msg-img { max-width: 240px; border-radius: 16px; margin-top: 4px; cursor: pointer; display: block; transition: transform 0.2s ease; }
+        .msg-img:hover { transform: scale(1.02); }
         .msg-deleted { opacity: 0.65; font-style: italic; }
         .msg-edited { font-size: 10px; opacity: 0.7; margin-right: 4px; }
         .msg-voice2 { display: flex; align-items: center; gap: 10px; min-width: 210px; }
@@ -196,9 +180,9 @@
         .voice-play:active { transform: scale(0.9); }
         .voice-bar { flex: 1; height: 4px; background: rgba(255,255,255,0.22); border-radius: 2px; position: relative; overflow: hidden; }
         .msg-wrapper.other .voice-bar { background: rgba(190,255,230,0.25); }
-        .voice-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: var(--accent-grad); border-radius: 2px; box-shadow: 0 0 10px rgba(244,169,136,0.7); transition: width 0.1s linear; }
+        .voice-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: var(--accent-grad); border-radius: 2px; box-shadow: 0 0 10px rgba(244,169,136,0.7); }
         .voice-time { font-size: 11px; opacity: 0.85; flex-shrink: 0; font-variant-numeric: tabular-nums; }
-        .msg-video-circle { width: 180px; height: 180px; border-radius: 50%; position: relative; overflow: hidden; cursor: pointer; background: #000; margin-top: 4px; box-shadow: 0 0 0 2px rgba(183,164,236,1), 0 0 24px rgba(169,154,240,0.4); transition: transform 0.15s, box-shadow 0.2s; }
+        .msg-video-circle { width: 180px; height: 180px; border-radius: 50%; position: relative; overflow: hidden; cursor: pointer; background: #000; margin-top: 4px; box-shadow: 0 0 0 2px rgba(183,164,236,1), 0 0 24px rgba(169,154,240,0.4); transition: transform 0.15s; }
         .msg-wrapper.my .msg-video-circle { box-shadow: 0 0 0 2px rgba(255,255,255,0.85), 0 0 24px rgba(244,169,136,0.4); }
         .msg-video-circle:hover { transform: scale(1.03); }
         .msg-video-circle:active { transform: scale(0.96); }
@@ -241,7 +225,6 @@
         #reply-bar-content { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .btn-cancel-reply { background: transparent; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; transition: transform 0.12s; }
         .btn-cancel-reply:active { transform: scale(1.2); }
-        /* Пузырь «печатает» внизу чата */
         #typing-indicator { display: none; padding: 0 16px 8px; }
         #typing-indicator.active { display: block; animation: fadeUp 0.25s ease; }
         .typing-bubble { display: inline-flex; align-items: center; gap: 8px; background: linear-gradient(160deg, rgba(224,255,246,0.42), rgba(146,214,190,0.22)); border: 1px solid rgba(220,255,240,0.55); border-radius: 18px 18px 18px 6px; padding: 8px 14px; box-shadow: 0 0 18px rgba(190,255,230,0.25); font-size: 12px; color: var(--text-secondary); }
@@ -255,15 +238,13 @@
         .input-row { display: flex; gap: 10px; align-items: center; }
         .input-container input[type="text"]#msg-input { flex: 1; height: 46px; padding: 12px 20px; background: var(--bg-input); border: 1px solid rgba(220,255,240,0.35); border-radius: var(--radius-pill); color: var(--text-primary); outline: none; font-size: 15px; transition: border-color 0.15s, box-shadow 0.15s; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25); }
         #msg-input:focus { border-color: var(--accent-b); box-shadow: 0 0 0 3px rgba(169,154,240,0.15), inset 0 1px 0 rgba(255,255,255,0.25); }
-        .btn-icon, .btn-send { height: 46px; border-radius: 50%; border: none; cursor: pointer; font-weight: 700; flex-shrink: 0; transition: transform 0.12s, background 0.15s; display: flex; align-items: center; justify-content: center; }
+        .btn-icon, .btn-send { height: 46px; border-radius: 50%; border: none; cursor: pointer; font-weight: 700; flex-shrink: 0; transition: transform 0.12s; display: flex; align-items: center; justify-content: center; }
         .btn-icon { background: var(--glass); border: 1px solid var(--border); color: var(--accent-b); width: 46px; font-size: 20px; }
         .btn-icon:hover { background: var(--accent-soft); }
         .btn-icon:active, .btn-send:active { transform: scale(0.93); }
         #btn-plus { transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), background 0.15s; }
         #btn-plus.open { transform: rotate(45deg); background: var(--accent-soft); }
-        .btn-send { background: var(--accent-grad); background-size: 200% 200%; animation: shimmer 3.2s linear infinite, gradShift 5s ease-in-out infinite alternate; color: #fff; width: 46px; font-size: 18px; position: relative; overflow: hidden; box-shadow: 0 0 22px rgba(244,169,136,0.5), inset 0 1px 0 rgba(255,255,255,0.5); }
-        .btn-send::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.45) 50%, transparent 70%); background-size: 250% 100%; pointer-events: none; }
-        @keyframes shimmer { from { background-position: 180% 0; } to { background-position: -80% 0; } }
+        .btn-send { background: var(--accent-grad); color: #fff; width: 46px; font-size: 18px; box-shadow: 0 0 22px rgba(244,169,136,0.5), inset 0 1px 0 rgba(255,255,255,0.5); }
         #char-counter { text-align: right; font-size: 11px; color: var(--text-muted); padding: 2px 16px 0 0; height: 14px; }
         #char-counter.warn { color: var(--danger); }
         .attach-menu { position: absolute; left: 14px; bottom: 66px; background: rgba(8,36,27,0.95); border: 1px solid rgba(220,255,240,0.18); border-radius: 22px; padding: 6px; display: none; flex-direction: column; min-width: 210px; box-shadow: 0 18px 44px rgba(0,0,0,0.55); z-index: 60; transform-origin: bottom left; }
@@ -274,8 +255,8 @@
         .attach-ico { width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 17px; background: var(--bg-input); border: 1px solid var(--border); flex-shrink: 0; transition: transform 0.15s; }
         .attach-item:hover .attach-ico { transform: scale(1.1) rotate(-6deg); }
         .sticker-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; max-height: 300px; overflow-y: auto; }
-        .sticker-item { font-size: 28px; background: rgba(255,255,255,0.07); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 8px 0; text-align: center; transition: transform 0.12s, background 0.12s, box-shadow 0.12s; }
-        .sticker-item:hover { transform: scale(1.12); box-shadow: 0 0 16px rgba(244,169,136,0.35); }
+        .sticker-item { font-size: 28px; background: rgba(255,255,255,0.07); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 8px 0; text-align: center; transition: transform 0.12s, background 0.12s; }
+        .sticker-item:hover { transform: scale(1.12); }
         .sticker-item:active { transform: scale(0.88); background: var(--accent-soft); }
         #recording-bar { display: none; flex: 1; align-items: center; gap: 10px; }
         #recording-bar.active { display: flex; animation: fadeUp 0.2s ease; }
@@ -288,8 +269,7 @@
         .btn-cancel-rec:active { transform: scale(1.2); }
         #video-recording-preview { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1500; flex-direction: column; justify-content: center; align-items: center; gap: 16px; }
         #video-recording-preview.active { display: flex; animation: overlayFadeIn 0.2s ease; }
-        .video-preview-circle { width: 240px; height: 240px; border-radius: 50%; overflow: hidden; background: #000; box-shadow: 0 0 0 4px var(--danger), 0 0 60px rgba(255,125,146,0.5); animation: recRing 1.6s ease-in-out infinite; }
-        @keyframes recRing { 0%,100% { box-shadow: 0 0 0 4px var(--danger), 0 0 40px rgba(255,125,146,0.4); } 50% { box-shadow: 0 0 0 6px var(--danger), 0 0 80px rgba(255,125,146,0.7); } }
+        .video-preview-circle { width: 240px; height: 240px; border-radius: 50%; overflow: hidden; background: #000; box-shadow: 0 0 0 4px var(--danger), 0 0 60px rgba(255,125,146,0.5); }
         .video-preview-circle video { width: 100%; height: 100%; object-fit: cover; }
         .video-preview-circle video.mirror { transform: scaleX(-1); }
         .video-rec-timer { color: #fff; font-size: 18px; font-weight: 700; }
@@ -347,12 +327,13 @@
             .msg-video-circle { width: 160px; height: 160px; }
             .video-preview-circle { width: 200px; height: 200px; }
             .attach-menu { left: 12px; bottom: 64px; }
+            #scroll-down-btn { right: 14px; bottom: 88px; }
         }
     </style>
 </head>
 <body>
 <div id="splash-screen">
-    <div class="splash-icon">💬</div>
+    <div class="splash-icon">&#x1F4AC;</div>
     <div style="font-size:36px;font-weight:800;color:#fff;margin-top:12px;position:relative;z-index:1;">Messenger</div>
 </div>
 <div id="auth-screen">
@@ -379,11 +360,11 @@
         <h3 style="text-align:center;">Мой профиль</h3>
         <div class="avatar-edit-wrapper" onclick="document.getElementById('profile-avatar-input').click()">
             <div class="avatar avatar-lg" id="profile-edit-avatar">?</div>
-            <div class="avatar-edit-badge">✏️</div>
+            <div class="avatar-edit-badge">&#x270F;&#xFE0F;</div>
         </div>
         <input type="file" id="profile-avatar-input" accept="image/*" style="display:none" onchange="onProfileAvatarChosen(this)">
         <textarea id="profile-bio-input" rows="3" placeholder="Немного о себе..." maxlength="150"></textarea>
-        <input type="text" id="profile-status-input" placeholder="Статус: 😎 на связи (до 40 символов)" maxlength="40">
+        <input type="text" id="profile-status-input" placeholder="Статус: &#x1F60E; на связи (до 40 символов)" maxlength="40">
         <button class="btn-primary" onclick="saveProfile()">Сохранить</button>
         <button class="btn-secondary" onclick="closeModal('modal-my-profile')">Закрыть</button>
     </div>
@@ -394,7 +375,7 @@
         <div class="profile-view-name" id="view-profile-name">@Имя</div>
         <div class="profile-view-status" id="view-profile-status" style="display:none;"></div>
         <div class="profile-view-bio" id="view-profile-bio">Нет описания</div>
-        <button class="btn-danger-text" id="view-profile-block-btn" onclick="toggleBlockCurrent()">🚫 Заблокировать</button>
+        <button class="btn-danger-text" id="view-profile-block-btn" onclick="toggleBlockCurrent()">&#x1F6AB; Заблокировать</button>
         <button class="btn-secondary" onclick="closeModal('modal-view-profile')">Закрыть</button>
     </div>
 </div>
@@ -415,7 +396,7 @@
 </div>
 <div class="modal-overlay" id="modal-admin">
     <div class="modal-box">
-        <h3 style="text-align:center;">🛡 Админ-панель</h3>
+        <h3 style="text-align:center;">&#x1F6E1; Админ-панель</h3>
         <div class="admin-total" id="admin-total"></div>
         <div class="section-title">Сейчас онлайн</div>
         <div id="admin-online" style="display:flex; flex-direction:column; gap:6px;"></div>
@@ -428,7 +409,7 @@
 </div>
 <div class="modal-overlay" id="modal-group-profile">
     <div class="modal-box">
-        <div class="avatar avatar-lg" style="align-self:center; background:linear-gradient(135deg,#10b981,#059669);">👥</div>
+        <div class="avatar avatar-lg" style="align-self:center; background:linear-gradient(135deg,#10b981,#059669);">&#x1F465;</div>
         <div class="profile-view-name" id="group-profile-title">Группа</div>
         <div id="group-add-member-row" style="display:flex; gap:8px;">
             <input type="text" id="group-add-member-input" placeholder="Логин нового участника...">
@@ -446,9 +427,9 @@
     </div>
     <div class="video-rec-timer" id="video-rec-timer">0:00</div>
     <div class="video-rec-controls">
-        <button class="video-rec-btn cancel" onclick="cancelVideoRecording()" title="Отмена">✖</button>
-        <button class="video-rec-btn switch" onclick="switchCamera()" title="Переключить камеру">🔄</button>
-        <button class="video-rec-btn send" onclick="stopVideoAndSend()" title="Отправить">➤</button>
+        <button class="video-rec-btn cancel" onclick="cancelVideoRecording()" title="Отмена">&#x2716;</button>
+        <button class="video-rec-btn switch" onclick="switchCamera()" title="Переключить камеру">&#x1F504;</button>
+        <button class="video-rec-btn send" onclick="stopVideoAndSend()" title="Отправить">&#x27A4;</button>
     </div>
 </div>
 <div id="app">
@@ -461,20 +442,20 @@
                     <div class="user-sub" id="my-status-line"><span class="status-dot online-dot"></span>Нажми, чтобы изменить профиль</div>
                 </div>
             </div>
-            <button class="btn-logout" id="btn-admin" onclick="openAdmin()" title="Админ-панель" style="display:none;">🛡</button>
-            <button class="btn-logout" onclick="logout()" title="Выйти">🚪</button>
+            <button class="btn-logout" id="btn-admin" onclick="openAdmin()" title="Админ-панель" style="display:none;">&#x1F6E1;</button>
+            <button class="btn-logout" onclick="logout()" title="Выйти">&#x1F6AA;</button>
         </div>
         <div class="add-user-bar">
             <input type="text" id="new-chat-input" placeholder="Поиск пользователя..." oninput="onSearchInputDebounce()" onfocus="onSearchInputDebounce()" onkeypress="if(event.key==='Enter') startNewChat()">
             <button onclick="startNewChat()">+</button>
-            <button onclick="openModal('modal-group')" title="Создать группу">👥</button>
+            <button onclick="openModal('modal-group')" title="Создать группу">&#x1F465;</button>
             <div class="search-suggestions" id="search-suggestions"></div>
         </div>
         <div class="list-wrapper" id="users-list"></div>
     </div>
     <div id="chat-area">
         <div class="chat-header">
-            <button class="btn-back" onclick="closeChat(event)">←</button>
+            <button class="btn-back" onclick="closeChat(event)">&#x2190;</button>
             <div class="chat-header-info" id="chat-header-clickable">
                 <div class="avatar" id="target-avatar-letter">?</div>
                 <div style="min-width:0;">
@@ -482,18 +463,22 @@
                     <div class="user-sub" id="target-status">Был(а) недавно</div>
                 </div>
             </div>
-            <button class="btn-header-icon" onclick="toggleSearchBar()" title="Поиск">🔍</button>
+            <button class="btn-header-icon" onclick="toggleSearchBar()" title="Поиск">&#x1F50D;</button>
         </div>
         <div id="search-bar">
             <input type="text" id="search-input" placeholder="Поиск по чату..." oninput="onSearchInput()">
             <span id="search-nav"></span>
-            <button class="btn-search-nav" onclick="searchNav(-1)">↑</button>
-            <button class="btn-search-nav" onclick="searchNav(1)">↓</button>
-            <button class="btn-header-icon" onclick="toggleSearchBar()">✖</button>
+            <button class="btn-search-nav" onclick="searchNav(-1)">&#x2191;</button>
+            <button class="btn-search-nav" onclick="searchNav(1)">&#x2193;</button>
+            <button class="btn-header-icon" onclick="toggleSearchBar()">&#x2716;</button>
         </div>
         <div id="messages">
             <div id="load-older-indicator">Загружаем историю...</div>
         </div>
+        <button id="scroll-down-btn" onclick="scrollToBottomSmooth()" title="К новым сообщениям">
+            <span id="scroll-down-badge"></span>
+            &#x2193;
+        </button>
         <div id="typing-indicator">
             <div class="typing-bubble">
                 <span class="typing-dots"><span></span><span></span><span></span></span>
@@ -506,32 +491,32 @@
                     <div id="reply-bar-sender"></div>
                     <div id="reply-bar-content"></div>
                 </div>
-                <button class="btn-cancel-reply" onclick="cancelReply()">✖</button>
+                <button class="btn-cancel-reply" onclick="cancelReply()">&#x2716;</button>
             </div>
             <div class="attach-menu" id="attach-menu">
-                <div class="attach-item" onclick="pickAttach('file')"><div class="attach-ico">📁</div>Файл или фото</div>
-                <div class="attach-item" onclick="pickAttach('voice')"><div class="attach-ico">🎤</div>Голосовое</div>
-                <div class="attach-item" onclick="pickAttach('circle')"><div class="attach-ico">📹</div>Видеокружок</div>
-                <div class="attach-item" onclick="pickAttach('sticker')"><div class="attach-ico">😊</div>Стикеры</div>
+                <div class="attach-item" onclick="pickAttach('file')"><div class="attach-ico">&#x1F4C1;</div>Файл или фото</div>
+                <div class="attach-item" onclick="pickAttach('voice')"><div class="attach-ico">&#x1F3A4;</div>Голосовое</div>
+                <div class="attach-item" onclick="pickAttach('circle')"><div class="attach-ico">&#x1F4F9;</div>Видеокружок</div>
+                <div class="attach-item" onclick="pickAttach('sticker')"><div class="attach-ico">&#x1F60A;</div>Стикеры</div>
             </div>
             <div class="input-row">
                 <input type="file" id="file-input" style="display:none" onchange="sendFile(this)">
-                <button class="btn-icon" id="btn-plus" onclick="toggleAttachMenu()" title="Вложения">＋</button>
+                <button class="btn-icon" id="btn-plus" onclick="toggleAttachMenu()" title="Вложения">&#xFF0B;</button>
                 <input type="text" id="msg-input" placeholder="Сообщение..." maxlength="2000" oninput="onMsgInput()" onkeypress="if(event.key==='Enter') sendMessage()">
                 <div id="recording-bar">
                     <div class="rec-dot"></div>
                     <div id="rec-timer">0:00</div>
-                    <button class="btn-stop-rec" onclick="stopRecordingAndSend()" title="Отправить">⏹</button>
-                    <button class="btn-cancel-rec" onclick="cancelRecording()">✖</button>
+                    <button class="btn-stop-rec" onclick="stopRecordingAndSend()" title="Отправить">&#x23F9;</button>
+                    <button class="btn-cancel-rec" onclick="cancelRecording()">&#x2716;</button>
                 </div>
-                <button class="btn-send" id="btn-send" onclick="sendMessage()">➤</button>
+                <button class="btn-send" id="btn-send" onclick="sendMessage()">&#x27A4;</button>
             </div>
             <div id="char-counter"></div>
         </div>
     </div>
 </div>
 <div id="lightbox" onclick="this.style.display='none'"><img id="lightbox-img" src=""></div>
-<div id="conn-indicator" style="display:none;">⏳ подключение...</div>
+<div id="conn-indicator" style="display:none;">&#x23F3; подключение...</div>
 <div id="toast-container"></div>
 <script>
     const APP_VERSION = "__APP_VERSION__";
@@ -570,6 +555,8 @@
     let oldestLoadedMessageId = null, noMoreOlderMessages = false, isLoadingOlder = false;
     let searchDebounceTimer = null, lastOnlineSnapshot = '', onlineTick = 0;
     let pingInterval = null, pongTimeout = null, wsFails = 0, wsHintShown = false;
+    let scrollDownPending = 0;
+    let chatScrollPositions = {};
 
     function startPing() {
         stopPing();
@@ -586,7 +573,6 @@
         if (pongTimeout) { clearTimeout(pongTimeout); pongTimeout = null; }
     }
 
-    // Эмодзи записаны юникод-экскейпами — ни один не потеряется при передаче/сохранении
     const REACTION_EMOJIS = ['\u{1F44D}', '\u{2764}\u{FE0F}', '\u{1F602}', '\u{1F62E}', '\u{1F622}', '\u{1F525}'];
     const STICKERS = [
         '\u{1F600}','\u{1F602}','\u{1F923}','\u{1F60A}','\u{1F60D}','\u{1F970}',
@@ -778,7 +764,7 @@
         stopPing();
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const url = `${protocol}//${window.location.host}/ws/${encodeURIComponent(currentUser)}?token=${encodeURIComponent(currentToken)}`;
-        setConnIndicator('⏳ подключение...');
+        setConnIndicator('\u{23F3} подключение...');
         ws = new WebSocket(url);
         ws.onopen = () => { wsFails = 0; setConnIndicator('\u{1F7E2} онлайн', 'rgba(126,240,192,0.6)'); startPing(); };
         ws.onclose = (e) => {
@@ -828,7 +814,6 @@
             if (!userGroups.find(g => g.group_id === chatTarget)) fetchUserGroups().then(() => renderUserList());
         } else if (data.sender === currentUser) chatTarget = data.target;
         else { chatTarget = data.sender; addKnownUser(data.sender); }
-        // Сообщение пришло — собеседник больше не «печатает»
         clearTypingFor(chatTarget, data.sender);
         const isMine = data.sender === currentUser;
         const chatIsOpen = activeChatTarget === chatTarget;
@@ -984,6 +969,34 @@
         if (!text) { el.classList.remove('active'); return; }
         txt.innerText = text;
         el.classList.add('active');
+    }
+
+    function messagesBox() { return document.getElementById('messages'); }
+    function isNearBottom(box) { return box.scrollHeight - box.scrollTop - box.clientHeight < 140; }
+    function updateScrollDownBtn() {
+        const box = messagesBox();
+        const btn = document.getElementById('scroll-down-btn');
+        const badge = document.getElementById('scroll-down-badge');
+        if (!btn) return;
+        if (isNearBottom(box)) {
+            scrollDownPending = 0;
+            badge.innerText = '';
+            btn.classList.remove('show');
+        } else {
+            btn.classList.add('show');
+            badge.innerText = scrollDownPending > 0 ? (scrollDownPending > 99 ? '99+' : String(scrollDownPending)) : '';
+        }
+    }
+    function scrollToBottomSmooth() {
+        const box = messagesBox();
+        scrollDownPending = 0;
+        const badge = document.getElementById('scroll-down-badge');
+        if (badge) badge.innerText = '';
+        box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
+        setTimeout(updateScrollDownBtn, 350);
+    }
+    function saveScrollPosition() {
+        if (activeChatTarget) chatScrollPositions[activeChatTarget] = messagesBox().scrollTop;
     }
 
     async function loadMyProfile() {
@@ -1328,10 +1341,12 @@
     function cssSafe(str) { return str.replace(/[^a-zA-Z0-9_-]/g, '_'); }
 
     async function selectChat(target, isGroup = false, groupTitle = "") {
+        saveScrollPosition();
         activeChatTarget = target; isCurrentGroup = isGroup;
         unreadCounts[target] = 0;
         cancelReply(); closeSearchBar(); toggleAttachMenu(false);
         oldestLoadedMessageId = null; noMoreOlderMessages = false;
+        scrollDownPending = 0;
         localStorage.setItem('lastChat_' + currentUser, JSON.stringify({ target, isGroup, title: groupTitle }));
         if (isGroup) {
             document.getElementById('target-username').innerText = groupTitle;
@@ -1371,17 +1386,19 @@
     }
     function closeChat(event) {
         if (event) event.stopPropagation();
+        saveScrollPosition();
         document.getElementById('app').classList.remove('mobile-chat-active');
         document.getElementById('conn-indicator').style.display = 'block';
         activeChatTarget = "";
         localStorage.removeItem('lastChat_' + currentUser);
         document.getElementById('typing-indicator').classList.remove('active');
+        document.getElementById('scroll-down-btn').classList.remove('show');
         cancelReply(); closeSearchBar(); toggleAttachMenu(false);
     }
 
     async function loadHistory() {
         if (!activeChatTarget) return;
-        const box = document.getElementById('messages');
+        const box = messagesBox();
         box.style.opacity = '0';
         const baseUrl = isCurrentGroup ? `/group-messages/${activeChatTarget}` : `/messages/${currentUser}/${activeChatTarget}`;
         const url = `${baseUrl}?token=${encodeURIComponent(currentToken)}`;
@@ -1395,18 +1412,26 @@
             if (!isCurrentGroup && serverMsgs.length > 0) sendReadReceipt(getChatId(currentUser, activeChatTarget), activeChatTarget);
         } catch(e) { box.innerHTML = '<div id="load-older-indicator">Загружаем историю...</div>'; }
         requestAnimationFrame(() => { box.style.opacity = '1'; });
+        // Возвращаемся на то место, где были в последний раз в этом чате
+        const saved = chatScrollPositions[activeChatTarget];
+        if (typeof saved === 'number') box.scrollTop = saved;
+        else box.scrollTop = box.scrollHeight;
+        updateScrollDownBtn();
         setupInfiniteScroll();
     }
     function setupInfiniteScroll() {
-        const box = document.getElementById('messages');
-        box.onscroll = () => { if (box.scrollTop < 60 && !isLoadingOlder && !noMoreOlderMessages) loadOlderMessages(); };
+        const box = messagesBox();
+        box.onscroll = () => {
+            if (box.scrollTop < 60 && !isLoadingOlder && !noMoreOlderMessages) loadOlderMessages();
+            updateScrollDownBtn();
+        };
     }
     async function loadOlderMessages() {
         if (!activeChatTarget || isLoadingOlder || noMoreOlderMessages || !oldestLoadedMessageId) return;
         isLoadingOlder = true;
         const indicator = document.getElementById('load-older-indicator');
         if (indicator) indicator.classList.add('active');
-        const box = document.getElementById('messages');
+        const box = messagesBox();
         const prevScrollHeight = box.scrollHeight;
         const baseUrl = isCurrentGroup ? `/group-messages/${activeChatTarget}` : `/messages/${currentUser}/${activeChatTarget}`;
         const url = `${baseUrl}?token=${encodeURIComponent(currentToken)}&before_id=${oldestLoadedMessageId}`;
@@ -1423,6 +1448,7 @@
         } catch(e) {}
         if (indicator) indicator.classList.remove('active');
         isLoadingOlder = false;
+        updateScrollDownBtn();
     }
     function sendReadReceipt(chatId, senderToNotify) {
         if (ws && ws.readyState === WebSocket.OPEN)
@@ -1773,13 +1799,21 @@
         } else { video.pause(); wrapperEl.classList.remove('playing'); }
     }
     function appendMessageToUI(msg, skipAnim) {
-        const box = document.getElementById('messages');
+        const box = messagesBox();
+        const near = isNearBottom(box);
         const wrapper = buildMessageElement(msg, skipAnim);
         box.appendChild(wrapper);
-        box.scrollTop = box.scrollHeight;
+        const isMine = msg.sender === currentUser;
+        if (skipAnim || near || isMine) {
+            box.scrollTop = box.scrollHeight;
+            updateScrollDownBtn();
+        } else {
+            scrollDownPending++;
+            updateScrollDownBtn();
+        }
     }
     function prependMessageToUI(msg) {
-        const box = document.getElementById('messages');
+        const box = messagesBox();
         const wrapper = buildMessageElement(msg, true);
         const indicator = document.getElementById('load-older-indicator');
         if (indicator && indicator.nextSibling) box.insertBefore(wrapper, indicator.nextSibling);
