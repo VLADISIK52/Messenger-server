@@ -47,7 +47,6 @@
                 radial-gradient(1200px 600px at 80% -10%, rgba(126,240,192,0.16), transparent 60%),
                 radial-gradient(900px 500px at -10% 110%, rgba(244,169,136,0.16), transparent 60%),
                 var(--bg-void); }
-        /* Мягкое боке БЕЗ blur-фильтра: дёшево для GPU, выглядит как свечение */
         body::before {
             content: ''; position: fixed; inset: -10%; pointer-events: none; z-index: 0;
             background:
@@ -59,7 +58,6 @@
         }
         @keyframes twinkle { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
         h1, h2, h3, .display-font { font-family: 'Sora', 'Inter', sans-serif; }
-        /* Сплэш НЕпрозрачный: сквозь него ничего не мелькает */
         #splash-screen { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.8s ease, visibility 0.8s; overflow: hidden;
             background:
                 radial-gradient(600px 300px at 50% 20%, rgba(126,240,192,0.10), transparent 60%),
@@ -73,51 +71,58 @@
         }
         @keyframes auroraDrift { 0%, 100% { transform: translate(-10%, -6%) scale(1); } 50% { transform: translate(10%, 8%) scale(1.15); } }
         #splash-screen.hidden::before { animation-play-state: paused; }
-        .splash-icon { width: 96px; height: 96px; border-radius: 28px; background: var(--accent-grad); display: flex; align-items: center; justify-content: center; font-size: 44px; position: relative; z-index: 1; animation: iconPulse 2.4s ease-in-out infinite; }
+        .splash-icon { width: 96px; height: 96px; border-radius: 28px; background: var(--accent-grad); display: flex; align-items: center; justify-content: center; font-size: 44px; position: relative; z-index: 1; animation: iconPulse 2.4s ease-in-out infinite, iconFloat 3.6s ease-in-out infinite; }
         @keyframes iconPulse {
             0%, 100% { box-shadow: 0 0 40px rgba(244,169,136,0.5), 0 0 90px rgba(169,154,240,0.35); }
             50% { box-shadow: 0 0 64px rgba(244,169,136,0.8), 0 0 130px rgba(169,154,240,0.55); }
         }
+        @keyframes iconFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
         #auth-screen { display: none; position: fixed; inset: 0; z-index: 100; justify-content: center; align-items: center; overflow: hidden;
             background:
                 radial-gradient(600px 300px at 50% 0%, rgba(126,240,192,0.14), transparent 60%),
                 radial-gradient(500px 300px at 50% 100%, rgba(244,169,136,0.12), transparent 60%),
                 var(--bg-void); }
-        .auth-box { background: rgba(8,36,27,0.90); padding: 40px 32px; border-radius: 32px; border: 1px solid rgba(220,255,240,0.25); display: flex; flex-direction: column; gap: 14px; width: 90%; max-width: 400px; position: relative; z-index: 1; box-shadow: 0 0 30px rgba(190,255,230,0.25), inset 0 1px 0 rgba(255,255,255,0.25), 0 30px 80px rgba(0,0,0,0.5); }
+        .auth-box { background: rgba(8,36,27,0.90); padding: 40px 32px; border-radius: 32px; border: 1px solid rgba(220,255,240,0.25); display: flex; flex-direction: column; gap: 14px; width: 90%; max-width: 400px; position: relative; z-index: 1; box-shadow: 0 0 30px rgba(190,255,230,0.25), inset 0 1px 0 rgba(255,255,255,0.25), 0 30px 80px rgba(0,0,0,0.5); animation: modalPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .auth-title { font-family: 'Sora', sans-serif; font-size: 26px; font-weight: 800; text-align: center; background: linear-gradient(90deg, #eafff5, #9adcf0 60%, #b7a4ec); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; }
         .auth-hint { text-align: center; font-size: 12px; color: var(--text-muted); margin-top: -6px; }
         .auth-error { text-align: center; font-size: 13px; color: var(--danger); min-height: 16px; }
         input[type="text"], input[type="password"], textarea { background: var(--bg-input); color: var(--text-primary); padding: 14px 18px; border: 1.5px solid rgba(220,255,240,0.35); border-radius: var(--radius-md); font-size: 15px; outline: none; width: 100%; transition: border-color 0.15s, box-shadow 0.15s; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25); }
         textarea { resize: none; font-family: inherit; }
         input:focus, textarea:focus { border-color: var(--accent-b); box-shadow: 0 0 0 3px rgba(169,154,240,0.15), inset 0 1px 0 rgba(255,255,255,0.25); }
-        .btn-primary { background: var(--accent-grad); color: #fff; padding: 14px; border: none; border-radius: var(--radius-pill); font-weight: 700; font-family: 'Sora', sans-serif; cursor: pointer; transition: transform 0.12s, box-shadow 0.12s; box-shadow: 0 0 26px rgba(244,169,136,0.45), inset 0 1px 0 rgba(255,255,255,0.5); }
+        .btn-primary { background: var(--accent-grad); background-size: 200% 200%; animation: gradShift 5s ease-in-out infinite alternate; color: #fff; padding: 14px; border: none; border-radius: var(--radius-pill); font-weight: 700; font-family: 'Sora', sans-serif; cursor: pointer; transition: transform 0.12s, box-shadow 0.12s; box-shadow: 0 0 26px rgba(244,169,136,0.45), inset 0 1px 0 rgba(255,255,255,0.5); }
         .btn-primary:active { transform: scale(0.97); }
         .btn-primary:disabled { opacity: 0.6; }
-        .btn-secondary { background: transparent; color: var(--text-muted); border: 1px solid var(--border); padding: 12px; border-radius: var(--radius-pill); font-weight: 600; cursor: pointer; }
-        .btn-danger-text { background: transparent; color: var(--danger); border: 1px solid rgba(255,125,146,0.3); padding: 12px; border-radius: var(--radius-pill); font-weight: 600; cursor: pointer; }
-        /* Приложение скрыто до входа — «Гость» не мелькает */
+        @keyframes gradShift { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
+        .btn-secondary { background: transparent; color: var(--text-muted); border: 1px solid var(--border); padding: 12px; border-radius: var(--radius-pill); font-weight: 600; cursor: pointer; transition: background 0.15s, color 0.15s; }
+        .btn-secondary:hover { background: var(--accent-soft); color: var(--text-primary); }
+        .btn-danger-text { background: transparent; color: var(--danger); border: 1px solid rgba(255,125,146,0.3); padding: 12px; border-radius: var(--radius-pill); font-weight: 600; cursor: pointer; transition: background 0.15s; }
+        .btn-danger-text:hover { background: rgba(255,125,146,0.12); }
         #app { display: flex; width: 100%; height: 100%; position: relative; z-index: 1; visibility: hidden; }
         #sidebar { width: 320px; min-width: 320px; background: rgba(6,30,22,0.72); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 2; }
         .sidebar-header { padding: 18px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; position: relative; }
         .sidebar-header::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: linear-gradient(90deg, transparent, rgba(126,240,192,0.5), transparent); }
         .user-header-left { display: flex; align-items: center; gap: 12px; cursor: pointer; border-radius: var(--radius-md); padding: 4px; margin: -4px; transition: background 0.15s; flex: 1; min-width: 0; }
         .user-header-left:active { background: var(--bg-elevated); }
-        .avatar { width: 42px; height: 42px; border-radius: 50%; background: radial-gradient(circle at 30% 25%, #fff0e4, #f8b294 45%, #e08b6d 80%, #c96f52 100%); display: flex; align-items: center; justify-content: center; font-weight: 800; font-family: 'Sora', sans-serif; font-size: 16px; flex-shrink: 0; overflow: hidden; box-shadow: 0 4px 16px rgba(244,169,136,0.5), inset 0 -3px 6px rgba(0,0,0,0.18); }
+        .avatar { width: 42px; height: 42px; border-radius: 50%; background: radial-gradient(circle at 30% 25%, #fff0e4, #f8b294 45%, #e08b6d 80%, #c96f52 100%); display: flex; align-items: center; justify-content: center; font-weight: 800; font-family: 'Sora', sans-serif; font-size: 16px; flex-shrink: 0; overflow: hidden; box-shadow: 0 4px 16px rgba(244,169,136,0.5), inset 0 -3px 6px rgba(0,0,0,0.18); transition: transform 0.2s ease, box-shadow 0.2s ease; }
         .avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .user-header-left:hover .avatar, .chat-header .avatar:hover, .chat-item:hover .avatar { transform: scale(1.06); }
         .avatar-sm { width: 30px; height: 30px; font-size: 12px; box-shadow: 0 2px 10px rgba(244,169,136,0.4); }
         .avatar-lg { width: 88px; height: 88px; font-size: 30px; box-shadow: 0 12px 34px rgba(244,169,136,0.5), inset 0 -4px 10px rgba(0,0,0,0.18); }
         .user-info { flex-grow: 1; min-width: 0; }
         .user-name { font-weight: 700; font-size: 15px; }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
-        .online-dot { background: var(--online); box-shadow: 0 0 8px rgba(126,240,192,0.6); }
+        .online-dot { background: var(--online); animation: dotPulse 2s ease-in-out infinite; }
+        @keyframes dotPulse { 0%, 100% { box-shadow: 0 0 6px rgba(126,240,192,0.5); } 50% { box-shadow: 0 0 14px rgba(126,240,192,0.95); } }
         .offline-dot { background: var(--text-muted); }
-        .user-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; display: flex; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .btn-logout { background: transparent; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); flex-shrink: 0; }
+        .user-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; display: flex; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color 0.2s; }
+        .btn-logout { background: transparent; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); flex-shrink: 0; transition: transform 0.15s, color 0.15s; }
+        .btn-logout:hover { color: var(--text-primary); transform: scale(1.1); }
         .add-user-bar { padding: 12px 16px; display: flex; gap: 8px; border-bottom: 1px solid var(--border); position: relative; }
         .add-user-bar input { flex: 1; padding: 10px 16px; background: var(--bg-input); border: 1px solid rgba(220,255,240,0.35); border-radius: var(--radius-pill); color: var(--text-primary); outline: none; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25); }
-        .add-user-bar button { background: var(--accent-grad); color: #fff; border: none; border-radius: var(--radius-pill); padding: 0 14px; font-weight: bold; cursor: pointer; box-shadow: 0 0 18px rgba(244,169,136,0.4); }
+        .add-user-bar button { background: var(--accent-grad); background-size: 200% 200%; animation: gradShift 5s ease-in-out infinite alternate; color: #fff; border: none; border-radius: var(--radius-pill); padding: 0 14px; font-weight: bold; cursor: pointer; box-shadow: 0 0 18px rgba(244,169,136,0.4); transition: transform 0.15s; }
+        .add-user-bar button:hover { transform: scale(1.06); }
         .search-suggestions { position: absolute; top: 100%; left: 16px; right: 16px; background: rgba(8,36,27,0.96); border: 1px solid rgba(220,255,240,0.18); border-radius: var(--radius-md); margin-top: 4px; max-height: 240px; overflow-y: auto; z-index: 10; box-shadow: var(--shadow-soft); display: none; }
-        .search-suggestions.open { display: block; }
+        .search-suggestions.open { display: block; animation: fadeUp 0.2s ease; }
         .search-suggestion-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; transition: background 0.12s; }
         .search-suggestion-item:hover, .search-suggestion-item:active { background: var(--bg-input); }
         .search-suggestion-name { flex: 1; font-weight: 600; font-size: 14px; }
@@ -131,27 +136,31 @@
         .chat-item.active { background: rgba(169,154,240,0.16); border-left: 3px solid var(--accent-b); box-shadow: 0 0 18px rgba(169,154,240,0.18); }
         .chat-item-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
         .chat-item-right { display: flex; align-items: center; gap: 8px; }
-        .btn-delete-chat { background: transparent; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; padding: 4px; }
-        .unread-badge { background: var(--accent-grad); color: #fff; font-size: 11px; font-weight: 800; min-width: 20px; height: 20px; border-radius: var(--radius-pill); display: flex; align-items: center; justify-content: center; padding: 0 6px; box-shadow: 0 0 14px rgba(244,169,136,0.5); }
+        .btn-delete-chat { background: transparent; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; padding: 4px; transition: transform 0.15s, color 0.15s; }
+        .btn-delete-chat:hover { color: var(--danger); transform: scale(1.15); }
+        .unread-badge { background: var(--accent-grad); color: #fff; font-size: 11px; font-weight: 800; min-width: 20px; height: 20px; border-radius: var(--radius-pill); display: flex; align-items: center; justify-content: center; padding: 0 6px; box-shadow: 0 0 14px rgba(244,169,136,0.5); animation: badgePop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        @keyframes badgePop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         #chat-area { flex-grow: 1; display: flex; flex-direction: column; background: transparent; }
         .chat-header { padding: 12px 16px; background: rgba(8,36,27,0.72); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; flex-shrink: 0; position: relative; }
         .chat-header::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: linear-gradient(90deg, transparent, rgba(126,240,192,0.6), transparent); }
         .chat-header .avatar { box-shadow: 0 0 0 2px rgba(126,240,192,0.35), 0 4px 16px rgba(244,169,136,0.5); }
         .chat-header-info { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; cursor: pointer; }
         .chat-header-info .user-name, .chat-header-info .user-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .btn-back { display: none; background: transparent; border: none; color: var(--accent-b); font-size: 22px; cursor: pointer; }
-        .btn-header-icon { background: var(--glass); border: 1px solid var(--border); color: var(--text-secondary); font-size: 17px; cursor: pointer; padding: 8px; flex-shrink: 0; border-radius: 50%; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; transition: background 0.15s; }
-        .btn-header-icon:active { background: var(--accent-soft); }
+        .btn-back { display: none; background: transparent; border: none; color: var(--accent-b); font-size: 22px; cursor: pointer; transition: transform 0.15s; }
+        .btn-back:active { transform: translateX(-3px); }
+        .btn-header-icon { background: var(--glass); border: 1px solid var(--border); color: var(--text-secondary); font-size: 17px; cursor: pointer; padding: 8px; flex-shrink: 0; border-radius: 50%; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; transition: background 0.15s, transform 0.15s; }
+        .btn-header-icon:active { background: var(--accent-soft); transform: scale(0.92); }
         #search-bar { display: none; align-items: center; gap: 8px; padding: 10px 16px; background: rgba(6,30,22,0.9); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-        #search-bar.active { display: flex; }
+        #search-bar.active { display: flex; animation: fadeUp 0.2s ease; }
         #search-input { flex: 1; padding: 8px 14px; background: var(--bg-input); border: 1px solid rgba(220,255,240,0.35); border-radius: var(--radius-pill); color: var(--text-primary); outline: none; font-size: 14px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25); }
         #search-nav { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
-        .btn-search-nav { background: transparent; border: none; color: var(--text-secondary); font-size: 16px; cursor: pointer; padding: 2px 4px; }
+        .btn-search-nav { background: transparent; border: none; color: var(--text-secondary); font-size: 16px; cursor: pointer; padding: 2px 4px; transition: transform 0.12s; }
+        .btn-search-nav:active { transform: scale(1.2); }
         .msg-bubble.search-match { outline: 2px solid var(--accent-a); }
         .msg-bubble.search-current { outline: 2px solid #fff; }
         #load-older-indicator { text-align: center; font-size: 12px; color: var(--text-muted); padding: 6px 0; display: none; }
         #load-older-indicator.active { display: block; }
-        #messages { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 4px; transition: opacity 0.15s ease; position: relative; z-index: 1; }
+        #messages { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 4px; transition: opacity 0.15s ease; position: relative; z-index: 1; scroll-behavior: smooth; }
         .msg-wrapper { display: flex; flex-direction: column; max-width: 85%; animation-duration: 0.32s; animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); animation-fill-mode: both; position: relative; margin-bottom: 10px; }
         .msg-wrapper.my { align-self: flex-end; animation-name: msgInRight; }
         .msg-wrapper.other { align-self: flex-start; animation-name: msgInLeft; }
@@ -161,13 +170,15 @@
         .msg-row { display: flex; align-items: center; gap: 6px; }
         .msg-wrapper.my .msg-row { flex-direction: row-reverse; }
         .msg-bubble-touch-zone { touch-action: pan-y; }
-        /* Облегчённые пузыри: 2 тени вместо 3+шума — быстрее рендер, тот же вид */
-        .msg-bubble { padding: 10px 16px; font-size: 14px; line-height: 1.45; word-break: break-word; position: relative; transition: transform 0.15s ease; }
+        .msg-bubble { padding: 10px 16px; font-size: 14px; line-height: 1.45; word-break: break-word; position: relative; transition: transform 0.15s ease, box-shadow 0.2s ease; }
         .msg-wrapper.my .msg-bubble {
             background: linear-gradient(120deg, rgba(255,255,255,0.32), rgba(255,255,255,0) 45%), var(--accent-grad);
+            background-size: 200% 200%;
             color: #fff; border-radius: 22px 22px 6px 22px;
             box-shadow: 0 0 22px rgba(244,169,136,0.35), inset 0 1px 0 rgba(255,255,255,0.45);
         }
+        .msg-wrapper.my .msg-bubble { animation: bubbleGrad 8s ease-in-out infinite alternate; }
+        @keyframes bubbleGrad { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
         .msg-wrapper.other .msg-bubble {
             background: linear-gradient(160deg, rgba(224,255,246,0.42), rgba(146,214,190,0.22));
             border: 1px solid rgba(220,255,240,0.55);
@@ -175,22 +186,25 @@
             box-shadow: 0 0 18px rgba(190,255,230,0.25), inset 0 1px 0 rgba(255,255,255,0.35);
         }
         .msg-sender { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; }
-        .msg-img { max-width: 240px; border-radius: 16px; margin-top: 4px; cursor: pointer; display: block; }
+        .msg-img { max-width: 240px; border-radius: 16px; margin-top: 4px; cursor: pointer; display: block; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .msg-img:hover { transform: scale(1.02); box-shadow: 0 0 24px rgba(190,255,230,0.3); }
         .msg-deleted { opacity: 0.65; font-style: italic; }
         .msg-edited { font-size: 10px; opacity: 0.7; margin-right: 4px; }
         .msg-voice2 { display: flex; align-items: center; gap: 10px; min-width: 210px; }
         .msg-voice2 audio { display: none; }
-        .voice-play { width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--accent-grad); color: #fff; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 0 16px rgba(244,169,136,0.45); }
+        .voice-play { width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--accent-grad); color: #fff; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 0 16px rgba(244,169,136,0.45); transition: transform 0.15s; }
+        .voice-play:active { transform: scale(0.9); }
         .voice-bar { flex: 1; height: 4px; background: rgba(255,255,255,0.22); border-radius: 2px; position: relative; overflow: hidden; }
         .msg-wrapper.other .voice-bar { background: rgba(190,255,230,0.25); }
-        .voice-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: var(--accent-grad); border-radius: 2px; box-shadow: 0 0 10px rgba(244,169,136,0.7); }
+        .voice-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: var(--accent-grad); border-radius: 2px; box-shadow: 0 0 10px rgba(244,169,136,0.7); transition: width 0.1s linear; }
         .voice-time { font-size: 11px; opacity: 0.85; flex-shrink: 0; font-variant-numeric: tabular-nums; }
-        .msg-video-circle { width: 180px; height: 180px; border-radius: 50%; position: relative; overflow: hidden; cursor: pointer; background: #000; margin-top: 4px; box-shadow: 0 0 0 2px rgba(183,164,236,1), 0 0 24px rgba(169,154,240,0.4); transition: transform 0.15s; }
+        .msg-video-circle { width: 180px; height: 180px; border-radius: 50%; position: relative; overflow: hidden; cursor: pointer; background: #000; margin-top: 4px; box-shadow: 0 0 0 2px rgba(183,164,236,1), 0 0 24px rgba(169,154,240,0.4); transition: transform 0.15s, box-shadow 0.2s; }
         .msg-wrapper.my .msg-video-circle { box-shadow: 0 0 0 2px rgba(255,255,255,0.85), 0 0 24px rgba(244,169,136,0.4); }
+        .msg-video-circle:hover { transform: scale(1.03); }
         .msg-video-circle:active { transform: scale(0.96); }
         .msg-video-circle video { width: 100%; height: 100%; object-fit: cover; }
         .msg-video-circle video.mirror { transform: scaleX(-1); }
-        .msg-video-play-icon { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.25); color: #fff; font-size: 30px; transition: opacity 0.15s; }
+        .msg-video-play-icon { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.25); color: #fff; font-size: 30px; transition: opacity 0.2s; }
         .msg-video-circle.playing .msg-video-play-icon { opacity: 0; }
         .msg-video-rect { max-width: 260px; width: 100%; border-radius: 16px; display: block; background: #000; border: 1px solid rgba(220,255,240,0.3); margin-top: 4px; }
         .msg-reply-quote { border-left: 3px solid rgba(255,255,255,0.5); padding: 4px 8px; margin-bottom: 6px; border-radius: 6px; background: rgba(0,0,0,0.15); font-size: 12px; opacity: 0.9; cursor: pointer; }
@@ -201,11 +215,12 @@
         .status-checks.read { color: var(--check-read); }
         .status-checks.delivered { color: #d7ece2; }
         .status-checks.sent { color: #9dbcae; }
-        .btn-reply-hover { opacity: 0; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-secondary); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; flex-shrink: 0; transition: opacity 0.15s; }
+        .btn-reply-hover { opacity: 0; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-secondary); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; flex-shrink: 0; transition: opacity 0.15s, transform 0.15s; }
         .msg-wrapper:hover .btn-reply-hover { opacity: 1; }
+        .btn-reply-hover:hover { transform: scale(1.1); }
         .reactions-row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
         .msg-wrapper.my .reactions-row { justify-content: flex-end; }
-        .reaction-pill { background: rgba(8,36,27,0.9); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 2px 8px; font-size: 12px; display: flex; align-items: center; gap: 3px; cursor: pointer; transition: transform 0.12s; }
+        .reaction-pill { background: rgba(8,36,27,0.9); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 2px 8px; font-size: 12px; display: flex; align-items: center; gap: 3px; cursor: pointer; transition: transform 0.12s; animation: badgePop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .reaction-pill:active { transform: scale(0.93); }
         .reaction-pill.mine { border-color: var(--accent-b); background: var(--accent-soft); }
         .reaction-picker { display: none; gap: 4px; background: rgba(8,36,27,0.95); border: 1px solid rgba(220,255,240,0.18); border-radius: var(--radius-pill); padding: 4px 8px; position: absolute; top: -38px; z-index: 5; box-shadow: var(--shadow-soft); align-items: center; }
@@ -216,14 +231,21 @@
         .reaction-picker span:active { transform: scale(1.3); }
         .reaction-picker .picker-divider { width: 1px; height: 18px; background: var(--border); margin: 0 2px; cursor: default; }
         .reaction-picker .picker-action { font-size: 15px; }
-        .msg-wrapper.sticker .msg-bubble { background: none !important; border: none !important; padding: 0 !important; box-shadow: none !important; }
-        .msg-sticker-emoji { font-size: 64px; line-height: 1; }
+        .msg-wrapper.sticker .msg-bubble { background: none !important; border: none !important; padding: 0 !important; box-shadow: none !important; animation: none !important; }
+        .msg-sticker-emoji { font-size: 64px; line-height: 1; animation: stickerPop 0.4s cubic-bezier(0.34, 1.8, 0.64, 1); }
+        @keyframes stickerPop { from { transform: scale(0.3) rotate(-12deg); opacity: 0; } to { transform: scale(1) rotate(0); opacity: 1; } }
         #reply-bar { display: none; align-items: center; gap: 10px; padding: 8px 12px; margin: 0 16px 6px 16px; background: var(--bg-elevated); border-left: 3px solid var(--accent-b); border-radius: var(--radius-sm); }
-        #reply-bar.active { display: flex; }
+        #reply-bar.active { display: flex; animation: fadeUp 0.2s ease; }
         #reply-bar-text { flex: 1; min-width: 0; }
         #reply-bar-sender { font-size: 12px; font-weight: 700; color: var(--accent-b); }
         #reply-bar-content { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .btn-cancel-reply { background: transparent; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; }
+        .btn-cancel-reply { background: transparent; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; transition: transform 0.12s; }
+        .btn-cancel-reply:active { transform: scale(1.2); }
+        /* Пузырь «печатает» внизу чата */
+        #typing-indicator { display: none; padding: 0 16px 8px; }
+        #typing-indicator.active { display: block; animation: fadeUp 0.25s ease; }
+        .typing-bubble { display: inline-flex; align-items: center; gap: 8px; background: linear-gradient(160deg, rgba(224,255,246,0.42), rgba(146,214,190,0.22)); border: 1px solid rgba(220,255,240,0.55); border-radius: 18px 18px 18px 6px; padding: 8px 14px; box-shadow: 0 0 18px rgba(190,255,230,0.25); font-size: 12px; color: var(--text-secondary); }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
         .typing-dots { display: inline-flex; gap: 2px; align-items: center; }
         .typing-dots span { width: 4px; height: 4px; border-radius: 50%; background: var(--online); animation: typingBounce 1.2s infinite; }
         .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
@@ -235,38 +257,45 @@
         #msg-input:focus { border-color: var(--accent-b); box-shadow: 0 0 0 3px rgba(169,154,240,0.15), inset 0 1px 0 rgba(255,255,255,0.25); }
         .btn-icon, .btn-send { height: 46px; border-radius: 50%; border: none; cursor: pointer; font-weight: 700; flex-shrink: 0; transition: transform 0.12s, background 0.15s; display: flex; align-items: center; justify-content: center; }
         .btn-icon { background: var(--glass); border: 1px solid var(--border); color: var(--accent-b); width: 46px; font-size: 20px; }
+        .btn-icon:hover { background: var(--accent-soft); }
         .btn-icon:active, .btn-send:active { transform: scale(0.93); }
         #btn-plus { transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), background 0.15s; }
         #btn-plus.open { transform: rotate(45deg); background: var(--accent-soft); }
-        .btn-send { background: var(--accent-grad); color: #fff; width: 46px; font-size: 18px; position: relative; overflow: hidden; box-shadow: 0 0 22px rgba(244,169,136,0.5), inset 0 1px 0 rgba(255,255,255,0.5); }
-        .btn-send::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.45) 50%, transparent 70%); background-size: 250% 100%; animation: shimmer 3.2s linear infinite; pointer-events: none; }
+        .btn-send { background: var(--accent-grad); background-size: 200% 200%; animation: shimmer 3.2s linear infinite, gradShift 5s ease-in-out infinite alternate; color: #fff; width: 46px; font-size: 18px; position: relative; overflow: hidden; box-shadow: 0 0 22px rgba(244,169,136,0.5), inset 0 1px 0 rgba(255,255,255,0.5); }
+        .btn-send::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.45) 50%, transparent 70%); background-size: 250% 100%; pointer-events: none; }
         @keyframes shimmer { from { background-position: 180% 0; } to { background-position: -80% 0; } }
         #char-counter { text-align: right; font-size: 11px; color: var(--text-muted); padding: 2px 16px 0 0; height: 14px; }
         #char-counter.warn { color: var(--danger); }
         .attach-menu { position: absolute; left: 14px; bottom: 66px; background: rgba(8,36,27,0.95); border: 1px solid rgba(220,255,240,0.18); border-radius: 22px; padding: 6px; display: none; flex-direction: column; min-width: 210px; box-shadow: 0 18px 44px rgba(0,0,0,0.55); z-index: 60; transform-origin: bottom left; }
         .attach-menu.open { display: flex; animation: menuPop 0.18s cubic-bezier(0.34,1.56,0.64,1); }
         @keyframes menuPop { from { opacity: 0; transform: scale(0.85) translateY(10px); } to { opacity: 1; transform: none; } }
-        .attach-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 16px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--text-primary); transition: background 0.12s; }
-        .attach-item:hover, .attach-item:active { background: var(--accent-soft); }
-        .attach-ico { width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 17px; background: var(--bg-input); border: 1px solid var(--border); flex-shrink: 0; }
+        .attach-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 16px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--text-primary); transition: background 0.12s, transform 0.12s; }
+        .attach-item:hover, .attach-item:active { background: var(--accent-soft); transform: translateX(2px); }
+        .attach-ico { width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 17px; background: var(--bg-input); border: 1px solid var(--border); flex-shrink: 0; transition: transform 0.15s; }
+        .attach-item:hover .attach-ico { transform: scale(1.1) rotate(-6deg); }
         .sticker-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; max-height: 300px; overflow-y: auto; }
-        .sticker-item { font-size: 28px; background: rgba(255,255,255,0.07); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 8px 0; text-align: center; transition: transform 0.1s; }
+        .sticker-item { font-size: 28px; background: rgba(255,255,255,0.07); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 8px 0; text-align: center; transition: transform 0.12s, background 0.12s, box-shadow 0.12s; }
+        .sticker-item:hover { transform: scale(1.12); box-shadow: 0 0 16px rgba(244,169,136,0.35); }
         .sticker-item:active { transform: scale(0.88); background: var(--accent-soft); }
         #recording-bar { display: none; flex: 1; align-items: center; gap: 10px; }
-        #recording-bar.active { display: flex; }
+        #recording-bar.active { display: flex; animation: fadeUp 0.2s ease; }
         .rec-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); animation: pulse 1s infinite; }
         @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
         #rec-timer { font-size: 14px; color: var(--text-secondary); flex: 1; }
-        .btn-stop-rec { width: 40px; height: 40px; border-radius: 50%; border: none; background: var(--accent-grad); color: #fff; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 18px rgba(244,169,136,0.5); }
-        .btn-cancel-rec { background: transparent; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; }
+        .btn-stop-rec { width: 40px; height: 40px; border-radius: 50%; border: none; background: var(--accent-grad); color: #fff; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 18px rgba(244,169,136,0.5); transition: transform 0.12s; }
+        .btn-stop-rec:active { transform: scale(0.9); }
+        .btn-cancel-rec { background: transparent; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; transition: transform 0.12s; }
+        .btn-cancel-rec:active { transform: scale(1.2); }
         #video-recording-preview { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1500; flex-direction: column; justify-content: center; align-items: center; gap: 16px; }
-        #video-recording-preview.active { display: flex; }
-        .video-preview-circle { width: 240px; height: 240px; border-radius: 50%; overflow: hidden; background: #000; box-shadow: 0 0 0 4px var(--danger), 0 0 60px rgba(255,125,146,0.5); }
+        #video-recording-preview.active { display: flex; animation: overlayFadeIn 0.2s ease; }
+        .video-preview-circle { width: 240px; height: 240px; border-radius: 50%; overflow: hidden; background: #000; box-shadow: 0 0 0 4px var(--danger), 0 0 60px rgba(255,125,146,0.5); animation: recRing 1.6s ease-in-out infinite; }
+        @keyframes recRing { 0%,100% { box-shadow: 0 0 0 4px var(--danger), 0 0 40px rgba(255,125,146,0.4); } 50% { box-shadow: 0 0 0 6px var(--danger), 0 0 80px rgba(255,125,146,0.7); } }
         .video-preview-circle video { width: 100%; height: 100%; object-fit: cover; }
         .video-preview-circle video.mirror { transform: scaleX(-1); }
         .video-rec-timer { color: #fff; font-size: 18px; font-weight: 700; }
         .video-rec-controls { display: flex; gap: 20px; }
-        .video-rec-btn { width: 56px; height: 56px; border-radius: 50%; border: none; font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .video-rec-btn { width: 56px; height: 56px; border-radius: 50%; border: none; font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.15s; }
+        .video-rec-btn:active { transform: scale(0.9); }
         .video-rec-btn.cancel { background: rgba(255,255,255,0.15); color: #fff; }
         .video-rec-btn.switch { background: rgba(255,255,255,0.15); color: #fff; }
         .video-rec-btn.send { background: var(--accent-grad); color: #fff; box-shadow: 0 0 22px rgba(244,169,136,0.5); }
@@ -275,15 +304,18 @@
         .modal-box { background: rgba(8,36,27,0.92); padding: 26px; border-radius: 32px; border: 1px solid rgba(220,255,240,0.2); width: 90%; max-width: 380px; max-height: 85vh; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 0 30px rgba(190,255,230,0.2), 0 30px 80px rgba(0,0,0,0.5); animation: modalPopIn 0.28s cubic-bezier(0.34, 1.56, 0.64, 1); }
         @keyframes modalPopIn { from { opacity: 0; transform: scale(0.9) translateY(10px); } to { opacity: 1; transform: none; } }
         .modal-box h3 { margin-bottom: 4px; font-family: 'Sora', sans-serif; }
-        .avatar-edit-wrapper { align-self: center; position: relative; cursor: pointer; }
+        .avatar-edit-wrapper { align-self: center; position: relative; cursor: pointer; transition: transform 0.2s; }
+        .avatar-edit-wrapper:hover { transform: scale(1.04); }
         .avatar-edit-badge { position: absolute; bottom: 0; right: 0; background: var(--accent-grad); width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; border: 2px solid var(--bg-panel); }
         .profile-view-name { text-align: center; font-size: 18px; font-weight: 800; font-family: 'Sora', sans-serif; }
         .profile-view-status { text-align: center; color: var(--accent-b); font-size: 13px; font-weight: 600; }
         .profile-view-bio { text-align: center; color: var(--text-secondary); font-size: 14px; }
-        .member-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: var(--radius-sm); background: rgba(255,255,255,0.06); }
+        .member-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: var(--radius-sm); background: rgba(255,255,255,0.06); transition: background 0.15s; }
+        .member-row:hover { background: rgba(255,255,255,0.09); }
         .member-row .user-name { flex: 1; font-size: 14px; }
         .member-owner-badge { font-size: 10px; color: var(--accent-b); font-weight: 700; }
-        .btn-remove-member { background: transparent; border: none; color: var(--danger); font-size: 16px; cursor: pointer; }
+        .btn-remove-member { background: transparent; border: none; color: var(--danger); font-size: 16px; cursor: pointer; transition: transform 0.12s; }
+        .btn-remove-member:hover { transform: scale(1.15); }
         .admin-total { text-align: center; font-size: 13px; color: var(--text-secondary); }
         .admin-total.err { color: var(--danger); }
         .admin-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; background: rgba(255,255,255,0.06); border-radius: 12px; font-size: 13px; }
@@ -296,8 +328,9 @@
         .admin-log-row .act-connect { color: var(--online); font-size: 11px; }
         .admin-log-row .act-disconnect { color: var(--text-muted); font-size: 11px; }
         #lightbox { display: none; position: fixed; inset: 0; background: rgba(2,8,6,0.92); justify-content: center; align-items: center; z-index: 2000; }
-        #lightbox img { max-width: 90%; max-height: 90%; border-radius: 16px; }
-        #conn-indicator { position: fixed; bottom: 8px; right: 8px; z-index: 3000; font-size: 11px; padding: 4px 10px; border-radius: var(--radius-pill); background: rgba(6,30,22,0.85); border: 1px solid rgba(220,255,240,0.25); color: #fff; opacity: 0.95; box-shadow: 0 0 18px rgba(126,240,192,0.15); }
+        #lightbox.active { display: flex; animation: overlayFadeIn 0.2s ease; }
+        #lightbox img { max-width: 90%; max-height: 90%; border-radius: 16px; animation: modalPopIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        #conn-indicator { position: fixed; bottom: 8px; right: 8px; z-index: 3000; font-size: 11px; padding: 4px 10px; border-radius: var(--radius-pill); background: rgba(6,30,22,0.85); border: 1px solid rgba(220,255,240,0.25); color: #fff; opacity: 0.95; box-shadow: 0 0 18px rgba(126,240,192,0.15); transition: background 0.3s; }
         #toast-container { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 4000; display: flex; flex-direction: column; gap: 8px; width: 90%; max-width: 380px; }
         .toast { background: rgba(8,36,27,0.95); border: 1px solid rgba(169,154,240,0.35); border-radius: var(--radius-md); padding: 10px 14px; display: flex; align-items: center; gap: 10px; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 12px 30px rgba(0,0,0,0.55); animation: toastIn 0.25s ease; }
         @keyframes toastIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
@@ -461,6 +494,12 @@
         <div id="messages">
             <div id="load-older-indicator">Загружаем историю...</div>
         </div>
+        <div id="typing-indicator">
+            <div class="typing-bubble">
+                <span class="typing-dots"><span></span><span></span><span></span></span>
+                <span id="typing-indicator-text">печатает...</span>
+            </div>
+        </div>
         <div class="input-container">
             <div id="reply-bar">
                 <div id="reply-bar-text">
@@ -547,7 +586,17 @@
         if (pongTimeout) { clearTimeout(pongTimeout); pongTimeout = null; }
     }
 
-    const REACTION_EMOJIS = ['👍', '❤️', '😂', '', '😢', ''];
+    // Эмодзи записаны юникод-экскейпами — ни один не потеряется при передаче/сохранении
+    const REACTION_EMOJIS = ['\u{1F44D}', '\u{2764}\u{FE0F}', '\u{1F602}', '\u{1F62E}', '\u{1F622}', '\u{1F525}'];
+    const STICKERS = [
+        '\u{1F600}','\u{1F602}','\u{1F923}','\u{1F60A}','\u{1F60D}','\u{1F970}',
+        '\u{1F60E}','\u{1F929}','\u{1F62D}','\u{1F631}','\u{1F976}','\u{1F914}',
+        '\u{1F634}','\u{1F648}','\u{1F921}','\u{1F607}','\u{1F621}','\u{1F92F}',
+        '\u{1F480}','\u{1F525}','\u{2728}','\u{1F389}','\u{2764}\u{FE0F}','\u{1F494}',
+        '\u{1F4AF}','\u{1F44D}','\u{1F44E}','\u{1F64C}','\u{1F440}','\u{1F4A9}',
+        '\u{1F431}','\u{1F436}','\u{1F355}','\u{2615}','\u{1F308}','\u{26A1}'
+    ];
+
     function fmtDuration(s) {
         s = Math.max(0, Math.round(s || 0));
         return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
@@ -624,7 +673,6 @@
         document.getElementById('my-username').innerText = '@' + currentUser;
         document.getElementById('my-avatar-letter').innerText = currentUser.charAt(0).toUpperCase();
         document.getElementById('auth-screen').style.display = 'none';
-        // Показываем приложение только после подстановки реального ника — «Гость» не мелькает
         document.getElementById('app').style.visibility = 'visible';
         document.getElementById('conn-indicator').style.display = 'block';
         knownUsers = JSON.parse(localStorage.getItem('chats_' + currentUser) || '[]');
@@ -648,7 +696,7 @@
         if (!("Notification" in window)) return;
         if (Notification.permission === "default") {
             Notification.requestPermission().then(perm => {
-                if (perm === "granted") showToast('🔔 Уведомления включены', 'Вы будете получать уведомления о новых сообщениях');
+                if (perm === "granted") showToast('\u{1F514} Уведомления включены', 'Вы будете получать уведомления о новых сообщениях');
             });
         }
     }
@@ -700,11 +748,11 @@
 
     function notifyNewMessage(data, chatKey, chatTitle) {
         let previewText = data.msg_type === 'text' ? data.content
-            : data.msg_type === 'image' ? '📷 Фото'
-            : data.msg_type === 'voice' ? '🎤 Голосовое сообщение'
-            : data.msg_type === 'video' ? '📹 Видео-кружок'
-            : data.msg_type === 'videofile' ? '🎬 Видео'
-            : data.msg_type === 'sticker' ? `Стикер ${data.content}` : '📁 Файл';
+            : data.msg_type === 'image' ? '\u{1F4F7} Фото'
+            : data.msg_type === 'voice' ? '\u{1F3A4} Голосовое сообщение'
+            : data.msg_type === 'video' ? '\u{1F4F9} Видео-кружок'
+            : data.msg_type === 'videofile' ? '\u{1F3AC} Видео'
+            : data.msg_type === 'sticker' ? `Стикер ${data.content}` : '\u{1F4C1} Файл';
         const goToChat = () => {
             if (data.is_group) selectChat(chatKey, true, chatTitle);
             else selectChat(chatKey, false);
@@ -732,7 +780,7 @@
         const url = `${protocol}//${window.location.host}/ws/${encodeURIComponent(currentUser)}?token=${encodeURIComponent(currentToken)}`;
         setConnIndicator('⏳ подключение...');
         ws = new WebSocket(url);
-        ws.onopen = () => { wsFails = 0; setConnIndicator('🟢 онлайн', 'rgba(126,240,192,0.6)'); startPing(); };
+        ws.onopen = () => { wsFails = 0; setConnIndicator('\u{1F7E2} онлайн', 'rgba(126,240,192,0.6)'); startPing(); };
         ws.onclose = (e) => {
             stopPing();
             if (e.code === 4001) {
@@ -742,10 +790,10 @@
                 return;
             }
             wsFails++;
-            setConnIndicator('🔴 нет соединения, переподключение...', 'rgba(255,125,146,0.6)');
+            setConnIndicator('\u{1F534} нет соединения, переподключение...', 'rgba(255,125,146,0.6)');
             if (wsFails === 4 && !wsHintShown) {
                 fetch('/version?_=' + Date.now(), { cache: 'no-store' })
-                    .then(r => { if (r.ok) { wsHintShown = true; showToast('🌐 Сеть блокирует сокет', 'Страница загружается, но WebSocket не подключается. Часто это блокировка провайдера — попробуй включить VPN.'); } })
+                    .then(r => { if (r.ok) { wsHintShown = true; showToast('\u{1F310} Сеть блокирует сокет', 'Страница загружается, но WebSocket не подключается. Часто это блокировка провайдера — попробуй включить VPN.'); } })
                     .catch(() => {});
             }
             setTimeout(initWS, Math.min(3000 * wsFails, 15000));
@@ -760,8 +808,17 @@
             else if (data.type === 'typing') handleTypingEvent(data);
             else if (data.type === 'message_edit') handleMessageEdit(data);
             else if (data.type === 'message_delete') handleMessageDelete(data);
-            else if (data.type === 'error') showToast('⛔ Не отправлено', data.detail || 'Ошибка отправки');
+            else if (data.type === 'error') showToast('\u{26D4} Не отправлено', data.detail || 'Ошибка отправки');
         };
+    }
+
+    function clearTypingFor(chatKey, sender) {
+        if (typingUsersInChat[chatKey] && typingUsersInChat[chatKey][sender]) {
+            clearTimeout(typingUsersInChat[chatKey][sender]);
+            delete typingUsersInChat[chatKey][sender];
+            updateHeaderStatus();
+            updateTypingIndicator();
+        }
     }
 
     function handleIncomingMessage(data) {
@@ -771,6 +828,8 @@
             if (!userGroups.find(g => g.group_id === chatTarget)) fetchUserGroups().then(() => renderUserList());
         } else if (data.sender === currentUser) chatTarget = data.target;
         else { chatTarget = data.sender; addKnownUser(data.sender); }
+        // Сообщение пришло — собеседник больше не «печатает»
+        clearTypingFor(chatTarget, data.sender);
         const isMine = data.sender === currentUser;
         const chatIsOpen = activeChatTarget === chatTarget;
         if (chatIsOpen) {
@@ -803,7 +862,7 @@
         const wrapper = document.querySelector(`.msg-wrapper[data-msg-id="${data.message_id}"]`);
         if (!wrapper) return;
         const bubble = wrapper.querySelector('.msg-bubble');
-        if (bubble) bubble.innerHTML = '<div class="msg-deleted">🚫 Сообщение удалено</div><div class="msg-footer"></div>';
+        if (bubble) bubble.innerHTML = '<div class="msg-deleted">\u{1F6AB} Сообщение удалено</div><div class="msg-footer"></div>';
         const reactions = wrapper.querySelector('.reactions-row');
         if (reactions) reactions.innerHTML = '';
     }
@@ -820,14 +879,14 @@
     async function saveEditedMessage() {
         if (editMessageId === null) return;
         const content = document.getElementById('edit-message-input').value.trim();
-        if (!content) { showToast('⚠️ Пусто', 'Текст сообщения не может быть пустым'); return; }
+        if (!content) { showToast('\u{26A0}\u{FE0F} Пусто', 'Текст сообщения не может быть пустым'); return; }
         const formData = new FormData();
         formData.append('token', currentToken); formData.append('content', content);
         try {
             const res = await fetch(`/messages/${editMessageId}/edit`, { method: 'POST', body: formData });
-            if (!res.ok) { const err = await res.json().catch(() => ({})); showToast('⛔ Ошибка', err.detail || 'Не удалось изменить'); return; }
+            if (!res.ok) { const err = await res.json().catch(() => ({})); showToast('\u{26D4} Ошибка', err.detail || 'Не удалось изменить'); return; }
             closeModal('modal-edit-message');
-        } catch (e) { showToast('⛔ Ошибка', 'Не удалось изменить сообщение'); }
+        } catch (e) { showToast('\u{26D4} Ошибка', 'Не удалось изменить сообщение'); }
     }
 
     async function deleteMyMessage(messageId) {
@@ -837,8 +896,8 @@
         formData.append('token', currentToken);
         try {
             const res = await fetch(`/messages/${messageId}/delete`, { method: 'POST', body: formData });
-            if (!res.ok) { const err = await res.json().catch(() => ({})); showToast('⛔ Ошибка', err.detail || 'Не удалось удалить'); }
-        } catch (e) { showToast('⛔ Ошибка', 'Не удалось удалить сообщение'); }
+            if (!res.ok) { const err = await res.json().catch(() => ({})); showToast('\u{26D4} Ошибка', err.detail || 'Не удалось удалить'); }
+        } catch (e) { showToast('\u{26D4} Ошибка', 'Не удалось удалить сообщение'); }
     }
 
     async function fetchBlocks() {
@@ -856,16 +915,16 @@
         formData.append('token', currentToken); formData.append('username', viewedUsername);
         try {
             const res = await fetch(isBlocked ? '/blocks/remove' : '/blocks/add', { method: 'POST', body: formData });
-            if (!res.ok) { const err = await res.json().catch(() => ({})); showToast('⛔ Ошибка', err.detail || 'Не удалось изменить блок'); return; }
-            if (isBlocked) { myBlocks = myBlocks.filter(u => u !== viewedUsername); showToast('✅ Разблокирован', `@${viewedUsername} снова может писать вам`); }
-            else { myBlocks.push(viewedUsername); showToast('🚫 Заблокирован', `@${viewedUsername} не сможет писать вам в личку`); }
+            if (!res.ok) { const err = await res.json().catch(() => ({})); showToast('\u{26D4} Ошибка', err.detail || 'Не удалось изменить блок'); return; }
+            if (isBlocked) { myBlocks = myBlocks.filter(u => u !== viewedUsername); showToast('\u{2705} Разблокирован', `@${viewedUsername} снова может писать вам`); }
+            else { myBlocks.push(viewedUsername); showToast('\u{1F6AB} Заблокирован', `@${viewedUsername} не сможет писать вам в личку`); }
             updateBlockButton();
-        } catch (e) { showToast('⛔ Ошибка', 'Не удалось изменить блок'); }
+        } catch (e) { showToast('\u{26D4} Ошибка', 'Не удалось изменить блок'); }
     }
 
     function updateBlockButton() {
         const btn = document.getElementById('view-profile-block-btn');
-        btn.innerText = myBlocks.includes(viewedUsername) ? '✅ Разблокировать' : '🚫 Заблокировать';
+        btn.innerText = myBlocks.includes(viewedUsername) ? '\u{2705} Разблокировать' : '\u{1F6AB} Заблокировать';
     }
 
     function toggleAttachMenu(force) {
@@ -906,16 +965,25 @@
         if (data.is_typing) {
             typingUsersInChat[chatKey][data.sender] = setTimeout(() => {
                 delete typingUsersInChat[chatKey][data.sender];
-                if (activeChatTarget === chatKey) updateHeaderStatus();
+                if (activeChatTarget === chatKey) { updateHeaderStatus(); updateTypingIndicator(); }
             }, 3000);
         } else delete typingUsersInChat[chatKey][data.sender];
-        if (activeChatTarget === chatKey) updateHeaderStatus();
+        if (activeChatTarget === chatKey) { updateHeaderStatus(); updateTypingIndicator(); }
     }
     function getTypingText(chatKey) {
         const typers = Object.keys(typingUsersInChat[chatKey] || {});
         if (typers.length === 0) return null;
         if (isCurrentGroup) return typers.length === 1 ? `@${typers[0]} печатает...` : `${typers.length} печатают...`;
         return 'печатает...';
+    }
+    function updateTypingIndicator() {
+        const el = document.getElementById('typing-indicator');
+        const txt = document.getElementById('typing-indicator-text');
+        if (!activeChatTarget) { el.classList.remove('active'); return; }
+        const text = getTypingText(activeChatTarget);
+        if (!text) { el.classList.remove('active'); return; }
+        txt.innerText = text;
+        el.classList.add('active');
     }
 
     async function loadMyProfile() {
@@ -1002,9 +1070,9 @@
             const res = await fetch(`/admin/stats?token=${encodeURIComponent(currentToken)}`);
             if (!res.ok) {
                 totalEl.classList.add('err');
-                totalEl.innerText = res.status === 403 ? '⛔ 403: нет прав админа (ADMIN_USERNAME в Render не совпадает с ником)'
-                    : res.status === 401 ? '⛔ 401: сессия устарела — выйди и зайди заново'
-                    : `⛔ Ошибка ${res.status}`;
+                totalEl.innerText = res.status === 403 ? '\u{26D4} 403: нет прав админа (ADMIN_USERNAME в Render не совпадает с ником)'
+                    : res.status === 401 ? '\u{26D4} 401: сессия устарела — выйди и зайди заново'
+                    : `\u{26D4} Ошибка ${res.status}`;
                 return;
             }
             const data = await res.json();
@@ -1021,7 +1089,7 @@
                 : data.log.slice(0, 30).map(l => `<div class="admin-log-row"><span class="t">${escapeHtml(l.time)}</span><span class="u">@${escapeHtml(l.user)}</span><span class="act-${l.action}">${l.action === 'connect' ? 'вошёл' : 'вышел'}</span></div>`).join('');
         } catch (e) {
             totalEl.classList.add('err');
-            totalEl.innerText = '⛔ Ошибка сети: ' + e;
+            totalEl.innerText = '\u{26D4} Ошибка сети: ' + e;
         }
     }
 
@@ -1046,7 +1114,7 @@
             row.innerHTML = `
                 <div class="avatar avatar-sm">${member.charAt(0).toUpperCase()}</div>
                 <div class="user-name">@${member} ${member === data.owner ? '<span class="member-owner-badge">создатель</span>' : ''}</div>
-                ${(isOwner && member !== currentUser) ? `<button class="btn-remove-member" onclick="removeGroupMember('${member}')">✖</button>` : ''}`;
+                ${(isOwner && member !== currentUser) ? `<button class="btn-remove-member" onclick="removeGroupMember('${member}')">\u{2716}</button>` : ''}`;
             list.appendChild(row);
             getProfile(member).then(p => {
                 if (p.avatar_url && p.avatar_url !== '/uploads/default.png') {
@@ -1130,14 +1198,14 @@
         try {
             const res = await fetch(`/search?q=${encodeURIComponent(q)}&token=${encodeURIComponent(currentToken)}`);
             if (!res.ok) {
-                dropdown.innerHTML = `<div class="search-suggestion-empty">⛔ Ошибка ${res.status}${res.status === 401 ? ' — перезайди' : ''}</div>`;
+                dropdown.innerHTML = `<div class="search-suggestion-empty">\u{26D4} Ошибка ${res.status}${res.status === 401 ? ' — перезайди' : ''}</div>`;
                 dropdown.classList.add('open');
                 return;
             }
             const results = await res.json();
             renderSearchSuggestions(results, q);
         } catch (e) {
-            dropdown.innerHTML = '<div class="search-suggestion-empty">⛔ Ошибка сети</div>';
+            dropdown.innerHTML = '<div class="search-suggestion-empty">\u{26D4} Ошибка сети</div>';
             dropdown.classList.add('open');
         }
     }
@@ -1173,10 +1241,10 @@
         if (user === currentUser) { input.value = ''; return; }
         try {
             const res = await fetch(`/search?q=${encodeURIComponent(user)}&token=${encodeURIComponent(currentToken)}`);
-            if (!res.ok) { showToast('⛔ Ошибка', `Поиск недоступен (${res.status})`); return; }
+            if (!res.ok) { showToast('\u{26D4} Ошибка', `Поиск недоступен (${res.status})`); return; }
             const results = await res.json();
             const exact = results.find(u => u.username.toLowerCase() === user.toLowerCase());
-            if (!exact) { showToast('❌ Не найдено', `Пользователь @${user} не существует`); return; }
+            if (!exact) { showToast('\u{274C} Не найдено', `Пользователь @${user} не существует`); return; }
             user = exact.username;
         } catch (e) { showToast('Ошибка', 'Не удалось проверить пользователя'); return; }
         addKnownUser(user); selectChat(user, false);
@@ -1212,7 +1280,7 @@
                 item.onclick = () => selectChat(g.group_id, true, g.title);
                 item.innerHTML = `
                     <div class="chat-item-left">
-                        <div class="avatar" style="background:linear-gradient(135deg,#10b981,#059669)">👥</div>
+                        <div class="avatar" style="background:linear-gradient(135deg,#10b981,#059669)">\u{1F465}</div>
                         <div><div class="user-name">${escapeHtml(g.title)}</div><div class="user-sub">Групповой чат</div></div>
                     </div>
                     <div class="chat-item-right">${unread > 0 ? `<span class="unread-badge">${unread}</span>` : ''}</div>`;
@@ -1240,13 +1308,13 @@
                 <div class="chat-item-left">
                     <div class="avatar" id="avatar-list-${cssSafe(user)}">${user.charAt(0).toUpperCase()}</div>
                     <div style="min-width:0;">
-                        <div class="user-name">@${user}${myBlocks.includes(user) ? ' 🚫' : ''}</div>
+                        <div class="user-name">@${user}${myBlocks.includes(user) ? ' \u{1F6AB}' : ''}</div>
                         <div class="user-sub">${statusHtml}</div>
                     </div>
                 </div>
                 <div class="chat-item-right">
                     ${unread > 0 ? `<span class="unread-badge">${unread}</span>` : ''}
-                    <button class="btn-delete-chat" onclick="deleteChat(event, '${user}')">🗑️</button>
+                    <button class="btn-delete-chat" onclick="deleteChat(event, '${user}')">\u{1F5D1}</button>
                 </div>`;
             container.appendChild(item);
             getProfile(user).then(p => {
@@ -1267,7 +1335,7 @@
         localStorage.setItem('lastChat_' + currentUser, JSON.stringify({ target, isGroup, title: groupTitle }));
         if (isGroup) {
             document.getElementById('target-username').innerText = groupTitle;
-            document.getElementById('target-avatar-letter').innerText = '👥';
+            document.getElementById('target-avatar-letter').innerText = '\u{1F465}';
             document.getElementById('target-status').innerText = 'Группа';
             document.getElementById('chat-header-clickable').onclick = () => openGroupProfile();
         } else {
@@ -1283,6 +1351,7 @@
         }
         document.getElementById('app').classList.add('mobile-chat-active');
         document.getElementById('conn-indicator').style.display = 'none';
+        updateTypingIndicator();
         renderUserList(); loadHistory();
     }
     function updateHeaderStatus() {
@@ -1306,6 +1375,7 @@
         document.getElementById('conn-indicator').style.display = 'block';
         activeChatTarget = "";
         localStorage.removeItem('lastChat_' + currentUser);
+        document.getElementById('typing-indicator').classList.remove('active');
         cancelReply(); closeSearchBar(); toggleAttachMenu(false);
     }
 
@@ -1361,7 +1431,7 @@
     function getChatId(user1, user2) { return [user1, user2].sort().join("_"); }
     function setReplyTarget(msg) {
         replyTarget = msg;
-        let previewText = msg.msg_type === 'text' ? msg.content : msg.msg_type === 'image' ? '📷 Фото' : msg.msg_type === 'voice' ? '🎤 Голосовое сообщение' : msg.msg_type === 'video' ? '📹 Видео-кружок' : msg.msg_type === 'videofile' ? '🎬 Видео' : msg.msg_type === 'sticker' ? 'Стикер ' + msg.content : '📁 Файл';
+        let previewText = msg.msg_type === 'text' ? msg.content : msg.msg_type === 'image' ? '\u{1F4F7} Фото' : msg.msg_type === 'voice' ? '\u{1F3A4} Голосовое сообщение' : msg.msg_type === 'video' ? '\u{1F4F9} Видео-кружок' : msg.msg_type === 'videofile' ? '\u{1F3AC} Видео' : msg.msg_type === 'sticker' ? 'Стикер ' + msg.content : '\u{1F4C1} Файл';
         document.getElementById('reply-bar-sender').innerText = '@' + msg.sender;
         document.getElementById('reply-bar-content').innerText = previewText;
         document.getElementById('reply-bar').classList.add('active');
@@ -1376,6 +1446,7 @@
         ws.send(JSON.stringify({ type: 'message', target: activeChatTarget, sender: currentUser, content: text, msg_type: 'text', is_group: isCurrentGroup, reply_to: replyTarget ? replyTarget.id : null }));
         ws.send(JSON.stringify({ type: 'typing', target: activeChatTarget, is_group: isCurrentGroup, is_typing: false }));
         clearTimeout(typingSendTimer);
+        clearTypingFor(activeChatTarget, currentUser);
         input.value = ''; updateCharCounter(); cancelReply();
     }
 
@@ -1429,14 +1500,6 @@
         input.value = '';
     }
 
-    const STICKERS = [
-        '😀','😂','','😊','','🥰',
-        '😎','','😭','😱','','',
-        '','🙈','🤡','😇','😡','🤯',
-        '💀','🔥','✨','🎉','❤️','💔',
-        '💯','👍','','🙌','','💩',
-        '🐱','','🍕','','🌈','⚡'
-    ];
     function openStickerPicker() {
         if (!activeChatTarget) return;
         const grid = document.getElementById('sticker-grid');
@@ -1520,7 +1583,7 @@
                 video: { facingMode: currentFacing, width: { ideal: 480 }, height: { ideal: 480 } },
                 audio: true
             });
-            if (videoStream.getAudioTracks().length === 0) showToast('⚠️ Без микрофона', 'Кружок запишется без звука');
+            if (videoStream.getAudioTracks().length === 0) showToast('\u{26A0}\u{FE0F} Без микрофона', 'Кружок запишется без звука');
             const videoEl = document.getElementById('video-preview-el');
             videoEl.srcObject = videoStream;
             videoEl.classList.toggle('mirror', currentFacing === 'user');
@@ -1545,7 +1608,7 @@
         clearInterval(videoTimerHandle);
         document.getElementById('video-recording-preview').classList.remove('active');
         await startVideoRecording();
-        showToast('📷 Камера переключена', 'Запись начата заново');
+        showToast('\u{1F4F7} Камера переключена', 'Запись начата заново');
     }
     function updateVideoTimer() {
         const m = Math.floor(videoSeconds / 60); const s = videoSeconds % 60;
@@ -1610,9 +1673,9 @@
         });
     }
     function getStatusIconHtml(status) {
-        if (status === 'read') return `<span class="status-checks read" title="Прочитано">✓✓</span>`;
-        if (status === 'delivered') return `<span class="status-checks delivered" title="Доставлено">✓✓</span>`;
-        return `<span class="status-checks sent" title="Отправлено">✓</span>`;
+        if (status === 'read') return `<span class="status-checks read" title="Прочитано">\u{2713}\u{2713}</span>`;
+        if (status === 'delivered') return `<span class="status-checks delivered" title="Доставлено">\u{2713}\u{2713}</span>`;
+        return `<span class="status-checks sent" title="Отправлено">\u{2713}</span>`;
     }
     function buildMessageElement(msg, skipAnim) {
         messageCache[msg.id] = msg;
@@ -1621,12 +1684,12 @@
         wrapper.className = `msg-wrapper ${isMy ? 'my' : 'other'} ${msg.msg_type === 'sticker' ? 'sticker' : ''} ${skipAnim ? 'no-anim' : ''}`;
         wrapper.dataset.msgId = msg.id;
         let contentHtml;
-        if (msg.msg_type === 'deleted') contentHtml = `<div class="msg-deleted">🚫 Сообщение удалено</div>`;
+        if (msg.msg_type === 'deleted') contentHtml = `<div class="msg-deleted">\u{1F6AB} Сообщение удалено</div>`;
         else if (msg.msg_type === 'text') contentHtml = `<div class="msg-text">${escapeHtml(msg.content)}</div>`;
         else if (msg.msg_type === 'image') contentHtml = `<img src="${msg.content}" class="msg-img" loading="lazy" onclick="document.getElementById('lightbox-img').src=this.src; document.getElementById('lightbox').style.display='flex'">`;
         else if (msg.msg_type === 'voice') contentHtml = `
             <div class="msg-voice2">
-                <button class="voice-play">▶</button>
+                <button class="voice-play">\u{25B6}</button>
                 <div class="voice-bar"><div class="voice-fill"></div></div>
                 <span class="voice-time">${msg.duration ? fmtDuration(msg.duration) : '–:––'}</span>
                 <audio preload="metadata" src="${msg.content}"></audio>
@@ -1634,22 +1697,22 @@
         else if (msg.msg_type === 'video') contentHtml = `
             <div class="msg-video-circle" onclick="playVideoCircle(this)">
                 <video src="${msg.content}" playsinline preload="metadata" class="${isMy ? 'mirror' : ''}"></video>
-                <div class="msg-video-play-icon">▶</div>
+                <div class="msg-video-play-icon">\u{25B6}</div>
             </div>`;
         else if (msg.msg_type === 'videofile') contentHtml = `
             <video src="${msg.content}" controls playsinline preload="metadata" class="msg-video-rect"></video>`;
         else if (msg.msg_type === 'sticker') contentHtml = `<div class="msg-sticker-emoji">${msg.content}</div>`;
-        else contentHtml = `<a href="${msg.content}" target="_blank" style="color:var(--accent-b)">📁 Файл</a>`;
+        else contentHtml = `<a href="${msg.content}" target="_blank" style="color:var(--accent-b)">\u{1F4C1} Файл</a>`;
         let replyHtml = '';
         if (msg.reply_to) {
-            let replyPreview = msg.reply_to.msg_type === 'text' ? escapeHtml(msg.reply_to.content) : msg.reply_to.msg_type === 'image' ? '📷 Фото' : msg.reply_to.msg_type === 'voice' ? '🎤 Голосовое' : msg.reply_to.msg_type === 'video' ? '📹 Видео' : msg.reply_to.msg_type === 'videofile' ? '🎬 Видео' : msg.reply_to.msg_type === 'sticker' ? 'Стикер ' + msg.reply_to.content : '📁 Файл';
+            let replyPreview = msg.reply_to.msg_type === 'text' ? escapeHtml(msg.reply_to.content) : msg.reply_to.msg_type === 'image' ? '\u{1F4F7} Фото' : msg.reply_to.msg_type === 'voice' ? '\u{1F3A4} Голосовое' : msg.reply_to.msg_type === 'video' ? '\u{1F4F9} Видео' : msg.reply_to.msg_type === 'videofile' ? '\u{1F3AC} Видео' : msg.reply_to.msg_type === 'sticker' ? 'Стикер ' + msg.reply_to.content : '\u{1F4C1} Файл';
             replyHtml = `<div class="msg-reply-quote" onclick="scrollToMessage(${msg.reply_to.id})"><div class="msg-reply-quote-sender">@${msg.reply_to.sender}</div><div>${replyPreview}</div></div>`;
         }
         let statusHtml = isMy && !isCurrentGroup ? getStatusIconHtml(msg.status || 'sent') : '';
         let editedHtml = msg.edited ? '<span class="msg-edited">изменено</span>' : '';
         let reactionsHtml = renderReactionsHtml(msg.id, msg.reactions);
         const pickerButtonsHtml = REACTION_EMOJIS.map(e => `<span onclick="sendReaction(${msg.id}, '${e}')">${e}</span>`).join('')
-            + (isMy && msg.msg_type !== 'deleted' ? `<span class="picker-divider"></span>` + (msg.msg_type === 'text' ? `<span class="picker-action" title="Редактировать" onclick="openEditModal(${msg.id})">✏️</span>` : '') + `<span class="picker-action" title="Удалить" onclick="deleteMyMessage(${msg.id})">🗑</span>` : '');
+            + (isMy && msg.msg_type !== 'deleted' ? `<span class="picker-divider"></span>` + (msg.msg_type === 'text' ? `<span class="picker-action" title="Редактировать" onclick="openEditModal(${msg.id})">\u{270F}</span>` : '') + `<span class="picker-action" title="Удалить" onclick="deleteMyMessage(${msg.id})">\u{1F5D1}</span>` : '');
         const replyPayload = JSON.stringify({ id: msg.id, sender: msg.sender, content: msg.content, msg_type: msg.msg_type }).replace(/"/g, '&quot;');
         wrapper.innerHTML = `
             <div class="msg-sender">@${msg.sender}</div>
@@ -1661,7 +1724,7 @@
                         <div class="msg-footer">${editedHtml}${statusHtml}</div>
                     </div>
                 </div>
-                <button class="btn-reply-hover" onclick="setReplyTarget(JSON.parse(this.dataset.msg))" data-msg="${replyPayload}" title="Ответить">↩</button>
+                <button class="btn-reply-hover" onclick="setReplyTarget(JSON.parse(this.dataset.msg))" data-msg="${replyPayload}" title="Ответить">\u{21A9}</button>
             </div>
             <div class="reactions-row">${reactionsHtml}</div>
             <div class="reaction-picker" id="picker-${msg.id}" data-msg-id="${msg.id}">${pickerButtonsHtml}</div>`;
@@ -1687,8 +1750,8 @@
                     timeEl.innerText = fmtDuration(audio.currentTime) + '/' + fmtDuration(total);
                 }
             });
-            audio.addEventListener('ended', () => { playBtn.innerText = '▶'; fill.style.width = '0%'; });
-            playBtn.onclick = (e) => { e.stopPropagation(); if (audio.paused) { audio.play(); playBtn.innerText = '⏸'; } else { audio.pause(); playBtn.innerText = '▶'; } };
+            audio.addEventListener('ended', () => { playBtn.innerText = '\u{25B6}'; fill.style.width = '0%'; });
+            playBtn.onclick = (e) => { e.stopPropagation(); if (audio.paused) { audio.play(); playBtn.innerText = '\u{23F8}'; } else { audio.pause(); playBtn.innerText = '\u{25B6}'; } };
         }
         const bubbleTouchZone = wrapper.querySelector('.msg-bubble-touch-zone');
         const bubbleEl = wrapper.querySelector('.msg-bubble');
@@ -1733,7 +1796,7 @@
     }
     function escapeHtml(text) { const div = document.createElement('div'); div.innerText = text; return div.innerHTML; }
     function updateMessagesStatusUI(newStatus) {
-        document.querySelectorAll('.msg-wrapper.my .status-checks').forEach(el => { el.className = `status-checks ${newStatus}`; el.innerText = '✓✓'; });
+        document.querySelectorAll('.msg-wrapper.my .status-checks').forEach(el => { el.className = `status-checks ${newStatus}`; el.innerText = '\u{2713}\u{2713}'; });
     }
     function toggleSearchBar() {
         const bar = document.getElementById('search-bar');
