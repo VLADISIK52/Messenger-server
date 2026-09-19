@@ -13,6 +13,16 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+        button, a, .chat-item, .attach-item, .attach-item *, .sticker-item, .wp-swatch, .accent-swatch, .seg button, .btn-settings, .btn-logout, .btn-header-icon, .btn-search-nav, .btn-delete-chat, .ban-btn, .btn-remove-member, .modal-close, .btn-cancel-reply, .btn-cancel-rec, .voice-play, .voice-tr-btn, .msg-video-circle, .msg-img, .user-header-left, .chat-header-info {
+            -webkit-tap-highlight-color: transparent;
+            outline: none !important;
+            -webkit-touch-callout: none;
+        }
+        button:focus, button:focus-visible, a:focus, a:focus-visible { outline: none; }
+        input, textarea { -webkit-user-select: text; user-select: text; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(169,154,240,0.35); border-radius: 4px; }
         :root {
             --bg-void: #051b13; --bg-panel: #06271c; --bg-elevated: #0a2e22; --bg-input: rgba(255,255,255,0.10);
             --accent-a: #f4a988; --accent-b: #a99af0;
@@ -144,9 +154,6 @@
         html.eco *, html.eco *::before, html.eco *::after { animation: none !important; transition: none !important; }
         html.eco body::before { display: none; }
         html.bubbles-square .msg-wrapper.my .msg-bubble, html.bubbles-square .msg-wrapper.other .msg-bubble { border-radius: 12px; }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: rgba(169,154,240,0.35); border-radius: 4px; }
         body, html { height: 100%; height: 100dvh; width: 100vw; overflow: hidden; color: var(--text-primary);
             background:
                 radial-gradient(34px 34px at 12% 22%, rgba(255,214,130,0.75), transparent 70%),
@@ -1090,7 +1097,6 @@
         } catch (e) { showToast('\u{26D4} Ошибка', 'Не удалось очистить кэш'); }
     }
 
-    // ── Редактор фото: подпись НЕ жжётся на фото, идёт текстом снизу ──
     function openPhotoEditor(img) {
         photoState = { img, filter: '', crop: 'orig', caption: '', strokes: [], drawMode: false, color: '#ff5470' };
         document.getElementById('photo-caption').value = '';
@@ -1198,7 +1204,6 @@
                 if (!res.ok) { alert('Не удалось загрузить фото'); return; }
                 const d = await res.json();
                 if (!ws || ws.readyState !== WebSocket.OPEN) { alert('Нет соединения.'); return; }
-                // Как в TG: фото + подпись текстом снизу в одном сообщении
                 const content = caption ? (d.file_url + '\n' + caption) : d.file_url;
                 ws.send(JSON.stringify({ type: 'message', target: activeChatTarget, sender: currentUser, content, msg_type: 'image', is_group: isCurrentGroup, reply_to: replyTarget ? replyTarget.id : null }));
                 cancelReply();
@@ -1207,7 +1212,6 @@
         }, 'image/jpeg', 0.9);
     }
 
-    // ── Расшифровка голосовых ──
     function transcribeVoice(msgId, audio, box) {
         const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SR) { showToast('\u{26A0}\u{FE0F} Не поддерживается', 'Твой браузер не умеет распознавать речь'); return; }
