@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Soro:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg-void: #051b13; --bg-panel: #06271c; --bg-elevated: #0a2e22; --bg-input: rgba(255,255,255,0.10);
@@ -27,7 +27,6 @@
             --online: #7ef0c0;
             --shadow-soft: 0 8px 30px rgba(0,0,0,0.35);
         }
-        /* ── Светлая тема Daylight Silk ── */
         html[data-theme="light"] {
             --bg-void: #eef0f8; --bg-panel: #f6f7fc; --bg-elevated: #ffffff; --bg-input: #ffffff;
             --accent-a: #f2926e; --accent-b: #8f7bf0;
@@ -41,6 +40,9 @@
             --online: #2fbf71;
             --shadow-soft: 0 8px 30px rgba(80,90,140,0.15);
         }
+        /* ── Эко-режим: гасим все анимации ── */
+        html.eco *, html.eco *::before, html.eco *::after { animation: none !important; transition: none !important; }
+        html.eco body::before { display: none; }
         html[data-theme="light"] body { background:
             radial-gradient(34px 34px at 12% 22%, rgba(242,146,110,0.30), transparent 70%),
             radial-gradient(24px 24px at 78% 12%, rgba(143,122,240,0.25), transparent 70%),
@@ -77,7 +79,8 @@
         html[data-theme="light"] .toast, html[data-theme="light"] .typing-bubble,
         html[data-theme="light"] .btn-reply-hover, html[data-theme="light"] #reply-bar,
         html[data-theme="light"] .attach-ico, html[data-theme="light"] .btn-icon,
-        html[data-theme="light"] .btn-header-icon, html[data-theme="light"] .reaction-pill { background: rgba(255,255,255,0.95); }
+        html[data-theme="light"] .btn-header-icon, html[data-theme="light"] .reaction-pill,
+        html[data-theme="light"] .wp-menu { background: rgba(255,255,255,0.95); }
         html[data-theme="light"] #conn-indicator { background: rgba(255,255,255,0.9); color: #232633; }
         html[data-theme="light"] #scroll-down-btn { background: rgba(255,255,255,0.92); color: #5b6070; }
         html[data-theme="light"] #search-bar { background: rgba(246,247,252,0.92); }
@@ -140,7 +143,12 @@
             content: ''; position: absolute; width: 480px; height: 480px; border-radius: 50%;
             background: radial-gradient(circle, rgba(244,169,136,0.30) 0%, rgba(126,240,192,0.22) 45%, transparent 70%);
             z-index: 0; }
-        .splash-icon { width: 96px; height: 96px; border-radius: 28px; background: var(--accent-grad); display: flex; align-items: center; justify-content: center; font-size: 44px; position: relative; z-index: 1; box-shadow: 0 0 40px rgba(244,169,136,0.5), 0 0 90px rgba(169,154,240,0.35); }
+        .splash-icon-wrap { position: relative; z-index: 1; }
+        .splash-ring { position: absolute; inset: 0; border-radius: 28px; border: 2px solid rgba(244,169,136,0.55); animation: ringExpand 1.6s ease-out 0.3s infinite; opacity: 0; }
+        @keyframes ringExpand { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(1.9); opacity: 0; } }
+        .splash-icon { width: 96px; height: 96px; border-radius: 28px; background: var(--accent-grad); display: flex; align-items: center; justify-content: center; font-size: 44px; box-shadow: 0 0 40px rgba(244,169,136,0.5), 0 0 90px rgba(169,154,240,0.35); animation: splashPop 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+        @keyframes splashPop { 0% { transform: scale(0) rotate(-15deg); opacity: 0; } 60% { transform: scale(1.15) rotate(3deg); opacity: 1; } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
+        .splash-title { animation: fadeUp 0.7s 0.35s ease both; }
         #auth-screen { display: none; position: fixed; inset: 0; z-index: 100; justify-content: center; align-items: center; overflow: hidden;
             background:
                 radial-gradient(600px 300px at 50% 0%, rgba(126,240,192,0.14), transparent 60%),
@@ -171,6 +179,11 @@
         .user-header-left:active { background: var(--bg-elevated); }
         .avatar { width: 42px; height: 42px; border-radius: 50%; background: radial-gradient(circle at 30% 25%, #fff0e4, #f8b294 45%, #e08b6d 80%, #c96f52 100%); display: flex; align-items: center; justify-content: center; font-weight: 800; font-family: 'Sora', sans-serif; font-size: 16px; flex-shrink: 0; overflow: hidden; box-shadow: 0 4px 16px rgba(244,169,136,0.5), inset 0 -3px 6px rgba(0,0,0,0.18); transition: transform 0.2s ease; }
         .avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .avatar.online-ring { animation: ringPulse 2s ease-in-out infinite; }
+        @keyframes ringPulse {
+            0%, 100% { box-shadow: 0 0 0 2px rgba(126,240,192,0.45), 0 0 10px rgba(126,240,192,0.35); }
+            50% { box-shadow: 0 0 0 4px rgba(126,240,192,0.7), 0 0 22px rgba(126,240,192,0.6); }
+        }
         .user-header-left:hover .avatar, .chat-item:hover .avatar { transform: scale(1.06); }
         .avatar-sm { width: 30px; height: 30px; font-size: 12px; box-shadow: 0 2px 10px rgba(244,169,136,0.4); }
         .avatar-lg { width: 88px; height: 88px; font-size: 30px; box-shadow: 0 12px 34px rgba(244,169,136,0.5), inset 0 -4px 10px rgba(0,0,0,0.18); }
@@ -215,6 +228,22 @@
         .btn-back:active { transform: translateX(-3px); }
         .btn-header-icon { background: var(--glass); border: 1px solid var(--border); color: var(--text-secondary); font-size: 17px; cursor: pointer; padding: 8px; flex-shrink: 0; border-radius: 50%; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; transition: background 0.15s, transform 0.15s; }
         .btn-header-icon:active { background: var(--accent-soft); transform: scale(0.92); }
+        .wp-menu { position: absolute; top: 56px; right: 12px; z-index: 70; display: none; gap: 8px; padding: 8px; background: rgba(8,36,27,0.95); border: 1px solid rgba(220,255,240,0.18); border-radius: 16px; box-shadow: var(--shadow-soft); }
+        .wp-menu.open { display: flex; animation: menuPop 0.18s cubic-bezier(0.34,1.56,0.64,1); }
+        .wp-swatch { width: 30px; height: 30px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); cursor: pointer; transition: transform 0.12s; }
+        .wp-swatch:active { transform: scale(0.9); }
+        .wp-s-default { background: transparent; }
+        .wp-s-aurora { background: radial-gradient(circle at 30% 30%, rgba(126,240,192,0.5), rgba(244,169,136,0.4)); }
+        .wp-s-dots { background-color: #07130e; background-image: radial-gradient(rgba(255,255,255,0.25) 1px, transparent 1px); background-size: 8px 8px; }
+        .wp-s-grid { background-color: #07130e; background-image: linear-gradient(rgba(255,255,255,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.15) 1px, transparent 1px); background-size: 8px 8px; }
+        .wp-s-solid { background: #04120c; }
+        #messages { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 4px; transition: opacity 0.15s ease; position: relative; z-index: 1; }
+        #messages[data-wp="aurora"] { background:
+            radial-gradient(400px 300px at 20% 20%, rgba(126,240,192,0.10), transparent 60%),
+            radial-gradient(400px 300px at 80% 70%, rgba(244,169,136,0.10), transparent 60%); }
+        #messages[data-wp="dots"] { background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 22px 22px; }
+        #messages[data-wp="grid"] { background-image: linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px); background-size: 40px 40px; }
+        #messages[data-wp="solid"] { background: rgba(4,18,12,0.6); }
         #search-bar { display: none; align-items: center; gap: 8px; padding: 10px 16px; background: rgba(6,30,22,0.9); border-bottom: 1px solid var(--border); flex-shrink: 0; }
         #search-bar.active { display: flex; animation: fadeUp 0.2s ease; }
         #search-input { flex: 1; padding: 8px 14px; background: var(--bg-input); border: 1px solid rgba(220,255,240,0.35); border-radius: var(--radius-pill); color: var(--text-primary); outline: none; font-size: 14px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25); }
@@ -225,7 +254,6 @@
         .msg-bubble.search-current { outline: 2px solid #fff; }
         #load-older-indicator { text-align: center; font-size: 12px; color: var(--text-muted); padding: 6px 0; display: none; }
         #load-older-indicator.active { display: block; }
-        #messages { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 4px; transition: opacity 0.15s ease; position: relative; z-index: 1; }
         #scroll-down-btn { position: absolute; right: 18px; bottom: 92px; width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(220,255,240,0.35); background: rgba(8,36,27,0.92); color: var(--text-secondary); font-size: 20px; font-weight: 700; cursor: pointer; z-index: 30; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(0,0,0,0.45), 0 0 18px rgba(126,240,192,0.18); opacity: 0; transform: translateY(12px) scale(0.8); pointer-events: none; transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.15s; }
         #scroll-down-btn.show { opacity: 1; transform: none; pointer-events: auto; }
         #scroll-down-btn:active { transform: scale(0.88); }
@@ -412,8 +440,11 @@
 </head>
 <body>
 <div id="splash-screen">
-    <div class="splash-icon">&#x1F4AC;</div>
-    <div style="font-size:36px;font-weight:800;color:#fff;margin-top:12px;position:relative;z-index:1;">Messenger</div>
+    <div class="splash-icon-wrap">
+        <div class="splash-ring"></div>
+        <div class="splash-icon">&#x1F4AC;</div>
+    </div>
+    <div class="splash-title" style="font-size:36px;font-weight:800;color:#fff;margin-top:12px;position:relative;z-index:1;">Messenger</div>
 </div>
 <div id="auth-screen">
     <div class="auth-box">
@@ -448,6 +479,7 @@
             <button class="theme-btn" id="theme-dark-btn" onclick="setThemePreview('dark')">&#x1F319; Тёмная</button>
             <button class="theme-btn" id="theme-light-btn" onclick="setThemePreview('light')">&#x1F324; Светлая</button>
         </div>
+        <button class="btn-secondary" id="eco-btn" onclick="toggleEco()"></button>
         <button class="btn-primary" onclick="saveProfile()">Сохранить</button>
         <button class="btn-secondary" onclick="openSecurity()">&#x1F511; Пароль и сессии</button>
         <button class="btn-secondary" onclick="closeModal('modal-my-profile')">Закрыть</button>
@@ -559,7 +591,15 @@
                     <div class="user-sub" id="target-status">Был(а) недавно</div>
                 </div>
             </div>
+            <button class="btn-header-icon" onclick="toggleWpMenu(event)" title="Обои чата">&#x1F5BC;</button>
             <button class="btn-header-icon" onclick="toggleSearchBar()" title="Поиск">&#x1F50D;</button>
+            <div class="wp-menu" id="wp-menu">
+                <button class="wp-swatch wp-s-default" onclick="setWallpaper('')" title="По умолчанию"></button>
+                <button class="wp-swatch wp-s-aurora" onclick="setWallpaper('aurora')" title="Аврора"></button>
+                <button class="wp-swatch wp-s-dots" onclick="setWallpaper('dots')" title="Точки"></button>
+                <button class="wp-swatch wp-s-grid" onclick="setWallpaper('grid')" title="Сетка"></button>
+                <button class="wp-swatch wp-s-solid" onclick="setWallpaper('solid')" title="Сплошной"></button>
+            </div>
         </div>
         <div id="search-bar">
             <input type="text" id="search-input" placeholder="Поиск по чату..." oninput="onSearchInput()">
@@ -645,6 +685,7 @@
     let myProfile = { avatar_url: '/uploads/default.png', bio: '', status_text: '', theme: 'dark', is_admin: false };
     let myBlocks = [], messageCache = {}, viewedUsername = "", editMessageId = null, adminTimer = null;
     let chosenTheme = 'dark';
+    let ecoMode = false;
     let mediaRecorder = null, recordedChunks = [], recordingSeconds = 0, recordingTimerHandle = null, recordingCancelled = false;
     let videoRecorder = null, videoChunks = [], videoStream = null, videoSeconds = 0, videoTimerHandle = null, videoCancelled = false;
     let replyTarget = null, typingSendTimer = null, typingUsersInChat = {}, searchMatches = [], searchCurrentIndex = -1;
@@ -698,6 +739,10 @@
         if (d.toDateString() === now.toDateString()) return 'был(а) в ' + hh;
         return 'был(а) ' + String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + ' в ' + hh;
     }
+    function badgeFor(p) {
+        if (!p) return '';
+        return (p.is_founder ? '\u{1F48E}' : '') + (p.is_admin ? '\u{1F6E1}' : '');
+    }
 
     document.addEventListener("DOMContentLoaded", () => {
         let savedUser = localStorage.getItem('messenger_currentUser');
@@ -721,6 +766,8 @@
             if (menu && menu.classList.contains('open') && !menu.contains(e.target) && e.target !== plus && !plus.contains(e.target)) {
                 menu.classList.remove('open'); plus.classList.remove('open');
             }
+            const wpm = document.getElementById('wp-menu');
+            if (wpm && wpm.classList.contains('open') && !wpm.contains(e.target)) wpm.classList.remove('open');
         });
     });
 
@@ -778,6 +825,8 @@
         await loadMyProfile();
         chosenTheme = myProfile.theme || 'dark';
         applyTheme(chosenTheme);
+        ecoMode = localStorage.getItem('eco_' + currentUser) === '1';
+        applyEco(); updateEcoBtn();
         myBlocks = await fetchBlocks();
         if (myProfile.is_admin) document.getElementById('btn-admin').style.display = '';
         renderMyStatusLine();
@@ -798,9 +847,17 @@
         document.getElementById('theme-dark-btn').classList.toggle('active', t === 'dark');
         document.getElementById('theme-light-btn').classList.toggle('active', t === 'light');
     }
-    function setThemePreview(t) {
-        chosenTheme = t;
-        applyTheme(t);
+    function setThemePreview(t) { chosenTheme = t; applyTheme(t); }
+    function applyEco() { document.documentElement.classList.toggle('eco', ecoMode); }
+    function updateEcoBtn() {
+        const b = document.getElementById('eco-btn');
+        if (b) b.innerText = '\u{1F50B} Эко-режим: ' + (ecoMode ? 'вкл' : 'выкл');
+    }
+    function toggleEco() {
+        ecoMode = !ecoMode;
+        localStorage.setItem('eco_' + currentUser, ecoMode ? '1' : '0');
+        applyEco(); updateEcoBtn();
+        showToast(ecoMode ? '\u{1F50B} Эко-режим включён' : '\u{2728} Анимации возвращены', ecoMode ? 'Анимации отключены для экономии батареи' : 'Все анимации снова работают');
     }
 
     function requestNotificationPermission() {
@@ -1044,11 +1101,7 @@
         btn.innerText = myBlocks.includes(viewedUsername) ? '\u{2705} Разблокировать' : '\u{1F6AB} Заблокировать';
     }
 
-    // ── Пароль и сессии ──
-    function openSecurity() {
-        openModal('modal-security');
-        loadSessions();
-    }
+    function openSecurity() { openModal('modal-security'); loadSessions(); }
     async function loadSessions() {
         const box = document.getElementById('sessions-list');
         try {
@@ -1104,7 +1157,24 @@
         else if (kind === 'sticker') openStickerPicker();
     }
 
-    // ── Черновики ──
+    function toggleWpMenu(e) {
+        if (e) e.stopPropagation();
+        document.getElementById('wp-menu').classList.toggle('open');
+    }
+    function setWallpaper(p) {
+        if (!activeChatTarget) return;
+        const key = 'wp_' + currentUser + '_' + activeChatTarget;
+        if (p) localStorage.setItem(key, p); else localStorage.removeItem(key);
+        applyWallpaper();
+        document.getElementById('wp-menu').classList.remove('open');
+    }
+    function applyWallpaper() {
+        const box = messagesBox();
+        if (!box) return;
+        const p = activeChatTarget ? (localStorage.getItem('wp_' + currentUser + '_' + activeChatTarget) || '') : '';
+        if (p) box.setAttribute('data-wp', p); else box.removeAttribute('data-wp');
+    }
+
     function draftKey(chat) { return 'draft_' + currentUser + '_' + chat; }
     function saveDraft() {
         if (!activeChatTarget) return;
@@ -1217,6 +1287,7 @@
         document.getElementById('profile-status-input').value = myProfile.status_text || '';
         chosenTheme = myProfile.theme || 'dark';
         applyTheme(chosenTheme);
+        updateEcoBtn();
         const avatarEl = document.getElementById('profile-edit-avatar');
         avatarEl.innerHTML = (myProfile.avatar_url && myProfile.avatar_url !== '/uploads/default.png') ? `<img src="${myProfile.avatar_url}">` : currentUser.charAt(0).toUpperCase();
         openModal('modal-my-profile');
@@ -1522,6 +1593,7 @@
             let isOnline = onlineUsers.includes(user);
             const pc = profileCache[user];
             const customStatus = pc && pc.data ? pc.data.status_text : '';
+            const badge = badgeFor(pc && pc.data);
             let statusHtml = (isOnline ? `<span class="status-dot online-dot"></span>В сети` : `<span class="status-dot offline-dot"></span>${(pc && pc.data && fmtLastSeen(pc.data.last_seen)) || 'Был(а) недавно'}`)
                 + (customStatus ? ` · <span style="color:var(--accent-b)">${escapeHtml(customStatus)}</span>` : '');
             const unread = unreadCounts[user] || 0;
@@ -1530,9 +1602,9 @@
             item.onclick = () => selectChat(user, false);
             item.innerHTML = `
                 <div class="chat-item-left">
-                    <div class="avatar" id="avatar-list-${cssSafe(user)}">${user.charAt(0).toUpperCase()}</div>
+                    <div class="avatar${isOnline ? ' online-ring' : ''}" id="avatar-list-${cssSafe(user)}">${user.charAt(0).toUpperCase()}</div>
                     <div style="min-width:0;">
-                        <div class="user-name">@${user}${myBlocks.includes(user) ? ' \u{1F6AB}' : ''}</div>
+                        <div class="user-name">@${user}${badge}${myBlocks.includes(user) ? ' \u{1F6AB}' : ''}</div>
                         <div class="user-sub">${statusHtml}</div>
                     </div>
                 </div>
@@ -1557,12 +1629,14 @@
         activeChatTarget = target; isCurrentGroup = isGroup;
         unreadCounts[target] = 0;
         cancelReply(); closeSearchBar(); toggleAttachMenu(false);
+        document.getElementById('wp-menu').classList.remove('open');
         oldestLoadedMessageId = null; noMoreOlderMessages = false;
         scrollDownPending = 0;
         localStorage.setItem('lastChat_' + currentUser, JSON.stringify({ target, isGroup, title: groupTitle }));
         if (isGroup) {
             document.getElementById('target-username').innerText = groupTitle;
             document.getElementById('target-avatar-letter').innerText = '\u{1F465}';
+            document.getElementById('target-avatar-letter').classList.remove('online-ring');
             document.getElementById('target-status').innerText = 'Группа';
             document.getElementById('chat-header-clickable').onclick = () => openGroupProfile();
         } else {
@@ -1573,13 +1647,14 @@
             getProfile(target).then(p => {
                 if (p.avatar_url && p.avatar_url !== '/uploads/default.png')
                     document.getElementById('target-avatar-letter').innerHTML = `<img src="${p.avatar_url}">`;
+                document.getElementById('target-username').innerText = '@' + target + badgeFor(p);
                 updateHeaderStatus();
             });
         }
         document.getElementById('app').classList.add('mobile-chat-active');
         document.getElementById('conn-indicator').style.display = 'none';
+        applyWallpaper();
         updateTypingIndicator();
-        // Черновик этого чата
         document.getElementById('msg-input').value = localStorage.getItem(draftKey(target)) || '';
         updateCharCounter();
         renderUserList(); loadHistory();
@@ -1596,6 +1671,7 @@
         const customStatus = pc && pc.data ? pc.data.status_text : '';
         const el = document.getElementById('target-status');
         let isOnline = onlineUsers.includes(activeChatTarget);
+        document.getElementById('target-avatar-letter').classList.toggle('online-ring', isOnline);
         let base = isOnline ? `<span class="status-dot online-dot"></span>В сети`
             : `<span class="status-dot offline-dot"></span>${(pc && pc.data && fmtLastSeen(pc.data.last_seen)) || 'Был(а) недавно'}`;
         el.innerHTML = base + (customStatus ? ` · <span style="color:var(--accent-b)">${escapeHtml(customStatus)}</span>` : '');
@@ -1625,7 +1701,10 @@
             const res = await fetch(url);
             const serverMsgs = await res.json();
             box.innerHTML = '<div id="load-older-indicator">Загружаем историю...</div>';
-            serverMsgs.forEach(msg => appendMessageToUI(msg, true));
+            const cascade = !ecoMode;
+            serverMsgs.forEach((msg, i) => {
+                appendMessageToUI(msg, !cascade, cascade ? Math.min(i, 14) * 35 : 0);
+            });
             if (serverMsgs.length > 0) oldestLoadedMessageId = serverMsgs[0].id;
             noMoreOlderMessages = serverMsgs.length < 50;
             if (!isCurrentGroup && serverMsgs.length > 0) sendReadReceipt(getChatId(currentUser, activeChatTarget), activeChatTarget);
@@ -1923,12 +2002,13 @@
         if (status === 'delivered') return `<span class="status-checks delivered" title="Доставлено">\u{2713}\u{2713}</span>`;
         return `<span class="status-checks sent" title="Отправлено">\u{2713}</span>`;
     }
-    function buildMessageElement(msg, skipAnim) {
+    function buildMessageElement(msg, skipAnim, delayMs) {
         messageCache[msg.id] = msg;
         const isMy = msg.sender === currentUser;
         const wrapper = document.createElement('div');
         wrapper.className = `msg-wrapper ${isMy ? 'my' : 'other'} ${msg.msg_type === 'sticker' ? 'sticker' : ''} ${skipAnim ? 'no-anim' : ''}`;
         wrapper.dataset.msgId = msg.id;
+        if (!skipAnim && delayMs) wrapper.style.animationDelay = delayMs + 'ms';
         let contentHtml;
         if (msg.msg_type === 'deleted') contentHtml = `<div class="msg-deleted">\u{1F6AB} Сообщение удалено</div>`;
         else if (msg.msg_type === 'text') contentHtml = `<div class="msg-text">${escapeHtml(msg.content)}</div>`;
@@ -2019,10 +2099,10 @@
             video.onended = () => { wrapperEl.classList.remove('playing'); };
         } else { video.pause(); wrapperEl.classList.remove('playing'); }
     }
-    function appendMessageToUI(msg, skipAnim) {
+    function appendMessageToUI(msg, skipAnim, delayMs) {
         const box = messagesBox();
         const near = isNearBottom(box);
-        const wrapper = buildMessageElement(msg, skipAnim);
+        const wrapper = buildMessageElement(msg, skipAnim, delayMs);
         box.appendChild(wrapper);
         const isMine = msg.sender === currentUser;
         if (skipAnim || near || isMine) {
@@ -2032,6 +2112,7 @@
             scrollDownPending++;
             updateScrollDownBtn();
         }
+        return wrapper;
     }
     function prependMessageToUI(msg) {
         const box = messagesBox();
