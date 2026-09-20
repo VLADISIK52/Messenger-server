@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 # ==========================================================
-#                    КОНФИГУРАЦИЯ ПУТЕЙ
+#                    КОНФИГУРАЦИЯ
 # ==========================================================
 IS_RENDER = os.path.isdir("/data")
 DATA_DIR = "/data" if IS_RENDER else "."
@@ -35,8 +35,6 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
 # OneSignal (нативные пуши в приложение median.co)
 ONE_SIGNAL_APP_ID = os.environ.get("ONE_SIGNAL_APP_ID", "")
 ONE_SIGNAL_REST_KEY = os.environ.get("ONE_SIGNAL_REST_KEY", "")
-
-# Последний текст ошибки OneSignal (для диагностики)
 ONESIGNAL_LAST_ERROR = ""
 
 try:
@@ -45,11 +43,19 @@ except Exception:
     APP_VERSION = "dev"
 
 MSK = timezone(timedelta(hours=3))
-
 CONNECT_LOG = deque(maxlen=100)
 
+USERNAME_RE = re.compile(r'^[A-Za-zА-Яа-яЁё0-9]{3,20}$')
+MAX_UPLOAD_SIZE = 25 * 1024 * 1024
+ALLOWED_UPLOAD_EXTENSIONS = {
+    '.jpg', '.jpeg', '.png', '.gif', '.webp',
+    '.mp3', '.wav', '.ogg', '.webm', '.m4a',
+    '.pdf', '.txt', '.zip', '.mp4', '.mov'
+}
+MESSAGES_PAGE_SIZE = 50
+
 # ==========================================================
-#          WEB PUSH (уведомления) — ключи в памяти
+#          WEB PUSH (уведомления браузера)
 # ==========================================================
 from pywebpush import webpush, WebPushException
 from py_vapid import Vapid
@@ -116,11 +122,10 @@ def send_push_to_user(username: str, title: str, body: str) -> None:
 
 
 # ==========================================================
-#          ONESIGNAL (нативные пуши в приложение)
+#          ONESIGNAL (нативные пуши приложения)
 # ==========================================================
 
 def _onesignal_post(payload: dict) -> bool:
-    """POST в OneSignal с авто-подбором схемы авторизации (Key= / Bearer)."""
     global ONESIGNAL_LAST_ERROR
     if not ONE_SIGNAL_APP_ID or not ONE_SIGNAL_REST_KEY:
         ONESIGNAL_LAST_ERROR = "нет переменных окружения"
@@ -145,11 +150,13 @@ def _onesignal_post(payload: dict) -> bool:
                 body = resp.read().decode()[:200]
                 print(f"[ONESIGNAL] ok status={resp.status} body={body}", flush=True)
                 ONESIGNAL_LAST_ERROR = ""
-                return 200 <= resp.status < 300
+                return True
         except urllib.error.HTTPError as e:
             err_body = ""
-            try: err_body = e.read().decode()[:200]
-            except Exception: pass
+            try:
+                err_body = e.read().decode()[:200]
+            except Exception:
+                pass
             print(f"[ONESIGNAL] HTTP {e.code} auth={auth.split(' ')[0]} body={err_body}", flush=True)
             ONESIGNAL_LAST_ERROR = f"HTTP {e.code}: {err_body}"
             continue
@@ -161,7 +168,6 @@ def _onesignal_post(payload: dict) -> bool:
 
 
 def send_onesignal_push(username: str, title: str, body: str) -> bool:
-    """Пуш конкретному пользователю (привязка по external user id = ник)."""
     return _onesignal_post({
         "include_external_user_ids": [username],
         "headings": {"en": title},
@@ -170,7 +176,6 @@ def send_onesignal_push(username: str, title: str, body: str) -> bool:
 
 
 def send_onesignal_broadcast(title: str, body: str) -> bool:
-    """Пуш всем устройствам приложения сразу."""
     return _onesignal_post({
         "included_segments": ["All"],
         "headings": {"en": title},
@@ -179,9 +184,9 @@ def send_onesignal_broadcast(title: str, body: str) -> bool:
 
 
 def notify_offline(username: str, title: str, body: str) -> None:
-    """Все каналы офлайн-доставки: Web Push (браузер) + OneSignal (приложение)."""
     send_push_to_user(username, title, body)
     send_onesignal_push(username, title, body)
+
 
 # ==========================================================
 #                        БАЗА ДАННЫХ
@@ -338,6 +343,7 @@ def utc_str_to_msk(s: Optional[str]) -> str:
     except Exception:
         return s
 
+
 # ==========================================================
 #                    ПАРОЛИ И АВТОРИЗАЦИЯ
 # ==========================================================
@@ -465,8 +471,9 @@ def get_group_member_usernames(group_id: str) -> List[str]:
         conn.close()
     return [r[0] for r in rows]
 
+
 # ==========================================================
-#   МЕНЕДЖЕР WEBSOCKET: МУЛЬТИ-СОЕДИНЕНИЯ
+#             МЕНЕДЖЕР WEBSOCKET: МУЛЬТИ-СОЕДИНЕНИЯ
 # ==========================================================
 
 class ConnectionManager:
@@ -522,6 +529,30 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+# ==========================================================
+#                    ПРИЛОЖЕНИЕ FASTAPI
+# ==========================================================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
 
 # ==========================================================
 #                    ОБЫЧНЫЕ ЭНДПОИНТЫ
@@ -858,6 +889,7 @@ async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
 def get_online_users():
     return list(manager.active_connections.keys())
 
+
 # ==========================================================
 #                    АДМИН: БАНЫ И РАССЫЛКА
 # ==========================================================
@@ -903,7 +935,6 @@ async def admin_broadcast(
     title: str = Form(...),
     body: str = Form(...),
 ):
-    global ONESIGNAL_LAST_ERROR
     require_admin(token)
     title = title.strip()[:80] or "📢 Объявление"
     body = body.strip()[:300]
@@ -930,6 +961,7 @@ async def admin_broadcast(
         "onesignal": onesignal_ok,
         "onesignal_error": "" if onesignal_ok else ONESIGNAL_LAST_ERROR,
     }
+
 
 # ==========================================================
 #                    ЧЁРНЫЙ СПИСОК
@@ -976,6 +1008,7 @@ def blocks_my(username: str, token: str):
     finally:
         conn.close()
     return [r[0] for r in rows]
+
 
 # ==========================================================
 #              РЕДАКТИРОВАНИЕ И УДАЛЕНИЕ СООБЩЕНИЙ
@@ -1037,6 +1070,7 @@ async def message_delete(msg_id: int, token: str = Form(...)):
         await manager.send_to_user(payload, user)
     return {"status": "ok"}
 
+
 # ==========================================================
 #                    АДМИН-ПАНЕЛЬ
 # ==========================================================
@@ -1069,6 +1103,7 @@ def admin_stats(token: str):
         "messages_total": messages_total,
         "log": list(CONNECT_LOG),
     }
+
 
 # ==========================================================
 #                    РАБОТА С ГРУППАМИ
@@ -1258,6 +1293,7 @@ def delete_group(group_id: str, token: str):
         conn.close()
     return {"status": "deleted"}
 
+
 # ==========================================================
 #                СООБЩЕНИЯ И ИСТОРИЯ ЧАТОВ
 # ==========================================================
@@ -1270,15 +1306,6 @@ LEFT JOIN messages r ON m.reply_to = r.id
 WHERE m.chat_id = ? {extra}
 ORDER BY m.id DESC LIMIT ?
 '''
-
-USERNAME_RE = re.compile(r'^[A-Za-zА-Яа-яЁё0-9]{3,20}$')
-MAX_UPLOAD_SIZE = 25 * 1024 * 1024
-ALLOWED_UPLOAD_EXTENSIONS = {
-    '.jpg', '.jpeg', '.png', '.gif', '.webp',
-    '.mp3', '.wav', '.ogg', '.webm', '.m4a',
-    '.pdf', '.txt', '.zip', '.mp4', '.mov'
-}
-MESSAGES_PAGE_SIZE = 50
 
 
 @app.get("/messages/{user1}/{user2}")
@@ -1331,6 +1358,7 @@ def delete_chat(user1: str, user2: str, token: str):
     finally:
         conn.close()
     return {"status": "deleted"}
+
 
 # ==========================================================
 #                    WEBSOCKET: ГЛАВНАЯ ЛОГИКА
