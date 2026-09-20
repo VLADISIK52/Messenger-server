@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Soro:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
         button, a, .chat-item, .attach-item, .attach-item *, .sticker-item, .wp-swatch, .accent-swatch, .seg button, .btn-settings, .btn-logout, .btn-header-icon, .btn-search-nav, .btn-delete-chat, .ban-btn, .btn-remove-member, .modal-close, .btn-cancel-reply, .btn-cancel-rec, .voice-play, .voice-tr-btn, .msg-video-circle, .msg-img, .user-header-left, .chat-header-info {
@@ -840,6 +840,7 @@
 <div id="toast-container"></div>
 <script>
     const APP_VERSION = "__APP_VERSION__";
+    const ONESIGNAL_APP_ID = "__ONESIGNAL_APP_ID__";
     (function selfHeal() {
         try {
             const guardKey = 'selfheal_' + APP_VERSION;
@@ -925,6 +926,41 @@
         const hh = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
         if (d.toDateString() === now.toDateString()) return 'был(а) в ' + hh;
         return 'был(а) ' + String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + ' в ' + hh;
+    }
+
+    // ── OneSignal: нативные пуши внутри приложения median.co ──
+    function inMedianApp() {
+        return !!(window.median || window.gonative);
+    }
+    function onesignalIdentify(user) {
+        try {
+            if (window.OneSignal && window.OneSignal.login) window.OneSignal.login(user);
+            else if (window.OneSignal && window.OneSignal.setExternalUserId) window.OneSignal.setExternalUserId(user);
+        } catch (e) {}
+    }
+    function onesignalLogout() {
+        try {
+            if (window.OneSignal && window.OneSignal.logout) window.OneSignal.logout();
+        } catch (e) {}
+    }
+    function initOneSignal() {
+        const appId = ONESIGNAL_APP_ID;
+        if (!appId || appId.indexOf('__') === 0) return;   // переменная не задана на сервере
+        if (!inMedianApp()) return;                        // в браузере работает наш Web Push
+        window.OneSignal = window.OneSignal || [];
+        window.OneSignal.push(function () {
+            try {
+                window.OneSignal.init({ appId: appId, allowExternalIdAsReceipt: true });
+                if (currentUser) onesignalIdentify(currentUser);
+            } catch (e) {}
+        });
+        if (!document.getElementById('onesignal-sdk')) {
+            const s = document.createElement('script');
+            s.id = 'onesignal-sdk';
+            s.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
+            s.defer = true;
+            document.head.appendChild(s);
+        }
     }
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -1306,6 +1342,7 @@
 
     async function logout() {
         stopPing();
+        onesignalLogout();
         try { const fd = new FormData(); fd.append('token', currentToken); await fetch('/logout', { method: 'POST', body: fd }); } catch (e) {}
         try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe(); } catch(e) {}
         localStorage.removeItem('messenger_currentUser');
@@ -1328,6 +1365,7 @@
         if (myProfile.is_admin) document.getElementById('btn-admin').style.display = '';
         renderMyStatusLine();
         requestNotificationPermission();
+        initOneSignal();
         initWS();
         setupPushNotifications();
         await fetchUserGroups();
@@ -1894,7 +1932,7 @@
             if (!res.ok) { showToast('\u{26D4} Ошибка', data.detail || 'Не удалось отправить'); return; }
             document.getElementById('broadcast-title').value = '';
             document.getElementById('broadcast-body').value = '';
-            showToast('\u{1F4E2} Рассылка отправлена', `Онлайн получили: ${data.online || 0} · Push ушло: ${data.pushed || 0}`);
+            showToast('\u{1F4E2} Рассылка отправлена', `Онлайн получили: ${data.online || 0} · Web Push: ${data.pushed || 0} · OneSignal: ${data.onesignal ? 'да' : 'нет'}`);
         } catch (e) { showToast('\u{26D4} Ошибка', 'Не удалось отправить рассылку'); }
     }
 
