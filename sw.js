@@ -1,45 +1,63 @@
-// sw.js — сервис-воркер: ТОЛЬКО push-уведомления.
-// Кэширования нет вообще — страница всегда свежая с сервера.
+// sw.js — service worker Messenger: пуши + офлайн-кэш статики
+const CACHE = 'messenger-cache-v2';
 
-self.addEventListener('install', () => {
+self.addEventListener('install', (e) => {
     self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
-    // Уничтожаем ВСЕ старые кэши прошлых версий воркера
-    event.waitUntil(
+self.addEventListener('activate', (e) => {
+    e.waitUntil(
         caches.keys()
-            .then(keys => Promise.all(keys.map(k => caches.delete(k))))
+            .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
             .then(() => self.clients.claim())
     );
 });
 
-// ── PUSH: уведомление от сервера ──
+// ГЛАВНОЕ: пуш при закрытом/свёрнутом сайте → системное уведомление
 self.addEventListener('push', (event) => {
-    const data = event.data ? event.data.json() : {};
-    const title = data.title || '💬 Новое сообщение';
+    let data = {};
+    try { data = event.data ? event.data.json() : {}; } catch (e) { data = {}; }
+    const title = data.title || 'Messenger';
+    const body = data.body || 'Новое сообщение';
     const options = {
-        body: data.body || '',
-        icon: '/static/icon-192.png',
-        badge: '/static/icon-96.png',
-        tag: 'nexus-message',
+        body: body,
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        tag: data.tag || 'messenger',
         renotify: true,
-        data: { url: self.location.origin },
+        data: { url: data.url || '/' }
     };
     event.waitUntil(self.registration.showNotification(title, options));
 });
 
-// ── Клик по уведомлению → открыть приложение ──
+// Тап по уведомлению → открыть сайт/чат
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
+    const url = (event.notification.data && event.notification.data.url) || '/';
     event.waitUntil(
-        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
-            for (const client of clients) {
-                if (client.url && client.url.startsWith(event.notification.data.url) && 'focus' in client) {
-                    return client.focus();
-                }
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+            for (const client of list) {
+                if ('focus' in client) return client.focus();
             }
-            return self.clients.openWindow(event.notification.data.url);
+            return clients.openWindow(url);
         })
     );
+});
+
+// Сеть: статику кэшируем, страницы и API не кэшируем (чтобы не ломать приложение)
+self.addEventListener('fetch', (event) => {
+    const url = new URL(event.request.url);
+    if (event.request.method !== 'GET' || url.origin !== location.origin) return;
+    if (url.pathname.startsWith('/uploads/') || url.pathname.startsWith('/static/') || url.pathname.endsWith('.png')) {
+        event.respondWith(
+            caches.open(CACHE).then(cache =>
+                cache.match(event.request).then(hit =>
+                    hit || fetch(event.request).then(resp => {
+                        if (resp.ok) cache.put(event.request, resp.clone());
+                        return resp;
+                    }).catch(() => hit)
+                )
+            )
+        );
+    }
 });
