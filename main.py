@@ -7,6 +7,7 @@ import json
 import base64
 import asyncio
 import urllib.request
+import urllib.error
 from collections import deque
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
@@ -35,6 +36,9 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
 ONE_SIGNAL_APP_ID = os.environ.get("ONE_SIGNAL_APP_ID", "")
 ONE_SIGNAL_REST_KEY = os.environ.get("ONE_SIGNAL_REST_KEY", "")
 
+# Последний текст ошибки OneSignal (для диагностики)
+ONESIGNAL_LAST_ERROR = ""
+
 try:
     APP_VERSION = os.environ.get("RENDER_GIT_COMMIT", "") or str(int(os.path.getmtime("index.html")))
 except Exception:
@@ -43,37 +47,6 @@ except Exception:
 MSK = timezone(timedelta(hours=3))
 
 CONNECT_LOG = deque(maxlen=100)
-
-# ==========================================================
-#                    ПРИЛОЖЕНИЕ FASTAPI
-# ==========================================================
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    init_db()
-    yield
-
-app = FastAPI(lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
-USERNAME_RE = re.compile(r'^[A-Za-zА-Яа-яЁё0-9]{3,20}$')
-MAX_UPLOAD_SIZE = 25 * 1024 * 1024
-ALLOWED_UPLOAD_EXTENSIONS = {
-    '.jpg', '.jpeg', '.png', '.gif', '.webp',
-    '.mp3', '.wav', '.ogg', '.webm', '.m4a',
-    '.pdf', '.txt', '.zip', '.mp4', '.mov'
-}
-MESSAGES_PAGE_SIZE = 50
 
 # ==========================================================
 #          WEB PUSH (уведомления) — ключи в памяти
@@ -147,33 +120,49 @@ def send_push_to_user(username: str, title: str, body: str) -> None:
 # ==========================================================
 
 def _onesignal_post(payload: dict) -> bool:
+    """POST в OneSignal с авто-подбором схемы авторизации (Key= / Bearer)."""
+    global ONESIGNAL_LAST_ERROR
     if not ONE_SIGNAL_APP_ID or not ONE_SIGNAL_REST_KEY:
+        ONESIGNAL_LAST_ERROR = "нет переменных окружения"
         return False
+    payload = dict(payload)
+    payload.setdefault("app_id", ONE_SIGNAL_APP_ID)
     data = json.dumps(payload).encode()
-    req = urllib.request.Request(
-        "https://api.onesignal.com/notifications",
-        data=data,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Key={ONE_SIGNAL_REST_KEY}",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            ok = 200 <= resp.status < 300
-            if not ok:
-                print(f"[ONESIGNAL] статус {resp.status}")
-            return ok
-    except Exception as e:
-        print(f"[ONESIGNAL] ошибка: {e}")
-        return False
+    key = ONE_SIGNAL_REST_KEY.strip()
+    if key.startswith("os_v2_app_") or key.startswith("os_v2_"):
+        auth_variants = [f"Bearer {key}", f"Key={key}"]
+    else:
+        auth_variants = [f"Key={key}", f"Bearer {key}"]
+    for auth in auth_variants:
+        req = urllib.request.Request(
+            "https://api.onesignal.com/notifications",
+            data=data,
+            headers={"Content-Type": "application/json", "Authorization": auth},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                body = resp.read().decode()[:200]
+                print(f"[ONESIGNAL] ok status={resp.status} body={body}", flush=True)
+                ONESIGNAL_LAST_ERROR = ""
+                return 200 <= resp.status < 300
+        except urllib.error.HTTPError as e:
+            err_body = ""
+            try: err_body = e.read().decode()[:200]
+            except Exception: pass
+            print(f"[ONESIGNAL] HTTP {e.code} auth={auth.split(' ')[0]} body={err_body}", flush=True)
+            ONESIGNAL_LAST_ERROR = f"HTTP {e.code}: {err_body}"
+            continue
+        except Exception as e:
+            print(f"[ONESIGNAL] ошибка: {e}", flush=True)
+            ONESIGNAL_LAST_ERROR = str(e)
+            continue
+    return False
 
 
 def send_onesignal_push(username: str, title: str, body: str) -> bool:
     """Пуш конкретному пользователю (привязка по external user id = ник)."""
     return _onesignal_post({
-        "app_id": ONE_SIGNAL_APP_ID,
         "include_external_user_ids": [username],
         "headings": {"en": title},
         "contents": {"en": body},
@@ -183,7 +172,6 @@ def send_onesignal_push(username: str, title: str, body: str) -> bool:
 def send_onesignal_broadcast(title: str, body: str) -> bool:
     """Пуш всем устройствам приложения сразу."""
     return _onesignal_post({
-        "app_id": ONE_SIGNAL_APP_ID,
         "included_segments": ["All"],
         "headings": {"en": title},
         "contents": {"en": body},
@@ -915,6 +903,7 @@ async def admin_broadcast(
     title: str = Form(...),
     body: str = Form(...),
 ):
+    global ONESIGNAL_LAST_ERROR
     require_admin(token)
     title = title.strip()[:80] or "📢 Объявление"
     body = body.strip()[:300]
@@ -923,7 +912,6 @@ async def admin_broadcast(
     for uname in list(manager.active_connections.keys()):
         if await manager.send_to_user(payload, uname):
             online_count += 1
-    # Web Push (браузеры)
     conn = get_db()
     try:
         users = [r[0] for r in conn.execute(
@@ -933,10 +921,15 @@ async def admin_broadcast(
         conn.close()
     for uname in users:
         await asyncio.to_thread(send_push_to_user, uname, f"📢 {title}", body)
-    # OneSignal (приложение) — всем устройствам сразу
     onesignal_ok = await asyncio.to_thread(send_onesignal_broadcast, f"📢 {title}", body)
     print(f"[ADMIN] broadcast: online={online_count}, webpush={len(users)}, onesignal={onesignal_ok}", flush=True)
-    return {"status": "ok", "online": online_count, "pushed": len(users), "onesignal": onesignal_ok}
+    return {
+        "status": "ok",
+        "online": online_count,
+        "pushed": len(users),
+        "onesignal": onesignal_ok,
+        "onesignal_error": "" if onesignal_ok else ONESIGNAL_LAST_ERROR,
+    }
 
 # ==========================================================
 #                    ЧЁРНЫЙ СПИСОК
@@ -1277,6 +1270,15 @@ LEFT JOIN messages r ON m.reply_to = r.id
 WHERE m.chat_id = ? {extra}
 ORDER BY m.id DESC LIMIT ?
 '''
+
+USERNAME_RE = re.compile(r'^[A-Za-zА-Яа-яЁё0-9]{3,20}$')
+MAX_UPLOAD_SIZE = 25 * 1024 * 1024
+ALLOWED_UPLOAD_EXTENSIONS = {
+    '.jpg', '.jpeg', '.png', '.gif', '.webp',
+    '.mp3', '.wav', '.ogg', '.webm', '.m4a',
+    '.pdf', '.txt', '.zip', '.mp4', '.mov'
+}
+MESSAGES_PAGE_SIZE = 50
 
 
 @app.get("/messages/{user1}/{user2}")
