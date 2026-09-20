@@ -6,6 +6,7 @@ import sqlite3
 import json
 import base64
 import asyncio
+import urllib.request
 from collections import deque
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
@@ -29,6 +30,10 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
 
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
+
+# OneSignal (нативные пуши в приложение median.co)
+ONE_SIGNAL_APP_ID = os.environ.get("ONE_SIGNAL_APP_ID", "")
+ONE_SIGNAL_REST_KEY = os.environ.get("ONE_SIGNAL_REST_KEY", "")
 
 try:
     APP_VERSION = os.environ.get("RENDER_GIT_COMMIT", "") or str(int(os.path.getmtime("index.html")))
@@ -135,6 +140,60 @@ def send_push_to_user(username: str, title: str, body: str) -> None:
             conn.commit()
         finally:
             conn.close()
+
+
+# ==========================================================
+#          ONESIGNAL (нативные пуши в приложение)
+# ==========================================================
+
+def _onesignal_post(payload: dict) -> bool:
+    if not ONE_SIGNAL_APP_ID or not ONE_SIGNAL_REST_KEY:
+        return False
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        "https://api.onesignal.com/notifications",
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Key={ONE_SIGNAL_REST_KEY}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            ok = 200 <= resp.status < 300
+            if not ok:
+                print(f"[ONESIGNAL] статус {resp.status}")
+            return ok
+    except Exception as e:
+        print(f"[ONESIGNAL] ошибка: {e}")
+        return False
+
+
+def send_onesignal_push(username: str, title: str, body: str) -> bool:
+    """Пуш конкретному пользователю (привязка по external user id = ник)."""
+    return _onesignal_post({
+        "app_id": ONE_SIGNAL_APP_ID,
+        "include_external_user_ids": [username],
+        "headings": {"en": title},
+        "contents": {"en": body},
+    })
+
+
+def send_onesignal_broadcast(title: str, body: str) -> bool:
+    """Пуш всем устройствам приложения сразу."""
+    return _onesignal_post({
+        "app_id": ONE_SIGNAL_APP_ID,
+        "included_segments": ["All"],
+        "headings": {"en": title},
+        "contents": {"en": body},
+    })
+
+
+def notify_offline(username: str, title: str, body: str) -> None:
+    """Все каналы офлайн-доставки: Web Push (браузер) + OneSignal (приложение)."""
+    send_push_to_user(username, title, body)
+    send_onesignal_push(username, title, body)
 
 # ==========================================================
 #                        БАЗА ДАННЫХ
@@ -419,7 +478,7 @@ def get_group_member_usernames(group_id: str) -> List[str]:
     return [r[0] for r in rows]
 
 # ==========================================================
-#   МЕНЕДЖЕР WEBSOCKET: МУЛЬТИ-СОЕДИНЕНИЯ (все вкладки получают)
+#   МЕНЕДЖЕР WEBSOCKET: МУЛЬТИ-СОЕДИНЕНИЯ
 # ==========================================================
 
 class ConnectionManager:
@@ -485,6 +544,7 @@ def get_index():
     with open("index.html", "r", encoding="utf-8") as f:
         html = f.read()
     html = html.replace("__APP_VERSION__", APP_VERSION)
+    html = html.replace("__ONESIGNAL_APP_ID__", ONE_SIGNAL_APP_ID)
     return Response(
         content=html,
         media_type="text/html; charset=utf-8",
@@ -863,6 +923,7 @@ async def admin_broadcast(
     for uname in list(manager.active_connections.keys()):
         if await manager.send_to_user(payload, uname):
             online_count += 1
+    # Web Push (браузеры)
     conn = get_db()
     try:
         users = [r[0] for r in conn.execute(
@@ -872,8 +933,10 @@ async def admin_broadcast(
         conn.close()
     for uname in users:
         await asyncio.to_thread(send_push_to_user, uname, f"📢 {title}", body)
-    print(f"[ADMIN] broadcast: online={online_count}, push={len(users)}", flush=True)
-    return {"status": "ok", "online": online_count, "pushed": len(users)}
+    # OneSignal (приложение) — всем устройствам сразу
+    onesignal_ok = await asyncio.to_thread(send_onesignal_broadcast, f"📢 {title}", body)
+    print(f"[ADMIN] broadcast: online={online_count}, webpush={len(users)}, onesignal={onesignal_ok}", flush=True)
+    return {"status": "ok", "online": online_count, "pushed": len(users), "onesignal": onesignal_ok}
 
 # ==========================================================
 #                    ЧЁРНЫЙ СПИСОК
@@ -1354,7 +1417,7 @@ async def websocket_endpoint(
                         ok = await manager.send_to_user(msg_payload, member_user)
                         if not ok:
                             await asyncio.to_thread(
-                                send_push_to_user, member_user,
+                                notify_offline, member_user,
                                 f"👥 {username}", content[:100],
                             )
                 else:
@@ -1363,7 +1426,7 @@ async def websocket_endpoint(
                         ok = await manager.send_to_user(msg_payload, target)
                         if not ok:
                             await asyncio.to_thread(
-                                send_push_to_user, target,
+                                notify_offline, target,
                                 f"💬 {username}", content[:100],
                             )
 
