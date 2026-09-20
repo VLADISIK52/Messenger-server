@@ -598,6 +598,7 @@
         <div class="settings-row"><span>&#x1F4E6; Компактный режим</span><label class="switch"><input type="checkbox" id="compact-switch"><span class="slider"></span></label></div>
         <div class="settings-row"><span>&#x1F50B; Эко-режим</span><label class="switch"><input type="checkbox" id="eco-switch"><span class="slider"></span></label></div>
         <div class="settings-section">Уведомления</div>
+        <div class="settings-row" onclick="checkNotifications()"><span>&#x1F514; Уведомления</span><span class="settings-chevron" id="notif-status">проверить</span></div>
         <div class="settings-row"><span>&#x1F50A; Звук сообщений</span><label class="switch"><input type="checkbox" id="sound-switch"><span class="slider"></span></label></div>
         <div class="settings-row"><span>&#x1F4F3; Вибрация</span><label class="switch"><input type="checkbox" id="vibro-switch"><span class="slider"></span></label></div>
         <div class="settings-row"><span>&#x1F441; Превью текста</span><label class="switch"><input type="checkbox" id="preview-switch"><span class="slider"></span></label></div>
@@ -1034,6 +1035,8 @@
         document.getElementById('settings-status').innerText = myProfile.status_text || 'в сети';
         document.getElementById('settings-version').innerText = APP_VERSION;
         setSwitch('ghost-switch', !!myProfile.hide_online);
+        const ns = document.getElementById('notif-status');
+        if (ns) ns.innerText = ('Notification' in window) ? (Notification.permission === 'granted' ? 'включены' : Notification.permission === 'denied' ? 'запрещено' : 'не включено') : 'не поддерживается';
         applySettings();
         openModal('modal-settings');
     }
@@ -1063,6 +1066,32 @@
         } catch (e) {}
     }
     function vibrateNow() { if (settings.vibro && navigator.vibrate) navigator.vibrate(120); }
+    async function checkNotifications() {
+        const statusEl = document.getElementById('notif-status');
+        if (!('Notification' in window)) { statusEl.innerText = 'не поддерживается'; return; }
+        if (Notification.permission === 'default') {
+            const perm = await Notification.requestPermission();
+            if (perm !== 'granted') { statusEl.innerText = 'нет разрешения'; showToast('\u{1F515} Нет разрешения', 'Разреши уведомления в браузере и в настройках телефона'); return; }
+        }
+        if (Notification.permission === 'denied') { statusEl.innerText = 'запрещено в настройках'; showToast('\u{1F515} Уведомления запрещены', 'Разреши их в настройках сайта (значок замка в адресной строке)'); return; }
+        let sub = null;
+        try {
+            const reg = await navigator.serviceWorker.ready;
+            sub = await reg.pushManager.getSubscription();
+            if (!sub) {
+                const keyRes = await fetch('/push/publickey');
+                const { publicKey } = await keyRes.json();
+                sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
+                const form = new FormData();
+                form.append('token', currentToken);
+                form.append('subscription', JSON.stringify(sub.toJSON()));
+                await fetch('/push/subscribe', { method: 'POST', body: form });
+            }
+        } catch (e) { statusEl.innerText = 'ошибка подписки'; return; }
+        statusEl.innerText = 'включены \u{2713}';
+        try { new Notification('\u{1F514} Уведомления включены', { body: 'Сообщения придут даже с закрытым сайтом', icon: '/icon-192.png' }); } catch (e) {}
+        showToast('\u{1F514} Готово', 'Подписка активна: пуши придут даже с закрытым сайтом');
+    }
     async function exportCurrentChat() {
         if (!activeChatTarget) { showToast('\u{26A0}\u{FE0F} Нет чата', 'Открой чат, чтобы экспортировать'); return; }
         let all = []; let before = null;
@@ -1382,7 +1411,7 @@
         if (document.hidden && "Notification" in window && Notification.permission === "granted") {
             try {
                 const n = new Notification('@' + data.sender + (data.is_group ? ` (${chatTitle})` : ''), {
-                    body: previewText, icon: '/static/icon-192.png', badge: '/static/icon-96.png', tag: chatKey, renotify: true,
+                    body: previewText, icon: '/icon-192.png', badge: '/icon-96.png', tag: chatKey, renotify: true,
                 });
                 n.onclick = () => { window.focus(); goToChat(); n.close(); };
             } catch (e) {}
@@ -1443,7 +1472,7 @@
                 playBeep(); vibrateNow();
                 if (document.hidden && "Notification" in window && Notification.permission === "granted") {
                     try {
-                        const n = new Notification(t, { body: b, icon: '/static/icon-192.png', badge: '/static/icon-96.png', tag: 'broadcast', renotify: true });
+                        const n = new Notification(t, { body: b, icon: '/icon-192.png', badge: '/icon-96.png', tag: 'broadcast', renotify: true });
                         n.onclick = () => { window.focus(); n.close(); };
                     } catch (e) {}
                 }
