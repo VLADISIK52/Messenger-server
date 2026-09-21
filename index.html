@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Soro:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
         button, a, .chat-item, .attach-item, .attach-item *, .sticker-item, .wp-swatch, .accent-swatch, .seg button, .btn-settings, .btn-logout, .btn-header-icon, .btn-search-nav, .btn-delete-chat, .ban-btn, .btn-remove-member, .modal-close, .btn-cancel-reply, .btn-cancel-rec, .voice-play, .voice-tr-btn, .msg-video-circle, .msg-img, .user-header-left, .chat-header-info {
@@ -874,6 +874,7 @@
     let settings = { sound: true, vibro: true, preview: true, fontsize: 14, bubble: 'round', enter: true, accent: '', compact: false };
     let audioCtx = null;
     let photoState = null;
+    let webPushActive = false;
     let mediaRecorder = null, recordedChunks = [], recordingSeconds = 0, recordingTimerHandle = null, recordingCancelled = false;
     let videoRecorder = null, videoChunks = [], videoStream = null, videoSeconds = 0, videoTimerHandle = null, videoCancelled = false;
     let replyTarget = null, typingSendTimer = null, typingUsersInChat = {}, searchMatches = [], searchCurrentIndex = -1;
@@ -946,7 +947,7 @@
     function initOneSignal() {
         const appId = ONESIGNAL_APP_ID;
         if (!appId || appId.indexOf('__') === 0) return;   // переменная не задана на сервере
-        if (!inMedianApp()) return;                        // в браузере работает наш Web Push
+        if (webPushActive) return;                         // в браузере уже работает наш Web Push
         window.OneSignal = window.OneSignal || [];
         window.OneSignal.push(function () {
             try {
@@ -1365,9 +1366,9 @@
         if (myProfile.is_admin) document.getElementById('btn-admin').style.display = '';
         renderMyStatusLine();
         requestNotificationPermission();
-        initOneSignal();
         initWS();
-        setupPushNotifications();
+        await setupPushNotifications();
+        initOneSignal();
         await fetchUserGroups();
         updateOnlineStatus();
         setInterval(updateOnlineStatus, 10000);
@@ -1412,6 +1413,7 @@
             form.append('token', currentToken);
             form.append('subscription', JSON.stringify(sub.toJSON()));
             await fetch('/push/subscribe', { method: 'POST', body: form });
+            webPushActive = true;
         } catch (e) { console.warn('[PUSH] подписка пропущена:', e); }
     }
 
