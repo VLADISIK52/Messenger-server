@@ -952,21 +952,16 @@
         const appId = ONESIGNAL_APP_ID;
         if (!appId || appId.indexOf('__') === 0) return;   // переменная не задана на сервере
         if (webPushActive) return;                         // браузер с рабочим Web Push
-        window.OneSignal = window.OneSignal || [];
-        window.OneSignal.push(function () {
-            try {
-                window.OneSignal.init({ appId: appId, allowExternalIdAsReceipt: true });
-                onesignalIdentify(currentUser);
-            } catch (e) {}
-        });
-        setTimeout(() => onesignalIdentify(currentUser), 3000);
-        setTimeout(() => onesignalIdentify(currentUser), 8000);
-        if (!document.getElementById('onesignal-sdk')) {
-            const s = document.createElement('script');
-            s.id = 'onesignal-sdk';
-            s.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
-            s.defer = true;
-            document.head.appendChild(s);
+        // В приложении работаем ТОЛЬКО с нативным мостом OneSignal, Web SDK не грузим
+        if (window.OneSignal && typeof window.OneSignal.push === 'function') {
+            window.OneSignal.push(function () {
+                try {
+                    if (window.OneSignal.init) window.OneSignal.init({ appId: appId });
+                    onesignalIdentify(currentUser);
+                } catch (e) {}
+            });
+            setTimeout(() => onesignalIdentify(currentUser), 3000);
+            setTimeout(() => onesignalIdentify(currentUser), 8000);
         }
     }
 
@@ -1079,7 +1074,7 @@
         document.getElementById('settings-version').innerText = APP_VERSION;
         setSwitch('ghost-switch', !!myProfile.hide_online);
         const ns = document.getElementById('notif-status');
-        if (ns) ns.innerText = ('Notification' in window) ? (Notification.permission === 'granted' ? 'включены' : Notification.permission === 'denied' ? 'запрещено' : 'не включено') : 'не поддерживается';
+        if (ns) ns.innerText = isWebView() ? 'нативные (OneSignal)' : (('Notification' in window) ? (Notification.permission === 'granted' ? 'включены' : Notification.permission === 'denied' ? 'запрещено' : 'не включено') : 'не поддерживается');
         applySettings();
         openModal('modal-settings');
     }
@@ -1111,6 +1106,7 @@
     function vibrateNow() { if (settings.vibro && navigator.vibrate) navigator.vibrate(120); }
     async function checkNotifications() {
         const statusEl = document.getElementById('notif-status');
+        if (isWebView()) { statusEl.innerText = 'нативные (OneSignal)'; showToast('\u{1F514} Нативные пуши', 'Уведомления в приложении идут через OneSignal (нативный сервис)'); return; }
         if (!('Notification' in window)) { statusEl.innerText = 'не поддерживается'; return; }
         if (Notification.permission === 'default') {
             const perm = await Notification.requestPermission();
@@ -1333,8 +1329,8 @@
             } else if (res.status === 401) {
                 errorEl.innerText = 'Неверный пароль'; btn.disabled = false; btn.innerText = 'Войти'; return;
             } else if (res.status === 403) {
-                const err = await res.json().catch(() => ({})); errorEl.innerText = err.detail || 'Доступ запрещён'; btn.disabled = false; btn.innerText = 'Войти'; return;
-            } else if (!res.ok) {
+                const err = await res.json().catch(() => ({})); errorEl.innerText = err.detail || 'Доступ запрещён'; btn.disabled = false; btn.innerText = 'Войти'; return; }
+            else if (!res.ok) {
                 const err = await res.json().catch(() => ({})); errorEl.innerText = err.detail || 'Что-то пошло не так'; btn.disabled = false; btn.innerText = 'Войти'; return;
             }
             const data = await res.json();
