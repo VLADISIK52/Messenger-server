@@ -929,11 +929,15 @@
         return 'был(а) ' + String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + ' в ' + hh;
     }
 
-    // ── OneSignal: нативные пуши внутри приложения median.co ──
+    // ── OneSignal: нативные пуши внутри приложения (WebView) ──
+    function isWebView() {
+        return /\bwv\b/.test(navigator.userAgent || '');
+    }
     function inMedianApp() {
-        return !!(window.median || window.gonative);
+        return isWebView() || !!(window.median || window.gonative);
     }
     function onesignalIdentify(user) {
+        if (!user) return;
         try {
             if (window.OneSignal && window.OneSignal.login) window.OneSignal.login(user);
             else if (window.OneSignal && window.OneSignal.setExternalUserId) window.OneSignal.setExternalUserId(user);
@@ -947,14 +951,16 @@
     function initOneSignal() {
         const appId = ONESIGNAL_APP_ID;
         if (!appId || appId.indexOf('__') === 0) return;   // переменная не задана на сервере
-        if (webPushActive) return;                         // в браузере уже работает наш Web Push
+        if (webPushActive) return;                         // браузер с рабочим Web Push
         window.OneSignal = window.OneSignal || [];
         window.OneSignal.push(function () {
             try {
                 window.OneSignal.init({ appId: appId, allowExternalIdAsReceipt: true });
-                if (currentUser) onesignalIdentify(currentUser);
+                onesignalIdentify(currentUser);
             } catch (e) {}
         });
+        setTimeout(() => onesignalIdentify(currentUser), 3000);
+        setTimeout(() => onesignalIdentify(currentUser), 8000);
         if (!document.getElementById('onesignal-sdk')) {
             const s = document.createElement('script');
             s.id = 'onesignal-sdk';
@@ -1389,6 +1395,7 @@
     }
 
     async function setupPushNotifications() {
+        if (isWebView()) return;   // в приложении Web Push не нужен — там OneSignal
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
         try {
             const reg = await Promise.race([
