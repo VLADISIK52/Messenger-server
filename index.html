@@ -952,17 +952,23 @@
         const appId = ONESIGNAL_APP_ID;
         if (!appId || appId.indexOf('__') === 0) return;   // переменная не задана на сервере
         if (webPushActive) return;                         // браузер с рабочим Web Push
-        // В приложении работаем ТОЛЬКО с нативным мостом OneSignal, Web SDK не грузим
-        if (window.OneSignal && typeof window.OneSignal.push === 'function') {
-            window.OneSignal.push(function () {
-                try {
-                    if (window.OneSignal.init) window.OneSignal.init({ appId: appId });
-                    onesignalIdentify(currentUser);
-                } catch (e) {}
-            });
-            setTimeout(() => onesignalIdentify(currentUser), 3000);
-            setTimeout(() => onesignalIdentify(currentUser), 8000);
-        }
+        // В приложении: ждём появления нативного моста OneSignal до 30 секунд
+        let tries = 0;
+        const timer = setInterval(() => {
+            tries++;
+            if (window.OneSignal && typeof window.OneSignal.push === 'function') {
+                clearInterval(timer);
+                window.OneSignal.push(function () {
+                    try {
+                        if (window.OneSignal.init) window.OneSignal.init({ appId: appId });
+                        onesignalIdentify(currentUser);
+                    } catch (e) {}
+                });
+                setTimeout(() => onesignalIdentify(currentUser), 3000);
+                setTimeout(() => onesignalIdentify(currentUser), 8000);
+            }
+            if (tries > 30) clearInterval(timer);
+        }, 1000);
     }
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -1329,8 +1335,8 @@
             } else if (res.status === 401) {
                 errorEl.innerText = 'Неверный пароль'; btn.disabled = false; btn.innerText = 'Войти'; return;
             } else if (res.status === 403) {
-                const err = await res.json().catch(() => ({})); errorEl.innerText = err.detail || 'Доступ запрещён'; btn.disabled = false; btn.innerText = 'Войти'; return; }
-            else if (!res.ok) {
+                const err = await res.json().catch(() => ({})); errorEl.innerText = err.detail || 'Доступ запрещён'; btn.disabled = false; btn.innerText = 'Войти'; return;
+            } else if (!res.ok) {
                 const err = await res.json().catch(() => ({})); errorEl.innerText = err.detail || 'Что-то пошло не так'; btn.disabled = false; btn.innerText = 'Войти'; return;
             }
             const data = await res.json();
