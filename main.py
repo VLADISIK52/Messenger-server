@@ -36,7 +36,6 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
 ONE_SIGNAL_APP_ID = os.environ.get("ONE_SIGNAL_APP_ID", "")
 ONE_SIGNAL_REST_KEY = os.environ.get("ONE_SIGNAL_REST_KEY", "")
 ONESIGNAL_LAST_ERROR = ""
-ONESIGNAL_CHANNEL_ID = "8102e2e3-0cc5-4622-8d51-377c155100a1"
 
 try:
     APP_VERSION = os.environ.get("RENDER_GIT_COMMIT", "") or str(int(os.path.getmtime("index.html")))
@@ -174,7 +173,6 @@ def send_onesignal_push(username: str, title: str, body: str) -> bool:
         "include_external_user_ids": [username],
         "headings": {"en": title},
         "contents": {"en": body},
-        "android_channel_id": ONESIGNAL_CHANNEL_ID,
     })
 
 
@@ -184,7 +182,6 @@ def send_onesignal_broadcast(title: str, body: str) -> bool:
         "included_segments": ["All"],
         "headings": {"en": title},
         "contents": {"en": body},
-        "android_channel_id": ONESIGNAL_CHANNEL_ID,
     })
 
 
