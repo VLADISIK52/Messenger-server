@@ -55,7 +55,7 @@ ALLOWED_UPLOAD_EXTENSIONS = {
 MESSAGES_PAGE_SIZE = 50
 
 # ==========================================================
-#          WEB PUSH (уведомления браузера)
+#          WEB PUSH (уведомления браузера / PWA / TWA)
 # ==========================================================
 from pywebpush import webpush, WebPushException
 from py_vapid import Vapid
@@ -63,20 +63,48 @@ from cryptography.hazmat.primitives.serialization import (
     Encoding, PublicFormat, PrivateFormat, NoEncryption,
 )
 
-_VAPID = Vapid()
-_VAPID.generate_keys()
-_VAPID_PRIVATE_PEM = _VAPID.private_key.private_bytes(
-    Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
-).decode()
-_VAPID_PUBLIC_RAW = _VAPID.public_key.public_bytes(
-    Encoding.DER, PublicFormat.SubjectPublicKeyInfo
-)[-65:]
-_VAPID_PUBLIC_B64 = base64.urlsafe_b64encode(_VAPID_PUBLIC_RAW).decode().rstrip("=")
 VAPID_CLAIMS = {"sub": "mailto:admin@nexus-messenger.local"}
+
+# Ключ VAPID создаётся ОДИН раз и хранится в базе, чтобы не гулять
+# между перезапусками/просыпаниями сервера (иначе пуши тихо отваливаются).
+_VAPID_MEM = None  # (private_pem, public_b64)
+
+
+def _load_or_make_vapid(conn: sqlite3.Connection):
+    row = conn.execute("SELECT private_pem, public_b64 FROM vapid WHERE id = 1").fetchone()
+    if row:
+        return row[0], row[1]
+    v = Vapid()
+    v.generate_keys()
+    pem = v.private_key.private_bytes(
+        Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
+    ).decode()
+    raw = v.public_key.public_bytes(
+        Encoding.DER, PublicFormat.SubjectPublicKeyInfo
+    )[-65:]
+    pub = base64.urlsafe_b64encode(raw).decode().rstrip("=")
+    conn.execute(
+        "INSERT OR REPLACE INTO vapid (id, private_pem, public_b64) VALUES (1, ?, ?)",
+        (pem, pub),
+    )
+    conn.commit()
+    return pem, pub
+
+
+def get_vapid_pair():
+    global _VAPID_MEM
+    if _VAPID_MEM:
+        return _VAPID_MEM
+    conn = get_db()
+    try:
+        _VAPID_MEM = _load_or_make_vapid(conn)
+    finally:
+        conn.close()
+    return _VAPID_MEM
 
 
 def get_vapid_public_b64() -> str:
-    return _VAPID_PUBLIC_B64
+    return get_vapid_pair()[1]
 
 
 def send_push_to_user(username: str, title: str, body: str) -> None:
@@ -90,6 +118,7 @@ def send_push_to_user(username: str, title: str, body: str) -> None:
         conn.close()
     if not subs:
         return
+    private_pem, _ = get_vapid_pair()
     payload = json.dumps({"title": title, "body": body})
     dead = []
     for endpoint, p256dh, auth in subs:
@@ -100,7 +129,7 @@ def send_push_to_user(username: str, title: str, body: str) -> None:
                     "keys": {"p256dh": p256dh, "auth": auth},
                 },
                 data=payload,
-                vapid_private_key=_VAPID_PRIVATE_PEM,
+                vapid_private_key=private_pem,
                 vapid_claims=VAPID_CLAIMS,
             )
         except WebPushException as e:
@@ -287,8 +316,18 @@ def init_db() -> None:
             PRIMARY KEY (blocker, blocked)
         )
     ''')
+    # Постоянный VAPID-ключ (создаётся один раз, переживает рестарты сервера)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS vapid (
+            id          INTEGER PRIMARY KEY CHECK (id = 1),
+            private_pem TEXT NOT NULL,
+            public_b64  TEXT NOT NULL
+        )
+    ''')
     conn.commit()
     conn.close()
+    # Прогреваем ключ при старте, чтобы не создавать его в момент первого пуша
+    get_vapid_pair()
 
 
 def get_chat_id(user1: str, user2: str) -> str:
