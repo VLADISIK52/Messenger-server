@@ -32,10 +32,9 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
 
-# OneSignal (нативные пуши в приложение median.co)
-ONE_SIGNAL_APP_ID = os.environ.get("ONE_SIGNAL_APP_ID", "")
-ONE_SIGNAL_REST_KEY = os.environ.get("ONE_SIGNAL_REST_KEY", "")
-ONESIGNAL_LAST_ERROR = ""
+# Firebase Cloud Messaging (нативные пуши APK)
+FIREBASE_SERVICE_ACCOUNT_JSON = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "")
+PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "")
 
 try:
     APP_VERSION = os.environ.get("RENDER_GIT_COMMIT", "") or str(int(os.path.getmtime("index.html")))
@@ -65,9 +64,7 @@ from cryptography.hazmat.primitives.serialization import (
 
 VAPID_CLAIMS = {"sub": "mailto:admin@nexus-messenger.local"}
 
-# Ключ VAPID создаётся ОДИН раз и хранится в базе, чтобы не гулять
-# между перезапусками/просыпаниями сервера (иначе пуши тихо отваливаются).
-_VAPID_MEM = None  # (private_pem, public_b64)
+_VAPID_MEM = None
 
 
 def _load_or_make_vapid(conn: sqlite3.Connection):
@@ -107,7 +104,8 @@ def get_vapid_public_b64() -> str:
     return get_vapid_pair()[1]
 
 
-def send_push_to_user(username: str, title: str, body: str) -> None:
+def send_web_push_to_user(username: str, title: str, body: str) -> None:
+    """Отправка через Web Push (работает в Chrome/PWA/TWA)."""
     conn = get_db()
     try:
         subs = conn.execute(
@@ -133,12 +131,12 @@ def send_push_to_user(username: str, title: str, body: str) -> None:
                 vapid_claims=VAPID_CLAIMS,
             )
         except WebPushException as e:
-            print(f"[PUSH] ошибка для {username}: {e}")
+            print(f"[WEBPUSH] ошибка для {username}: {e}")
             resp = getattr(e, "response", None)
             if resp is not None and getattr(resp, "status_code", 0) in (404, 410):
                 dead.append(endpoint)
         except Exception as e:
-            print(f"[PUSH] неожиданная ошибка: {e}")
+            print(f"[WEBPUSH] неожиданная ошибка: {e}")
     if dead:
         conn = get_db()
         try:
@@ -151,72 +149,156 @@ def send_push_to_user(username: str, title: str, body: str) -> None:
 
 
 # ==========================================================
-#          ONESIGNAL (нативные пуши приложения)
+#          FIREBASE CLOUD MESSAGING (FCM)
 # ==========================================================
 
-def _onesignal_post(payload: dict) -> bool:
-    global ONESIGNAL_LAST_ERROR
-    if not ONE_SIGNAL_APP_ID or not ONE_SIGNAL_REST_KEY:
-        ONESIGNAL_LAST_ERROR = "нет переменных окружения"
-        return False
-    payload = dict(payload)
-    payload.setdefault("app_id", ONE_SIGNAL_APP_ID)
-    data = json.dumps(payload).encode()
-    key = ONE_SIGNAL_REST_KEY.strip()
-    if key.startswith("os_v2_app_") or key.startswith("os_v2_"):
-        auth_variants = [f"Bearer {key}", f"Key={key}"]
-    else:
-        auth_variants = [f"Key={key}", f"Bearer {key}"]
-    for auth in auth_variants:
+ACCESS_TOKEN_CACHE = {"token": "", "expires_at": 0}
+
+
+def get_firebase_access_token() -> Optional[str]:
+    """Получает OAuth2 access token для Google APIs используя Service Account."""
+    now = int(datetime.now(timezone.utc).timestamp())
+    if ACCESS_TOKEN_CACHE["token"] and ACCESS_TOKEN_CACHE["expires_at"] > now + 60:
+        return ACCESS_TOKEN_CACHE["token"]
+
+    if not FIREBASE_SERVICE_ACCOUNT_JSON:
+        print("[FCM] Нет переменной окружения FIREBASE_SERVICE_ACCOUNT_JSON")
+        return None
+
+    try:
+        sa_data = json.loads(FIREBASE_SERVICE_ACCOUNT_JSON)
+        from jwt import encode  # pip install PyJWT[crypto]
+
+        headers = {'alg': 'RS256', 'typ': 'JWT'}
+        claims = {
+            'iss': sa_data['client_email'],
+            'scope': 'https://www.googleapis.com/auth/firebase.messaging',
+            'aud': 'https://oauth2.googleapis.com/token',
+            'iat': now,
+            'exp': now + 3600
+        }
+
+        signing_key = sa_data['private_key']
+        encoded_jwt = encode(claims, signing_key, algorithm='RS256', headers=headers)
+
+        data = {
+            'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+            'assertion': encoded_jwt
+        }
+
         req = urllib.request.Request(
-            "https://api.onesignal.com/notifications",
-            data=data,
-            headers={"Content-Type": "application/json", "Authorization": auth},
-            method="POST",
+            'https://oauth2.googleapis.com/token',
+            data=json.dumps(data).encode(),
+            headers={'Content-Type': 'application/json'},
+            method='POST'
         )
+
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read().decode())
+            token = result['access_token']
+            expires_in = result.get('expires_in', 3600)
+
+            ACCESS_TOKEN_CACHE["token"] = token
+            ACCESS_TOKEN_CACHE["expires_at"] = now + expires_in
+
+            print(f"[FCM] Access token получен, срок жизни {expires_in}s")
+            return token
+
+    except ImportError:
+        print("[FCM] Библиотека PyJWT не установлена. Добавьте 'PyJWT[crypto]' в requirements.txt")
+        return None
+    except Exception as e:
+        print(f"[FCM] Ошибка получения токена: {e}")
+        return None
+
+
+def send_fcm_push(username: str, title: str, body: str) -> bool:
+    """Отправка пуша через FCM HTTP v1 API."""
+    if not PROJECT_ID:
+        print("[FCM] Нет PROJECT_ID")
+        return False
+
+    token = get_firebase_access_token()
+    if not token:
+        return False
+
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT fcm_token FROM users WHERE username = ? AND fcm_token IS NOT NULL AND fcm_token != ''",
+            (username,)
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        print(f"[FCM] У пользователя {username} нет сохраненных FCM токенов")
+        return False
+
+    success_count = 0
+    for (device_token,) in rows:
+        url = f"https://fcm.googleapis.com/v1/projects/{PROJECT_ID}/messages:send"
+
+        message_payload = {
+            "message": {
+                "token": device_token,
+                "notification": {
+                    "title": title,
+                    "body": body
+                },
+                "android": {
+                    "priority": "HIGH",
+                    "notification": {
+                        "channel_id": "messenger_default",
+                        "sound": "default"
+                    }
+                }
+            }
+        }
+
         try:
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(message_payload).encode(),
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json"
+                },
+                method="POST"
+            )
+
             with urllib.request.urlopen(req, timeout=10) as resp:
-                body = resp.read().decode()[:200]
-                print(f"[ONESIGNAL] ok status={resp.status} body={body}", flush=True)
-                ONESIGNAL_LAST_ERROR = ""
-                return True
+                print(f"[FCM] Пуш успешно отправлен на {device_token[:10]}...")
+                success_count += 1
+
         except urllib.error.HTTPError as e:
             err_body = ""
             try:
                 err_body = e.read().decode()[:200]
             except Exception:
                 pass
-            print(f"[ONESIGNAL] HTTP {e.code} auth={auth.split(' ')[0]} body={err_body}", flush=True)
-            ONESIGNAL_LAST_ERROR = f"HTTP {e.code}: {err_body}"
-            continue
+            print(f"[FCM] HTTP Error {e.code} для {device_token[:10]}...: {err_body}")
         except Exception as e:
-            print(f"[ONESIGNAL] ошибка: {e}", flush=True)
-            ONESIGNAL_LAST_ERROR = str(e)
-            continue
-    return False
+            print(f"[FCM] Ошибка отправки на {device_token[:10]}...: {e}")
 
-
-def send_onesignal_push(username: str, title: str, body: str) -> bool:
-    """Пуш конкретному пользователю (привязка по external user id = ник)."""
-    return _onesignal_post({
-        "include_external_user_ids": [username],
-        "headings": {"en": title},
-        "contents": {"en": body},
-    })
-
-
-def send_onesignal_broadcast(title: str, body: str) -> bool:
-    """Пуш всем устройствам приложения сразу."""
-    return _onesignal_post({
-        "included_segments": ["All"],
-        "headings": {"en": title},
-        "contents": {"en": body},
-    })
+    return success_count > 0
 
 
 def notify_offline(username: str, title: str, body: str) -> None:
-    send_push_to_user(username, title, body)
-    send_onesignal_push(username, title, body)
+    """Главный диспетчер уведомлений при закрытом приложении."""
+    # 1. Пробуем Web Push (браузер/PWA/TWA)
+    try:
+        send_web_push_to_user(username, title, body)
+    except Exception as e:
+        print(f"[NOTIFY] Web Push failed: {e}")
+
+    # 2. Пробуем FCM (нативный APK через median plugin)
+    try:
+        fcm_sent = send_fcm_push(username, title, body)
+        if not fcm_sent:
+            print(f"[NOTIFY] FCM skipped or failed for {username}")
+    except Exception as e:
+        print(f"[NOTIFY] FCM error: {e}")
 
 
 # ==========================================================
@@ -240,12 +322,20 @@ def safe_alter(cursor: sqlite3.Cursor, sql: str) -> None:
 def init_db() -> None:
     conn = get_db()
     cursor = conn.cursor()
+    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             username      TEXT PRIMARY KEY,
             password_hash TEXT,
             avatar_url    TEXT DEFAULT '/uploads/default.png',
-            bio           TEXT DEFAULT ''
+            bio           TEXT DEFAULT '',
+            status_text   TEXT DEFAULT '',
+            created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_seen     DATETIME,
+            banned        INTEGER DEFAULT 0,
+            theme         TEXT DEFAULT 'dark',
+            hide_online   INTEGER DEFAULT 0,
+            fcm_token     TEXT DEFAULT ''
         )
     ''')
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''")
@@ -255,6 +345,9 @@ def init_db() -> None:
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN last_seen DATETIME")
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0")
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN theme TEXT DEFAULT 'dark'")
+    safe_alter(cursor, "ALTER TABLE users ADD COLUMN hide_online INTEGER DEFAULT 0")
+    safe_alter(cursor, "ALTER TABLE users ADD COLUMN fcm_token TEXT DEFAULT ''")
+    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sessions (
             token      TEXT PRIMARY KEY,
@@ -278,6 +371,7 @@ def init_db() -> None:
     safe_alter(cursor, "ALTER TABLE messages ADD COLUMN edited_at DATETIME")
     safe_alter(cursor, "ALTER TABLE messages ADD COLUMN duration INTEGER")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id, id)")
+    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS reactions (
             message_id INTEGER NOT NULL,
@@ -316,7 +410,6 @@ def init_db() -> None:
             PRIMARY KEY (blocker, blocked)
         )
     ''')
-    # Постоянный VAPID-ключ (создаётся один раз, переживает рестарты сервера)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS vapid (
             id          INTEGER PRIMARY KEY CHECK (id = 1),
@@ -324,9 +417,9 @@ def init_db() -> None:
             public_b64  TEXT NOT NULL
         )
     ''')
+    
     conn.commit()
     conn.close()
-    # Прогреваем ключ при старте, чтобы не создавать его в момент первого пуша
     get_vapid_pair()
 
 
@@ -604,7 +697,8 @@ def get_index():
     with open("index.html", "r", encoding="utf-8") as f:
         html = f.read()
     html = html.replace("__APP_VERSION__", APP_VERSION)
-    html = html.replace("__ONESIGNAL_APP_ID__", ONE_SIGNAL_APP_ID)
+    # OneSignal больше не нужен, но оставляем заглушку для совместимости старых сборок
+    html = html.replace("__ONESIGNAL_APP_ID__", "") 
     return Response(
         content=html,
         media_type="text/html; charset=utf-8",
@@ -697,6 +791,26 @@ async def push_subscribe(token: str = Form(...), subscription: str = Form(...)):
             (username, endpoint, p256dh, auth),
         )
         conn.commit()
+    finally:
+        conn.close()
+    return {"status": "ok"}
+
+
+@app.post("/fcm/register")
+async def register_fcm_token(token: str = Form(...), fcm_token: str = Form(...)):
+    """Сохраняет FCM токен устройства для текущего пользователя."""
+    username = require_auth(token)
+    if not fcm_token.strip():
+        raise HTTPException(status_code=400, detail="Пустой FCM токен")
+        
+    conn = get_db()
+    try:
+        conn.execute(
+            "UPDATE users SET fcm_token = ? WHERE username = ?",
+            (fcm_token.strip(), username)
+        )
+        conn.commit()
+        print(f"[FCM] Токен сохранен для {username}: {fcm_token[:10]}...")
     finally:
         conn.close()
     return {"status": "ok"}
@@ -992,15 +1106,25 @@ async def admin_broadcast(
     finally:
         conn.close()
     for uname in users:
-        await asyncio.to_thread(send_push_to_user, uname, f"📢 {title}", body)
-    onesignal_ok = await asyncio.to_thread(send_onesignal_broadcast, f"📢 {title}", body)
-    print(f"[ADMIN] broadcast: online={online_count}, webpush={len(users)}, onesignal={onesignal_ok}", flush=True)
+        await asyncio.to_thread(send_web_push_to_user, uname, f"📢 {title}", body)
+    
+    # Рассылка через FCM всем пользователям с токеном
+    conn = get_db()
+    try:
+        fcm_users = [r[0] for r in conn.execute(
+            "SELECT DISTINCT username FROM users WHERE fcm_token IS NOT NULL AND fcm_token != ''"
+        ).fetchall()]
+    finally:
+        conn.close()
+    for uname in fcm_users:
+        await asyncio.to_thread(send_fcm_push, uname, f"📢 {title}", body)
+        
+    print(f"[ADMIN] broadcast: online={online_count}, webpush={len(users)}, fcm={len(fcm_users)}", flush=True)
     return {
         "status": "ok",
         "online": online_count,
         "pushed": len(users),
-        "onesignal": onesignal_ok,
-        "onesignal_error": "" if onesignal_ok else ONESIGNAL_LAST_ERROR,
+        "fcm_pushed": len(fcm_users),
     }
 
 
