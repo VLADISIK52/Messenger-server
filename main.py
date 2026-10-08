@@ -32,7 +32,7 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
 
-# Firebase Cloud Messaging (нативные пуши APK)
+# Firebase Cloud Messaging (нативные пуши APK через median)
 FIREBASE_SERVICE_ACCOUNT_JSON = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "")
 PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "")
 
@@ -54,7 +54,7 @@ ALLOWED_UPLOAD_EXTENSIONS = {
 MESSAGES_PAGE_SIZE = 50
 
 # ==========================================================
-#          WEB PUSH (уведомления браузера / PWA / TWA)
+#          WEB PUSH (уведомления браузера / PWA)
 # ==========================================================
 from pywebpush import webpush, WebPushException
 from py_vapid import Vapid
@@ -64,13 +64,18 @@ from cryptography.hazmat.primitives.serialization import (
 
 VAPID_CLAIMS = {"sub": "mailto:admin@nexus-messenger.local"}
 
-_VAPID_MEM = None
+_VAPID_MEM = None  # (private_pem, public_b64)
 
 
 def _load_or_make_vapid(conn: sqlite3.Connection):
     row = conn.execute("SELECT private_pem, public_b64 FROM vapid WHERE id = 1").fetchone()
     if row:
-        return row[0], row[1]
+        try:
+            from cryptography.hazmat.primitives.serialization import load_pem_private_key
+            load_pem_private_key(row[0].encode(), password=None)
+            return row[0], row[1]
+        except Exception:
+            print("[VAPID] сохранённый ключ повреждён — пересоздаю", flush=True)
     v = Vapid()
     v.generate_keys()
     pem = v.private_key.private_bytes(
@@ -105,7 +110,7 @@ def get_vapid_public_b64() -> str:
 
 
 def send_web_push_to_user(username: str, title: str, body: str) -> None:
-    """Отправка через Web Push (работает в Chrome/PWA/TWA)."""
+    """Отправка через Web Push (работает в Chrome/PWA)."""
     conn = get_db()
     try:
         subs = conn.execute(
@@ -137,6 +142,9 @@ def send_web_push_to_user(username: str, title: str, body: str) -> None:
                 dead.append(endpoint)
         except Exception as e:
             print(f"[WEBPUSH] неожиданная ошибка: {e}")
+            low = str(e).lower()
+            if 'deserialize' in low or 'invalid' in low:
+                dead.append(endpoint)
     if dead:
         conn = get_db()
         try:
@@ -156,18 +164,18 @@ ACCESS_TOKEN_CACHE = {"token": "", "expires_at": 0}
 
 
 def get_firebase_access_token() -> Optional[str]:
-    """Получает OAuth2 access token для Google APIs используя Service Account."""
+    """Получает OAuth2 access token для Google APIs, используя Service Account."""
     now = int(datetime.now(timezone.utc).timestamp())
     if ACCESS_TOKEN_CACHE["token"] and ACCESS_TOKEN_CACHE["expires_at"] > now + 60:
         return ACCESS_TOKEN_CACHE["token"]
 
     if not FIREBASE_SERVICE_ACCOUNT_JSON:
-        print("[FCM] Нет переменной окружения FIREBASE_SERVICE_ACCOUNT_JSON")
+        print("[FCM] нет переменной окружения FIREBASE_SERVICE_ACCOUNT_JSON")
         return None
 
     try:
         sa_data = json.loads(FIREBASE_SERVICE_ACCOUNT_JSON)
-        from jwt import encode  # pip install PyJWT[crypto]
+        from jwt import encode  # PyJWT[crypto]
 
         headers = {'alg': 'RS256', 'typ': 'JWT'}
         claims = {
@@ -201,21 +209,21 @@ def get_firebase_access_token() -> Optional[str]:
             ACCESS_TOKEN_CACHE["token"] = token
             ACCESS_TOKEN_CACHE["expires_at"] = now + expires_in
 
-            print(f"[FCM] Access token получен, срок жизни {expires_in}s")
+            print(f"[FCM] access token получен, срок жизни {expires_in}s")
             return token
 
     except ImportError:
-        print("[FCM] Библиотека PyJWT не установлена. Добавьте 'PyJWT[crypto]' в requirements.txt")
+        print("[FCM] PyJWT не установлена")
         return None
     except Exception as e:
-        print(f"[FCM] Ошибка получения токена: {e}")
+        print(f"[FCM] ошибка получения токена: {e}")
         return None
 
 
 def send_fcm_push(username: str, title: str, body: str) -> bool:
     """Отправка пуша через FCM HTTP v1 API."""
     if not PROJECT_ID:
-        print("[FCM] Нет PROJECT_ID")
+        print("[FCM] нет PROJECT_ID")
         return False
 
     token = get_firebase_access_token()
@@ -232,7 +240,7 @@ def send_fcm_push(username: str, title: str, body: str) -> bool:
         conn.close()
 
     if not rows:
-        print(f"[FCM] У пользователя {username} нет сохраненных FCM токенов")
+        print(f"[FCM] у пользователя {username} нет сохранённых FCM-токенов")
         return False
 
     success_count = 0
@@ -268,7 +276,7 @@ def send_fcm_push(username: str, title: str, body: str) -> bool:
             )
 
             with urllib.request.urlopen(req, timeout=10) as resp:
-                print(f"[FCM] Пуш успешно отправлен на {device_token[:10]}...")
+                print(f"[FCM] пуш отправлен на {device_token[:10]}...")
                 success_count += 1
 
         except urllib.error.HTTPError as e:
@@ -277,26 +285,21 @@ def send_fcm_push(username: str, title: str, body: str) -> bool:
                 err_body = e.read().decode()[:200]
             except Exception:
                 pass
-            print(f"[FCM] HTTP Error {e.code} для {device_token[:10]}...: {err_body}")
+            print(f"[FCM] HTTP {e.code} для {device_token[:10]}...: {err_body}")
         except Exception as e:
-            print(f"[FCM] Ошибка отправки на {device_token[:10]}...: {e}")
+            print(f"[FCM] ошибка отправки на {device_token[:10]}...: {e}")
 
     return success_count > 0
 
 
 def notify_offline(username: str, title: str, body: str) -> None:
     """Главный диспетчер уведомлений при закрытом приложении."""
-    # 1. Пробуем Web Push (браузер/PWA/TWA)
     try:
         send_web_push_to_user(username, title, body)
     except Exception as e:
         print(f"[NOTIFY] Web Push failed: {e}")
-
-    # 2. Пробуем FCM (нативный APK через median plugin)
     try:
-        fcm_sent = send_fcm_push(username, title, body)
-        if not fcm_sent:
-            print(f"[NOTIFY] FCM skipped or failed for {username}")
+        send_fcm_push(username, title, body)
     except Exception as e:
         print(f"[NOTIFY] FCM error: {e}")
 
@@ -322,7 +325,6 @@ def safe_alter(cursor: sqlite3.Cursor, sql: str) -> None:
 def init_db() -> None:
     conn = get_db()
     cursor = conn.cursor()
-    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             username      TEXT PRIMARY KEY,
@@ -347,7 +349,6 @@ def init_db() -> None:
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN theme TEXT DEFAULT 'dark'")
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN hide_online INTEGER DEFAULT 0")
     safe_alter(cursor, "ALTER TABLE users ADD COLUMN fcm_token TEXT DEFAULT ''")
-    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sessions (
             token      TEXT PRIMARY KEY,
@@ -371,7 +372,6 @@ def init_db() -> None:
     safe_alter(cursor, "ALTER TABLE messages ADD COLUMN edited_at DATETIME")
     safe_alter(cursor, "ALTER TABLE messages ADD COLUMN duration INTEGER")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id, id)")
-    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS reactions (
             message_id INTEGER NOT NULL,
@@ -417,10 +417,9 @@ def init_db() -> None:
             public_b64  TEXT NOT NULL
         )
     ''')
-    
     conn.commit()
     conn.close()
-    get_vapid_pair()
+    get_vapid_pair()  # прогрев/самолечение ключа при старте
 
 
 def get_chat_id(user1: str, user2: str) -> str:
@@ -697,8 +696,7 @@ def get_index():
     with open("index.html", "r", encoding="utf-8") as f:
         html = f.read()
     html = html.replace("__APP_VERSION__", APP_VERSION)
-    # OneSignal больше не нужен, но оставляем заглушку для совместимости старых сборок
-    html = html.replace("__ONESIGNAL_APP_ID__", "") 
+    html = html.replace("__ONESIGNAL_APP_ID__", "")
     return Response(
         content=html,
         media_type="text/html; charset=utf-8",
@@ -798,11 +796,10 @@ async def push_subscribe(token: str = Form(...), subscription: str = Form(...)):
 
 @app.post("/fcm/register")
 async def register_fcm_token(token: str = Form(...), fcm_token: str = Form(...)):
-    """Сохраняет FCM токен устройства для текущего пользователя."""
+    """Сохраняет FCM-токен устройства для текущего пользователя."""
     username = require_auth(token)
     if not fcm_token.strip():
         raise HTTPException(status_code=400, detail="Пустой FCM токен")
-        
     conn = get_db()
     try:
         conn.execute(
@@ -810,7 +807,7 @@ async def register_fcm_token(token: str = Form(...), fcm_token: str = Form(...))
             (fcm_token.strip(), username)
         )
         conn.commit()
-        print(f"[FCM] Токен сохранен для {username}: {fcm_token[:10]}...")
+        print(f"[FCM] токен сохранён для {username}: {fcm_token[:10]}...")
     finally:
         conn.close()
     return {"status": "ok"}
@@ -1107,8 +1104,6 @@ async def admin_broadcast(
         conn.close()
     for uname in users:
         await asyncio.to_thread(send_web_push_to_user, uname, f"📢 {title}", body)
-    
-    # Рассылка через FCM всем пользователям с токеном
     conn = get_db()
     try:
         fcm_users = [r[0] for r in conn.execute(
@@ -1118,7 +1113,6 @@ async def admin_broadcast(
         conn.close()
     for uname in fcm_users:
         await asyncio.to_thread(send_fcm_push, uname, f"📢 {title}", body)
-        
     print(f"[ADMIN] broadcast: online={online_count}, webpush={len(users)}, fcm={len(fcm_users)}", flush=True)
     return {
         "status": "ok",
