@@ -503,6 +503,27 @@
         .toast-text { flex: 1; overflow: hidden; }
         .toast-title { font-weight: 700; font-size: 13px; }
         .toast-body { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        /* ── Нижняя навигация в стиле TG + счётчик непрочитанных ── */
+        #bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 45; display: none; align-items: stretch; justify-content: space-around; background: rgba(6,30,22,0.94); border-top: 1px solid var(--border); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 30px rgba(0,0,0,0.35); }
+        #app.mobile-chat-active ~ #bottom-nav { display: none !important; }
+        .bnav-item { background: transparent; border: none; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 10px; border-radius: 20px; cursor: pointer; transition: color 0.15s, background 0.15s, transform 0.1s; flex: 1; -webkit-tap-highlight-color: transparent; }
+        .bnav-item:active { transform: scale(0.96); }
+        .bnav-item.active { color: var(--accent-b); background: var(--accent-soft); box-shadow: 0 0 18px var(--glow-b); }
+        .bnav-ico { position: relative; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; }
+        .bnav-ico svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .bnav-label { font-size: 11px; font-weight: 600; }
+        .bnav-badge { position: absolute; top: -7px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--radius-pill); background: var(--accent-grad); color: #fff; font-size: 10px; font-weight: 800; display: none; align-items: center; justify-content: center; box-shadow: 0 0 12px var(--glow-a); }
+        .bnav-badge.show { display: flex; animation: badgePop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        #contacts-view { display: none; flex: 1; min-height: 0; flex-direction: column; }
+        .contacts-search { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+        .contacts-search input { width: 100%; padding: 10px 16px; background: var(--bg-input); border: 1px solid rgba(220,255,240,0.35); border-radius: var(--radius-pill); color: var(--text-primary); outline: none; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25); }
+        .contacts-results { display: none; background: rgba(8,36,27,0.96); border-bottom: 1px solid var(--border); max-height: 220px; overflow-y: auto; }
+        #sidebar.tab-contacts > .add-user-bar, #sidebar.tab-contacts > .list-wrapper { display: none; }
+        #sidebar.tab-contacts #contacts-view { display: flex; }
+        html[data-theme="light"] #bottom-nav { background: rgba(255,255,255,0.94); }
+        html[data-theme="light"] .contacts-results { background: rgba(255,255,255,0.96); }
+        html[data-theme="amoled"] #bottom-nav { background: rgba(5,5,5,0.96); }
+        html[data-theme="amoled"] .contacts-results { background: rgba(10,10,10,0.97); }
         @media (max-width: 768px) {
             #sidebar { width: 100%; position: absolute; inset: 0; z-index: 2; transform: translateX(0); transition: transform 0.32s cubic-bezier(0.4,0,0.2,1); }
             #chat-area { width: 100%; position: absolute; inset: 0; display: flex; z-index: 3; transform: translateX(100%); transition: transform 0.32s cubic-bezier(0.4,0,0.2,1); }
@@ -514,6 +535,8 @@
             .video-preview-circle { width: 200px; height: 200px; }
             .attach-menu { left: 12px; bottom: 64px; }
             #scroll-down-btn { right: 14px; bottom: 88px; }
+            #bottom-nav { display: flex; }
+            #sidebar > .list-wrapper, #contacts-view .list-wrapper { padding-bottom: 84px; }
         }
     </style>
 </head>
@@ -762,6 +785,13 @@
             <div class="search-suggestions" id="search-suggestions"></div>
         </div>
         <div class="list-wrapper" id="users-list"></div>
+        <div id="contacts-view">
+            <div class="contacts-search">
+                <input type="text" id="contacts-search-input" placeholder="Найти пользователя по нику..." oninput="onContactsSearch()">
+            </div>
+            <div class="contacts-results" id="contacts-search-results"></div>
+            <div class="list-wrapper" id="contacts-list"></div>
+        </div>
     </div>
     <div id="chat-area">
         <div class="chat-header">
@@ -835,6 +865,33 @@
         </div>
     </div>
 </div>
+<nav id="bottom-nav">
+    <button class="bnav-item active" data-tab="chats" onclick="switchBottomTab('chats')">
+        <span class="bnav-ico">
+            <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+            <span class="bnav-badge" id="bnav-unread"></span>
+        </span>
+        <span class="bnav-label">Чаты</span>
+    </button>
+    <button class="bnav-item" data-tab="contacts" onclick="switchBottomTab('contacts')">
+        <span class="bnav-ico">
+            <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        </span>
+        <span class="bnav-label">Контакты</span>
+    </button>
+    <button class="bnav-item" onclick="openSettings()">
+        <span class="bnav-ico">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </span>
+        <span class="bnav-label">Настройки</span>
+    </button>
+    <button class="bnav-item" onclick="openMyProfile()">
+        <span class="bnav-ico">
+            <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        </span>
+        <span class="bnav-label">Профиль</span>
+    </button>
+</nav>
 <div id="lightbox" onclick="this.style.display='none'"><img id="lightbox-img" src=""></div>
 <div id="conn-indicator" style="display:none;">&#x23F3; подключение...</div>
 <div id="toast-container"></div>
@@ -984,6 +1041,81 @@
             grabToken();
         }, 5000);
     }
+
+    // ── Нижняя навигация (TG-стиль) + счётчик непрочитанных ──
+    function updateUnreadBadge() {
+        const el = document.getElementById('bnav-unread');
+        if (!el) return;
+        const total = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
+        el.innerText = total > 99 ? '99+' : String(total);
+        el.classList.toggle('show', total > 0);
+    }
+    function switchBottomTab(tab) {
+        const sidebar = document.getElementById('sidebar');
+        sidebar.classList.toggle('tab-contacts', tab === 'contacts');
+        document.querySelectorAll('#bottom-nav .bnav-item[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+        if (tab === 'contacts') renderContacts();
+        if (tab === 'chats' && activeChatTarget && window.innerWidth <= 768) closeChat();
+    }
+    function renderContacts() {
+        const box = document.getElementById('contacts-list');
+        if (!box) return;
+        box.innerHTML = '';
+        const sorted = [...knownUsers].sort((a, b) => (onlineUsers.includes(b) ? 1 : 0) - (onlineUsers.includes(a) ? 1 : 0) || a.localeCompare(b));
+        if (!sorted.length) {
+            box.innerHTML = '<div class="search-suggestion-empty">Пока нет контактов — найди человека через поиск сверху</div>';
+            return;
+        }
+        sorted.forEach(u => {
+            const isOnline = onlineUsers.includes(u);
+            const pc = profileCache[u];
+            const customStatus = pc && pc.data ? pc.data.status_text : '';
+            const item = document.createElement('div');
+            item.className = 'chat-item';
+            item.onclick = () => { switchBottomTab('chats'); selectChat(u, false); };
+            item.innerHTML = `
+                <div class="chat-item-left">
+                    <div class="avatar${isOnline ? ' online-ring' : ''}" id="contact-av-${cssSafe(u)}">${u.charAt(0).toUpperCase()}</div>
+                    <div style="min-width:0;">
+                        <div class="user-name">@${u}${myBlocks.includes(u) ? ' \u{1F6AB}' : ''}</div>
+                        <div class="user-sub">${isOnline ? '<span class="status-dot online-dot"></span>В сети' : '<span class="status-dot offline-dot"></span>Был(а) недавно'}${customStatus ? ` · <span style="color:var(--accent-b)">${escapeHtml(customStatus)}</span>` : ''}</div>
+                    </div>
+                </div>`;
+            box.appendChild(item);
+            getProfile(u).then(p => {
+                if (p.avatar_url && p.avatar_url !== '/uploads/default.png') {
+                    const av = document.getElementById(`contact-av-${cssSafe(u)}`);
+                    if (av) av.innerHTML = `<img src="${p.avatar_url}" loading="lazy">`;
+                }
+            });
+        });
+    }
+    async function onContactsSearch() {
+        const q = document.getElementById('contacts-search-input').value.trim();
+        const resBox = document.getElementById('contacts-search-results');
+        if (!q) { resBox.innerHTML = ''; resBox.style.display = 'none'; return; }
+        try {
+            const res = await fetch(`/search?q=${encodeURIComponent(q)}&token=${encodeURIComponent(currentToken)}`);
+            if (!res.ok) { resBox.style.display = 'none'; return; }
+            const results = await res.json();
+            resBox.style.display = results.length ? 'block' : 'none';
+            resBox.innerHTML = results.map(u => `
+                <div class="search-suggestion-item" onclick="contactPick('${u.username}')">
+                    <div class="avatar avatar-sm">${u.username.charAt(0).toUpperCase()}</div>
+                    <div class="search-suggestion-name">@${u.username}</div>
+                </div>`).join('');
+        } catch (e) { resBox.style.display = 'none'; }
+    }
+    function contactPick(u) {
+        addKnownUser(u);
+        document.getElementById('contacts-search-input').value = '';
+        const resBox = document.getElementById('contacts-search-results');
+        resBox.innerHTML = ''; resBox.style.display = 'none';
+        renderContacts();
+        switchBottomTab('chats');
+        selectChat(u, false);
+    }
+    setInterval(updateUnreadBadge, 1000);
 
     document.addEventListener("DOMContentLoaded", () => {
         let savedUser = localStorage.getItem('messenger_currentUser');
@@ -2194,6 +2326,7 @@
                 }
             });
         });
+        updateUnreadBadge();
     }
     function cssSafe(str) { return str.replace(/[^a-zA-Z0-9_-]/g, '_'); }
 
@@ -2202,6 +2335,7 @@
         saveDraft();
         activeChatTarget = target; isCurrentGroup = isGroup;
         unreadCounts[target] = 0;
+        updateUnreadBadge();
         cancelReply(); closeSearchBar(); toggleAttachMenu(false);
         document.getElementById('wp-menu').classList.remove('open');
         oldestLoadedMessageId = null; noMoreOlderMessages = false;
