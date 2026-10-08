@@ -70,7 +70,6 @@
         html[data-theme="amoled"] .chat-item { background: rgba(255,255,255,0.03); }
         html[data-theme="amoled"] .toast { background: rgba(10,10,10,0.97); }
         html[data-theme="amoled"] #scroll-down-btn { background: rgba(10,10,10,0.95); }
-        html[data-theme="amoled"] #conn-indicator { background: rgba(10,10,10,0.9); }
         html[data-theme="amoled"] .typing-bubble { background: #0d0d0d; }
         html[data-theme="amoled"] #reply-bar { background: #0c0c0c; }
         html[data-theme="amoled"] .btn-reply-hover { background: #0c0c0c; }
@@ -123,7 +122,6 @@
         html[data-theme="light"] .btn-header-icon, html[data-theme="light"] .reaction-pill,
         html[data-theme="light"] .wp-menu, html[data-theme="light"] .settings-row,
         html[data-theme="light"] .settings-profile { background: rgba(255,255,255,0.95); }
-        html[data-theme="light"] #conn-indicator { background: rgba(255,255,255,0.9); color: #232633; }
         html[data-theme="light"] #scroll-down-btn { background: rgba(255,255,255,0.92); color: #5b6070; }
         html[data-theme="light"] #search-bar { background: rgba(246,247,252,0.92); }
         html[data-theme="light"] .msg-wrapper.other .msg-bubble { background: #ffffff; border-color: rgba(120,110,200,0.18); box-shadow: 0 4px 14px rgba(80,90,140,0.12), inset 0 1px 0 rgba(255,255,255,0.6); }
@@ -496,7 +494,10 @@
         #lightbox { display: none; position: fixed; inset: 0; background: rgba(2,8,6,0.92); justify-content: center; align-items: center; z-index: 2000; }
         #lightbox.active { display: flex; animation: overlayFadeIn 0.2s ease; }
         #lightbox img { max-width: 90%; max-height: 90%; border-radius: 16px; animation: modalPopIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
-        #conn-indicator { position: fixed; bottom: 8px; right: 8px; z-index: 3000; font-size: 11px; padding: 4px 10px; border-radius: var(--radius-pill); background: rgba(6,30,22,0.85); border: 1px solid rgba(220,255,240,0.25); color: #fff; opacity: 0.95; box-shadow: 0 0 18px rgba(126,240,192,0.15); transition: background 0.3s; }
+        .conn-row-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
+        .conn-ok { background: var(--online); box-shadow: 0 0 8px rgba(126,240,192,0.6); }
+        .conn-bad { background: var(--danger); box-shadow: 0 0 8px rgba(255,125,146,0.6); }
+        .conn-wait { background: var(--text-muted); }
         #toast-container { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 4000; display: flex; flex-direction: column; gap: 8px; width: 90%; max-width: 380px; }
         .toast { background: rgba(8,36,27,0.95); border: 1px solid rgba(169,154,240,0.35); border-radius: var(--radius-md); padding: 10px 14px; display: flex; align-items: center; gap: 10px; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 12px 30px rgba(0,0,0,0.55); animation: toastIn 0.25s ease; }
         @keyframes toastIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
@@ -504,11 +505,15 @@
         .toast-title { font-weight: 700; font-size: 13px; }
         .toast-body { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         /* ── Нижняя навигация в стиле TG + счётчик непрочитанных ── */
-        #bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 45; display: none; align-items: stretch; justify-content: space-around; background: rgba(6,30,22,0.94); border-top: 1px solid var(--border); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 30px rgba(0,0,0,0.35); }
+        #bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 45; display: none; align-items: stretch; justify-content: space-around; background: rgba(6,30,22,0.94); border-top: 1px solid var(--border); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 30px rgba(0,0,0,0.35); animation: navIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        @keyframes navIn { from { transform: translateY(100%); opacity: 0; } to { transform: none; opacity: 1; } }
+        @keyframes viewIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+        @keyframes tabPop { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
         #app.mobile-chat-active ~ #bottom-nav { display: none !important; }
         .bnav-item { background: transparent; border: none; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 10px; border-radius: 20px; cursor: pointer; transition: color 0.15s, background 0.15s, transform 0.1s; flex: 1; -webkit-tap-highlight-color: transparent; }
         .bnav-item:active { transform: scale(0.96); }
         .bnav-item.active { color: var(--accent-b); background: var(--accent-soft); box-shadow: 0 0 18px var(--glow-b); }
+        .bnav-item.pop .bnav-ico { animation: tabPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .bnav-ico { position: relative; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; }
         .bnav-ico svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .bnav-label { font-size: 11px; font-weight: 600; }
@@ -537,6 +542,7 @@
             #scroll-down-btn { right: 14px; bottom: 88px; }
             #bottom-nav { display: flex; }
             #sidebar > .list-wrapper, #contacts-view .list-wrapper { padding-bottom: 84px; }
+            #sidebar > .list-wrapper, #sidebar #contacts-view { animation: viewIn 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
         }
     </style>
 </head>
@@ -634,6 +640,8 @@
         <div class="settings-row" onclick="clearCacheNow()"><span>&#x1F9F9; Очистить кэш</span><span class="settings-chevron">&#x203A;</span></div>
         <div class="settings-section">Безопасность</div>
         <div class="settings-row" onclick="closeModal('modal-settings'); openSecurity();"><span>&#x1F511; Пароль и сессии</span><span class="settings-chevron">&#x203A;</span></div>
+        <div class="settings-section">Сеть</div>
+        <div class="settings-row"><span>&#x1F4E1; Соединение</span><span class="settings-meta" id="conn-status-text"><span class="conn-row-dot conn-wait"></span>подключение...</span></div>
         <div class="settings-section">О приложении</div>
         <div class="settings-row"><span>&#x2139; Версия</span><span class="settings-meta" id="settings-version"></span></div>
     </div>
@@ -699,6 +707,7 @@
         <div class="profile-view-name" id="view-profile-name">@Имя</div>
         <div class="profile-view-status" id="view-profile-status" style="display:none;"></div>
         <div class="profile-view-bio" id="view-profile-bio">Нет описания</div>
+        <button class="btn-secondary" id="view-profile-contact-btn" onclick="toggleContactCurrent()" style="display:none;">&#x2B50; Добавить в контакты</button>
         <button class="btn-danger-text" id="view-profile-block-btn" onclick="toggleBlockCurrent()">&#x1F6AB; Заблокировать</button>
         <button class="btn-secondary" onclick="closeModal('modal-view-profile')">Закрыть</button>
     </div>
@@ -893,7 +902,6 @@
     </button>
 </nav>
 <div id="lightbox" onclick="this.style.display='none'"><img id="lightbox-img" src=""></div>
-<div id="conn-indicator" style="display:none;">&#x23F3; подключение...</div>
 <div id="toast-container"></div>
 <script>
     const APP_VERSION = "__APP_VERSION__";
@@ -924,7 +932,7 @@
     let ws, currentUser = "", currentToken = "", activeChatTarget = "", isCurrentGroup = false;
     let knownUsers = [], userGroups = [], onlineUsers = [], unreadCounts = {}, profileCache = {};
     let myProfile = { avatar_url: '/uploads/default.png', bio: '', status_text: '', theme: 'dark', hide_online: false, is_admin: false };
-    let myBlocks = [], messageCache = {}, viewedUsername = "", editMessageId = null, adminTimer = null;
+    let myBlocks = [], myContacts = [], messageCache = {}, viewedUsername = "", editMessageId = null, adminTimer = null;
     let chosenTheme = 'dark';
     let ecoMode = false;
     let settings = { sound: true, vibro: true, preview: true, fontsize: 14, bubble: 'round', enter: true, accent: '', compact: false };
@@ -1054,16 +1062,52 @@
         const sidebar = document.getElementById('sidebar');
         sidebar.classList.toggle('tab-contacts', tab === 'contacts');
         document.querySelectorAll('#bottom-nav .bnav-item[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+        const btn = document.querySelector(`#bottom-nav .bnav-item[data-tab="${tab}"]`);
+        if (btn) { btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop'); }
         if (tab === 'contacts') renderContacts();
         if (tab === 'chats' && activeChatTarget && window.innerWidth <= 768) closeChat();
+    }
+
+    // ── Контакты (только явно добавленные) ──
+    function loadContacts() {
+        try { myContacts = JSON.parse(localStorage.getItem('contacts_' + currentUser) || '[]'); } catch (e) { myContacts = []; }
+    }
+    function saveContacts() {
+        localStorage.setItem('contacts_' + currentUser, JSON.stringify(myContacts));
+    }
+    function addContact(u) {
+        if (!u || u === currentUser || myContacts.includes(u)) return;
+        myContacts.push(u);
+        saveContacts();
+        showToast('\u{2B50} Добавлен в контакты', '@' + u + ' теперь в твоём списке контактов');
+        if (document.getElementById('sidebar').classList.contains('tab-contacts')) renderContacts();
+    }
+    function removeContact(u) {
+        myContacts = myContacts.filter(x => x !== u);
+        saveContacts();
+        showToast('\u{274C} Убран из контактов', '@' + u);
+        renderContacts();
+    }
+    function toggleContactCurrent() {
+        if (!viewedUsername || viewedUsername === currentUser) return;
+        if (myContacts.includes(viewedUsername)) removeContact(viewedUsername);
+        else addContact(viewedUsername);
+        updateContactButton();
+    }
+    function updateContactButton() {
+        const btn = document.getElementById('view-profile-contact-btn');
+        if (!btn) return;
+        if (!viewedUsername || viewedUsername === currentUser) { btn.style.display = 'none'; return; }
+        btn.style.display = '';
+        btn.innerHTML = myContacts.includes(viewedUsername) ? '\u{2B50} В контактах — убрать' : '\u{2B50} Добавить в контакты';
     }
     function renderContacts() {
         const box = document.getElementById('contacts-list');
         if (!box) return;
         box.innerHTML = '';
-        const sorted = [...knownUsers].sort((a, b) => (onlineUsers.includes(b) ? 1 : 0) - (onlineUsers.includes(a) ? 1 : 0) || a.localeCompare(b));
+        const sorted = [...myContacts].sort((a, b) => (onlineUsers.includes(b) ? 1 : 0) - (onlineUsers.includes(a) ? 1 : 0) || a.localeCompare(b));
         if (!sorted.length) {
-            box.innerHTML = '<div class="search-suggestion-empty">Пока нет контактов — найди человека через поиск сверху</div>';
+            box.innerHTML = '<div class="search-suggestion-empty">Пока пусто. Нажми «⭐ Добавить в контакты» в профиле пользователя или найди через поиск сверху</div>';
             return;
         }
         sorted.forEach(u => {
@@ -1080,6 +1124,9 @@
                         <div class="user-name">@${u}${myBlocks.includes(u) ? ' \u{1F6AB}' : ''}</div>
                         <div class="user-sub">${isOnline ? '<span class="status-dot online-dot"></span>В сети' : '<span class="status-dot offline-dot"></span>Был(а) недавно'}${customStatus ? ` · <span style="color:var(--accent-b)">${escapeHtml(customStatus)}</span>` : ''}</div>
                     </div>
+                </div>
+                <div class="chat-item-right">
+                    <button class="btn-delete-chat" onclick="event.stopPropagation(); removeContact('${u}')">\u{2716}</button>
                 </div>`;
             box.appendChild(item);
             getProfile(u).then(p => {
@@ -1108,10 +1155,10 @@
     }
     function contactPick(u) {
         addKnownUser(u);
+        addContact(u);
         document.getElementById('contacts-search-input').value = '';
         const resBox = document.getElementById('contacts-search-results');
         resBox.innerHTML = ''; resBox.style.display = 'none';
-        renderContacts();
         switchBottomTab('chats');
         selectChat(u, false);
     }
@@ -1513,8 +1560,8 @@
         document.getElementById('my-avatar-letter').innerText = currentUser.charAt(0).toUpperCase();
         document.getElementById('auth-screen').style.display = 'none';
         document.getElementById('app').style.visibility = 'visible';
-        document.getElementById('conn-indicator').style.display = 'block';
         knownUsers = JSON.parse(localStorage.getItem('chats_' + currentUser) || '[]');
+        loadContacts();
         await loadMyProfile();
         chosenTheme = myProfile.theme || 'dark';
         loadSettings();
@@ -1616,18 +1663,19 @@
     }
 
     function setConnIndicator(text, color) {
-        const el = document.getElementById('conn-indicator');
-        el.innerText = text;
-        el.style.background = color || 'rgba(0,0,0,0.6)';
+        const el = document.getElementById('conn-status-text');
+        if (!el) return;
+        const cls = text.includes('онлайн') ? 'conn-ok' : (text.includes('нет') ? 'conn-bad' : 'conn-wait');
+        el.innerHTML = `<span class="conn-row-dot ${cls}"></span>${escapeHtml(text)}`;
     }
 
     function initWS() {
         stopPing();
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const url = `${protocol}//${window.location.host}/ws/${encodeURIComponent(currentUser)}?token=${encodeURIComponent(currentToken)}`;
-        setConnIndicator('\u{23F3} подключение...');
+        setConnIndicator('подключение...');
         ws = new WebSocket(url);
-        ws.onopen = () => { wsFails = 0; setConnIndicator('\u{1F7E2} онлайн', 'rgba(126,240,192,0.6)'); startPing(); };
+        ws.onopen = () => { wsFails = 0; setConnIndicator('онлайн'); startPing(); };
         ws.onclose = (e) => {
             stopPing();
             if (e.code === 4001) {
@@ -1644,7 +1692,7 @@
                 return;
             }
             wsFails++;
-            setConnIndicator('\u{1F534} нет соединения, переподключение...', 'rgba(255,125,146,0.6)');
+            setConnIndicator('нет соединения, переподключение...');
             if (wsFails === 4 && !wsHintShown) {
                 fetch('/version?_=' + Date.now(), { cache: 'no-store' })
                     .then(r => { if (r.ok) { wsHintShown = true; showToast('\u{1F310} Сеть блокирует сокет', 'Страница загружается, но WebSocket не подключается. Часто это блокировка провайдера — попробуй включить VPN.'); } })
@@ -2018,6 +2066,7 @@
         if (profile.avatar_url && profile.avatar_url !== '/uploads/default.png') avatarEl.innerHTML = `<img src="${profile.avatar_url}">`;
         else avatarEl.innerHTML = username.charAt(0).toUpperCase();
         updateBlockButton();
+        updateContactButton();
         openModal('modal-view-profile');
     }
 
@@ -2359,7 +2408,6 @@
             });
         }
         document.getElementById('app').classList.add('mobile-chat-active');
-        document.getElementById('conn-indicator').style.display = 'none';
         applyWallpaper();
         updateTypingIndicator();
         document.getElementById('msg-input').value = localStorage.getItem(draftKey(target)) || '';
@@ -2388,7 +2436,6 @@
         saveScrollPosition();
         saveDraft();
         document.getElementById('app').classList.remove('mobile-chat-active');
-        document.getElementById('conn-indicator').style.display = 'block';
         activeChatTarget = "";
         localStorage.removeItem('lastChat_' + currentUser);
         document.getElementById('typing-indicator').classList.remove('active');
