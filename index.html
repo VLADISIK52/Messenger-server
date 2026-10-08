@@ -928,16 +928,23 @@
         return 'был(а) ' + String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + ' в ' + hh;
     }
 
-    // ── FIREBASE FCM: регистрация токена в Median + разведка моста ──
+    // ── FIREBASE FCM: регистрация токена через median.firebaseMessaging ──
     let fcmRegistered = false;
+    function fcmNormalize(t) {
+        if (!t) return null;
+        if (typeof t === 'string') return t;
+        return t.token || t.registrationId || t.fcmToken || null;
+    }
     function setupMedianFCM() {
         const isMedian = /\bwv\b/.test(navigator.userAgent || '') || !!window.median || !!window.gonative;
         if (!isMedian || fcmRegistered) return;
+        const m = window.median || window.gonative;
+        const fm = m && m.firebaseMessaging;
+        if (!fm) { console.warn('[FCM] median.firebaseMessaging не найден'); return; }
+
         const send = (token) => {
+            token = fcmNormalize(token);
             if (!token || !currentToken || fcmRegistered) return;
-            if (typeof token !== 'string') {
-                try { token = token.token || token.registrationId || token.fcmToken || JSON.stringify(token); } catch (e) { return; }
-            }
             fcmRegistered = true;
             const fd = new FormData();
             fd.append('token', currentToken);
@@ -949,59 +956,32 @@
                 })
                 .catch(e => { fcmRegistered = false; console.warn('[FCM] ошибка сохранения:', e); });
         };
-        const tryGrab = () => {
+
+        const grabToken = () => {
             try {
-                if (window.FirebasePlugin && typeof window.FirebasePlugin.getToken === 'function') {
-                    window.FirebasePlugin.getToken(send, (e) => console.warn('[FCM] getToken error:', e));
-                    return true;
-                }
-                const m = window.median || window.gonative;
-                if (m) {
-                    const candidates = [
-                        m.plugins && m.plugins.firebaseMessaging,
-                        m.plugins && m.plugins.fcm,
-                        m.firebaseMessaging,
-                        m.fcm,
-                        m.push,
-                    ];
-                    for (const api of candidates) {
-                        if (!api) continue;
-                        if (typeof api.getToken === 'function') {
-                            const r = api.getToken(send, (e) => console.warn('[FCM] getToken error:', e));
-                            if (r && typeof r.then === 'function') r.then(send).catch(() => {});
-                            return true;
-                        }
-                        if (typeof api.getRegistrationId === 'function') {
-                            const r = api.getRegistrationId(send);
-                            if (r && typeof r.then === 'function') r.then(send).catch(() => {});
-                            return true;
-                        }
-                    }
-                }
-            } catch (e) { console.warn('[FCM] tryGrab error:', e); }
-            return false;
+                const r = fm.getToken();
+                if (r && typeof r.then === 'function') r.then(send).catch(e => console.warn('[FCM] getToken:', e));
+            } catch (e) { console.warn('[FCM] getToken throw:', e); }
         };
-        // Разведка: если токен не удалось взять, показываем, что вообще есть внутри моста
-        setTimeout(() => {
-            try {
-                if (fcmRegistered) return;
-                const m = window.median || window.gonative || {};
-                const info = {
-                    root: Object.keys(m),
-                    plugins: m.plugins ? Object.keys(m.plugins) : null,
-                    fcmKeys: (m.fcm ? Object.keys(m.fcm) : (m.firebaseMessaging ? Object.keys(m.firebaseMessaging) : (m.push ? Object.keys(m.push) : null))),
-                    FirebasePlugin: typeof window.FirebasePlugin,
-                };
-                console.log('[FCM] bridge info:', JSON.stringify(info));
-                alert('[FCM] bridge:\n' + JSON.stringify(info, null, 1));
-            } catch (e) {}
-        }, 4000);
-        if (tryGrab()) return;
-        document.addEventListener('deviceready', () => tryGrab(), false);
+
+        const start = () => {
+            try { if (typeof fm.register === 'function') fm.register(); } catch (e) {}
+            grabToken();
+            try { if (typeof fm.tokenRefreshed === 'function') fm.tokenRefreshed(send); } catch (e) {}
+        };
+        try {
+            if (typeof fm.requestPermission === 'function') {
+                const p = fm.requestPermission();
+                if (p && typeof p.then === 'function') p.then(start).catch(() => start());
+                else start();
+            } else start();
+        } catch (e) { start(); }
+
         let tries = 0;
         const iv = setInterval(() => {
             tries++;
-            if (tryGrab() || tries >= 6) clearInterval(iv);
+            if (fcmRegistered || tries >= 6) { clearInterval(iv); return; }
+            grabToken();
         }, 5000);
     }
 
