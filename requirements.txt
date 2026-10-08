@@ -1,10 +1,9 @@
 fastapi
-    uvicorn
-    python-multipart
-    aiofiles
-    pywebpush
-    py-vapid
-    cryptography
-    PyJWT[crypto]
-
-
+uvicorn[standard]
+websockets
+python-multipart
+aiofiles
+pywebpush
+py-vapid
+cryptography
+PyJWT[crypto]
