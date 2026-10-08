@@ -928,13 +928,16 @@
         return 'был(а) ' + String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + ' в ' + hh;
     }
 
-    // ── FIREBASE FCM: регистрация токена в Median ──
+    // ── FIREBASE FCM: регистрация токена в Median + разведка моста ──
     let fcmRegistered = false;
     function setupMedianFCM() {
         const isMedian = /\bwv\b/.test(navigator.userAgent || '') || !!window.median || !!window.gonative;
         if (!isMedian || fcmRegistered) return;
         const send = (token) => {
             if (!token || !currentToken || fcmRegistered) return;
+            if (typeof token !== 'string') {
+                try { token = token.token || token.registrationId || token.fcmToken || JSON.stringify(token); } catch (e) { return; }
+            }
             fcmRegistered = true;
             const fd = new FormData();
             fd.append('token', currentToken);
@@ -947,17 +950,52 @@
                 .catch(e => { fcmRegistered = false; console.warn('[FCM] ошибка сохранения:', e); });
         };
         const tryGrab = () => {
-            if (window.FirebasePlugin && typeof window.FirebasePlugin.getToken === 'function') {
-                window.FirebasePlugin.getToken(send, (e) => console.warn('[FCM] getToken error:', e));
-                return true;
-            }
-            if (window.median && window.median.plugins && window.median.plugins.firebaseMessaging &&
-                typeof window.median.plugins.firebaseMessaging.getToken === 'function') {
-                window.median.plugins.firebaseMessaging.getToken().then(send).catch(e => console.warn('[FCM] median plugin error:', e));
-                return true;
-            }
+            try {
+                if (window.FirebasePlugin && typeof window.FirebasePlugin.getToken === 'function') {
+                    window.FirebasePlugin.getToken(send, (e) => console.warn('[FCM] getToken error:', e));
+                    return true;
+                }
+                const m = window.median || window.gonative;
+                if (m) {
+                    const candidates = [
+                        m.plugins && m.plugins.firebaseMessaging,
+                        m.plugins && m.plugins.fcm,
+                        m.firebaseMessaging,
+                        m.fcm,
+                        m.push,
+                    ];
+                    for (const api of candidates) {
+                        if (!api) continue;
+                        if (typeof api.getToken === 'function') {
+                            const r = api.getToken(send, (e) => console.warn('[FCM] getToken error:', e));
+                            if (r && typeof r.then === 'function') r.then(send).catch(() => {});
+                            return true;
+                        }
+                        if (typeof api.getRegistrationId === 'function') {
+                            const r = api.getRegistrationId(send);
+                            if (r && typeof r.then === 'function') r.then(send).catch(() => {});
+                            return true;
+                        }
+                    }
+                }
+            } catch (e) { console.warn('[FCM] tryGrab error:', e); }
             return false;
         };
+        // Разведка: если токен не удалось взять, показываем, что вообще есть внутри моста
+        setTimeout(() => {
+            try {
+                if (fcmRegistered) return;
+                const m = window.median || window.gonative || {};
+                const info = {
+                    root: Object.keys(m),
+                    plugins: m.plugins ? Object.keys(m.plugins) : null,
+                    fcmKeys: (m.fcm ? Object.keys(m.fcm) : (m.firebaseMessaging ? Object.keys(m.firebaseMessaging) : (m.push ? Object.keys(m.push) : null))),
+                    FirebasePlugin: typeof window.FirebasePlugin,
+                };
+                console.log('[FCM] bridge info:', JSON.stringify(info));
+                alert('[FCM] bridge:\n' + JSON.stringify(info, null, 1));
+            } catch (e) {}
+        }, 4000);
         if (tryGrab()) return;
         document.addEventListener('deviceready', () => tryGrab(), false);
         let tries = 0;
