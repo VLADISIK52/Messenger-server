@@ -6,6 +6,7 @@ import sqlite3
 import json
 import base64
 import asyncio
+import threading
 import time
 import urllib.request
 import urllib.error
@@ -54,13 +55,16 @@ ALLOWED_UPLOAD_EXTENSIONS = {
 }
 MESSAGES_PAGE_SIZE = 50
 
+# Текст пуша-уведомления об обновлении
+UPDATE_NOTICE_TITLE = "\u26A0\uFE0F Внимание: обновление"
+UPDATE_NOTICE_BODY = "Перезайдите из аккаунта (выйти → войти), чтобы всё работало корректно"
+
 # Маркеры ботов в User-Agent
 BOT_UA_RE = re.compile(
     r'bot|crawl|spider|headless|selenium|puppeteer|playwright|python-requests|scrapy|'
     r'curl|wget|go-http|httpclient|okhttp|java\/|node-fetch|axios|postman|insomnia|phantomjs',
     re.I,
 )
-# Минимальное разумное время между открытием страницы и отправкой формы (мс)
 MIN_FILL_MS = 1500
 
 
@@ -323,6 +327,84 @@ def send_fcm_push(username: str, title: str, body: str) -> bool:
     return success_count > 0
 
 
+def send_fcm_topic_push(topic: str, title: str, body: str) -> bool:
+    """Пуш всем устройствам, подписанным на топик (не требует хранения токенов)."""
+    if not PROJECT_ID:
+        print("[UPDATE] нет PROJECT_ID, topic push пропущен")
+        return False
+    token = get_firebase_access_token()
+    if not token:
+        return False
+    url = f"https://fcm.googleapis.com/v1/projects/{PROJECT_ID}/messages:send"
+    payload = {
+        "message": {
+            "topic": topic,
+            "notification": {"title": title, "body": body},
+            "android": {
+                "priority": "HIGH",
+                "notification": {"channel_id": "messenger_default", "sound": "default"}
+            },
+        }
+    }
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode(),
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            print(f"[UPDATE] topic push отправлен в топик '{topic}'")
+            return True
+    except urllib.error.HTTPError as e:
+        err_body = ""
+        try:
+            err_body = e.read().decode()[:200]
+        except Exception:
+            pass
+        print(f"[UPDATE] topic push HTTP {e.code}: {err_body}")
+        return False
+    except Exception as e:
+        print(f"[UPDATE] topic push ошибка: {e}")
+        return False
+
+
+def notify_update_if_new_version() -> None:
+    """При старте новой версии (деплое) шлёт всем пуш 'обновление — перезайдите'."""
+    try:
+        conn = get_db()
+        try:
+            last = conn.execute("SELECT value FROM meta WHERE key = 'last_notified_version'").fetchone()
+            last = last[0] if last else None
+        finally:
+            conn.close()
+        if last == APP_VERSION:
+            return  # это не деплой, а пробуждение инстанса — молчим
+        send_fcm_topic_push("updates", UPDATE_NOTICE_TITLE, UPDATE_NOTICE_BODY)
+        conn = get_db()
+        try:
+            users = [r[0] for r in conn.execute("SELECT DISTINCT username FROM push_subs").fetchall()]
+        finally:
+            conn.close()
+        for uname in users:
+            try:
+                send_web_push_to_user(uname, UPDATE_NOTICE_TITLE, UPDATE_NOTICE_BODY)
+            except Exception:
+                pass
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES ('last_notified_version', ?)",
+                (APP_VERSION,),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        print(f"[UPDATE] разослано уведомление об обновлении {APP_VERSION}")
+    except Exception as e:
+        print(f"[UPDATE] ошибка рассылки обновления: {e}")
+
+
 def notify_offline(username: str, title: str, body: str) -> None:
     """Главный диспетчер уведомлений при закрытом приложении."""
     try:
@@ -460,6 +542,12 @@ def init_db() -> None:
         )
     ''')
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_access_log_id ON access_log(id)")
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS meta (
+            key   TEXT PRIMARY KEY,
+            value TEXT
+        )
+    ''')
     conn.commit()
     conn.close()
     get_vapid_pair()  # прогрев/самолечение ключа при старте
@@ -729,6 +817,7 @@ manager = ConnectionManager()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    threading.Thread(target=notify_update_if_new_version, daemon=True).start()
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -884,7 +973,6 @@ async def register(
     ua = request.headers.get("user-agent", "")
     bot_ua = ua_bot_flag(ua)
     honeypot = hp.strip() != ""
-    # проверка скорости заполнения формы
     bot_fast = 0
     try:
         lt = int(load_ts)
