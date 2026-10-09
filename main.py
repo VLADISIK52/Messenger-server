@@ -49,13 +49,10 @@ B2_BASE = "https://api.backblazeb2.com"
 SNAPSHOT_NAME = "snapshots/chat.db"
 MEDIA_TTL_DAYS = 90
 
-# ── ЧТО НОВОГО: верхняя строка = текст пуша и тоста об обновлении ──
-CHANGELOG = [
-    "Подключено облачное хранилище: фото, голосовые, видео и история чатов теперь сохраняются после обновлений. Перезаходить не нужно!",
-    "Оповещения об обновлениях: приложение само рассказывает, что нового на сервере.",
-    "Админ-панель: журнал доступа с IP и устройствами, защита от ботов.",
-]
-UPDATE_NOTICE_TITLE = "\U0001F504 Обновление"
+# Оповещение об обновлении: коротко и без лишних слов
+UPDATE_NOTICE_TITLE = "\u26A0\uFE0F Внимание: обновление"
+UPDATE_NOTICE_BODY = ""
+UPDATE_NOTE_SHORT = "Внимание: обновление"
 
 try:
     APP_VERSION = os.environ.get("RENDER_GIT_COMMIT", "") or str(int(os.path.getmtime("index.html")))
@@ -83,7 +80,7 @@ MIN_FILL_MS = 1500
 
 
 def update_note() -> str:
-    return CHANGELOG[0] if CHANGELOG else ""
+    return UPDATE_NOTE_SHORT
 
 
 def guess_mime(name: str) -> str:
@@ -170,7 +167,7 @@ class B2Client:
         )
         buckets = res.get("buckets", [])
         if not buckets:
-            raise RuntimeError("B2: бакет не найден")
+            raise RuntimeError(f"B2: бакет '{B2_BUCKET}' не найден в аккаунте")
         self.bucket_id = buckets[0]["bucketId"]
         return self.bucket_id
 
@@ -289,16 +286,18 @@ def db_snapshot_now(tag=""):
 
 def db_restore_from_b2():
     if not b2.enabled():
+        print("[B2] переменные не заданы — работаю без облака", flush=True)
         return
     if os.path.exists(DB_FILE) and os.path.getsize(DB_FILE) > 0:
+        print("[B2] локальная база на месте — восстановление не нужно", flush=True)
         return
     data = b2.download_bytes(SNAPSHOT_NAME)
     if data:
         with open(DB_FILE, "wb") as f:
             f.write(data)
-        print(f"[B2] база восстановлена из снапшота ({len(data)} байт)")
+        print(f"[B2] база восстановлена из снапшота ({len(data)} байт)", flush=True)
     else:
-        print("[B2] снапшот не найден — стартуем с чистой базы")
+        print("[B2] снапшот не найден — стартуем с чистой базы", flush=True)
 
 
 def snapshot_loop():
@@ -634,7 +633,7 @@ def send_fcm_topic_push(topic: str, title: str, body: str) -> bool:
 
 
 def notify_update_if_new_version() -> None:
-    """При старте новой версии шлёт пуш 'Обновление + что добавилось'."""
+    """При старте новой версии шлёт короткий пуш 'Внимание: обновление'."""
     try:
         conn = get_db()
         try:
@@ -644,8 +643,7 @@ def notify_update_if_new_version() -> None:
             conn.close()
         if last == APP_VERSION:
             return  # не деплой, а пробуждение инстанса — молчим
-        note = update_note()
-        send_fcm_topic_push("updates", UPDATE_NOTICE_TITLE, note)
+        send_fcm_topic_push("updates", UPDATE_NOTICE_TITLE, UPDATE_NOTICE_BODY)
         conn = get_db()
         try:
             users = [r[0] for r in conn.execute("SELECT DISTINCT username FROM push_subs").fetchall()]
@@ -653,7 +651,7 @@ def notify_update_if_new_version() -> None:
             conn.close()
         for uname in users:
             try:
-                send_web_push_to_user(uname, UPDATE_NOTICE_TITLE, note)
+                send_web_push_to_user(uname, UPDATE_NOTICE_TITLE, UPDATE_NOTICE_BODY)
             except Exception:
                 pass
         conn = get_db()
@@ -665,7 +663,7 @@ def notify_update_if_new_version() -> None:
             conn.commit()
         finally:
             conn.close()
-        print(f"[UPDATE] разослано уведомление об обновлении {APP_VERSION}: {note}")
+        print(f"[UPDATE] разослано уведомление об обновлении {APP_VERSION}")
     except Exception as e:
         print(f"[UPDATE] ошибка рассылки обновления: {e}")
 
@@ -1080,6 +1078,7 @@ manager = ConnectionManager()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    print(f"[B2] конфиг: key_id={'есть' if B2_KEY_ID else 'НЕТ'}, app_key={'есть' if B2_APP_KEY else 'НЕТ'}, bucket={B2_BUCKET or 'НЕТ'}", flush=True)
     db_restore_from_b2()
     init_db()
     threading.Thread(target=notify_update_if_new_version, daemon=True).start()
