@@ -455,6 +455,7 @@
         .admin-row .a-name { flex: 1; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .admin-row .a-meta { color: var(--text-muted); font-size: 11px; flex-shrink: 0; }
         .admin-row .a-online { color: var(--online); font-size: 11px; font-weight: 700; flex-shrink: 0; }
+        .admin-scroll { max-height: 38vh; overflow-y: auto; padding-right: 4px; }
         .ban-badge { background: var(--danger); color: #fff; font-size: 9px; font-weight: 800; padding: 1px 6px; border-radius: var(--radius-pill); }
         .ban-btn { background: transparent; border: none; cursor: pointer; font-size: 14px; flex-shrink: 0; transition: transform 0.12s; }
         .ban-btn:active { transform: scale(1.2); }
@@ -735,19 +736,30 @@
     <div class="modal-box">
         <button class="modal-close" onclick="closeModal('modal-admin')">&#x2715;</button>
         <h3 style="text-align:center;">&#x1F6E1; Админ-панель</h3>
-        <div class="admin-total" id="admin-total"></div>
-        <div class="settings-section">Сейчас онлайн</div>
-        <div id="admin-online" style="display:flex; flex-direction:column; gap:6px;"></div>
-        <div class="settings-section">Аккаунты</div>
-        <div id="admin-users" style="display:flex; flex-direction:column; gap:6px;"></div>
-        <div class="settings-section">Журнал подключений</div>
-        <div id="admin-log" style="display:flex; flex-direction:column; gap:4px;"></div>
-        <div class="settings-section">Журнал доступа (IP / устройства)</div>
-        <div id="admin-access" style="display:flex; flex-direction:column; gap:4px;"></div>
-        <div class="settings-section">Рассылка</div>
-        <input type="text" id="broadcast-title" placeholder="Заголовок (например: Обновление сервера)">
-        <textarea id="broadcast-body" rows="2" placeholder="Текст объявления..."></textarea>
-        <button class="btn-primary" onclick="adminBroadcast()">&#x1F4E2; Отправить всем</button>
+        <div class="seg" id="admin-tabs" style="justify-content:center;">
+            <button data-at="overview" class="active" onclick="switchAdminTab('overview')">&#x1F4CA; Обзор</button>
+            <button data-at="logs" onclick="switchAdminTab('logs')">&#x1FDC; Журналы</button>
+            <button data-at="broadcast" onclick="switchAdminTab('broadcast')">&#x1F4E2; Рассылка</button>
+        </div>
+        <div id="admin-tab-overview">
+            <div class="admin-total" id="admin-total"></div>
+            <div class="settings-section">Сейчас онлайн</div>
+            <div id="admin-online" style="display:flex; flex-direction:column; gap:6px;"></div>
+            <div class="settings-section">Аккаунты</div>
+            <div id="admin-users" class="admin-scroll" style="display:flex; flex-direction:column; gap:6px;"></div>
+        </div>
+        <div id="admin-tab-logs" style="display:none;">
+            <div class="settings-section">Журнал подключений</div>
+            <div id="admin-log" class="admin-scroll" style="display:flex; flex-direction:column; gap:4px;"></div>
+            <div class="settings-section">Журнал доступа (IP / устройства)</div>
+            <div id="admin-access" class="admin-scroll" style="display:flex; flex-direction:column; gap:4px;"></div>
+        </div>
+        <div id="admin-tab-broadcast" style="display:none;">
+            <div class="settings-section">Рассылка всем пользователям</div>
+            <input type="text" id="broadcast-title" placeholder="Заголовок (например: Обновление сервера)">
+            <textarea id="broadcast-body" rows="2" placeholder="Текст объявления..."></textarea>
+            <button class="btn-primary" onclick="adminBroadcast()">&#x1F4E2; Отправить всем</button>
+        </div>
         <button class="btn-secondary" onclick="closeAdmin()">Закрыть</button>
     </div>
 </div>
@@ -1267,7 +1279,10 @@
                     sessionStorage.removeItem('session_reset_after_update');
                     setTimeout(() => showToast('\u{26A0}\uFE0F} Сессия сброшена', 'Сервер обновился: войди заново — это займёт секунду'), 600);
                 } else if (JUST_UPDATED) {
-                    setTimeout(() => showToast('\u{1F4E2} Обновление', 'Приложение обновилось: если что-то работает странно — выйди и войди заново'), 600);
+                    fetch('/version?_=' + Date.now(), { cache: 'no-store' })
+                        .then(r => r.json())
+                        .then(d => setTimeout(() => showToast('\u{1F504} Обновление', (d && d.note) ? d.note : 'Сервер обновился: всё работает, перезаходить не нужно'), 600))
+                        .catch(() => setTimeout(() => showToast('\u{1F504} Обновление', 'Сервер обновился: всё работает, перезаходить не нужно'), 600));
                 }
             } catch (e) {}
             if (savedUser && savedToken) {
@@ -2183,6 +2198,12 @@
         adminTimer = setInterval(refreshAdmin, 5000);
     }
     function closeAdmin() { clearInterval(adminTimer); adminTimer = null; closeModal('modal-admin'); }
+    function switchAdminTab(tab) {
+        document.querySelectorAll('#admin-tabs button').forEach(b => b.classList.toggle('active', b.dataset.at === tab));
+        document.getElementById('admin-tab-overview').style.display = tab === 'overview' ? '' : 'none';
+        document.getElementById('admin-tab-logs').style.display = tab === 'logs' ? '' : 'none';
+        document.getElementById('admin-tab-broadcast').style.display = tab === 'broadcast' ? '' : 'none';
+    }
     async function refreshAdmin() {
         const totalEl = document.getElementById('admin-total');
         try {
@@ -2206,12 +2227,12 @@
                 : data.users.map(u => `<div class="admin-row"><span class="a-name">@${escapeHtml(u.username)}${u.banned ? ' <span class="ban-badge">БАН</span>' : ''}${botUsers.includes(u.username) ? ' \u{1F916}' : ''}${u.status_text ? ' · ' + escapeHtml(u.status_text) : ''}</span><span class="a-meta">${escapeHtml(u.created_at || '')}</span><button class="ban-btn" onclick="${u.banned ? `adminUnban('${u.username}')` : `adminBan('${u.username}')`}">${u.banned ? '\u{2705}' : '\u{1F6AB}'}</button></div>`).join('');
             document.getElementById('admin-log').innerHTML = data.log.length === 0
                 ? '<div class="admin-log-row"><span class="u" style="color:var(--text-muted)">Пока пусто</span></div>'
-                : data.log.slice(0, 30).map(l => `<div class="admin-log-row"><span class="t">${escapeHtml(l.time)}</span><span class="u">@${escapeHtml(l.user)}</span><span class="act-${l.action}">${l.action === 'connect' ? 'вошёл' : 'вышел'}</span></div>`).join('');
+                : data.log.slice(0, 15).map(l => `<div class="admin-log-row"><span class="t">${escapeHtml(l.time)}</span><span class="u">@${escapeHtml(l.user)}</span><span class="act-${l.action}">${l.action === 'connect' ? 'вошёл' : 'вышел'}</span></div>`).join('');
             const accessBox = document.getElementById('admin-access');
             if (accessBox) {
                 accessBox.innerHTML = (!data.access || data.access.length === 0)
                     ? '<div class="admin-log-row"><span class="u" style="color:var(--text-muted)">Пока пусто</span></div>'
-                    : data.access.slice(0, 40).map(l => `
+                    : data.access.slice(0, 20).map(l => `
                         <div class="admin-log-row">
                             <span class="t">${escapeHtml(l.ts || '')}</span>
                             <span class="u">@${escapeHtml(l.username || '—')}</span>
