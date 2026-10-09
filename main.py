@@ -7,9 +7,12 @@ import json
 import base64
 import asyncio
 import threading
+import atexit
+import mimetypes
 import time
 import urllib.request
 import urllib.error
+import urllib.parse
 from collections import deque
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
@@ -38,6 +41,14 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
 FIREBASE_SERVICE_ACCOUNT_JSON = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "")
 PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "")
 
+# Backblaze B2 (облачное хранилище медиа и бэкапов базы)
+B2_KEY_ID = os.environ.get("B2_KEY_ID", "")
+B2_APP_KEY = os.environ.get("B2_APP_KEY", "")
+B2_BUCKET = os.environ.get("B2_BUCKET", "")
+B2_BASE = "https://api.backblazeb2.com"
+SNAPSHOT_NAME = "snapshots/chat.db"
+MEDIA_TTL_DAYS = 90
+
 try:
     APP_VERSION = os.environ.get("RENDER_GIT_COMMIT", "") or str(int(os.path.getmtime("index.html")))
 except Exception:
@@ -55,17 +66,20 @@ ALLOWED_UPLOAD_EXTENSIONS = {
 }
 MESSAGES_PAGE_SIZE = 50
 
-# Текст пуша-уведомления об обновлении
 UPDATE_NOTICE_TITLE = "\u26A0\uFE0F Внимание: обновление"
 UPDATE_NOTICE_BODY = "Перезайдите из аккаунта (выйти → войти), чтобы всё работало корректно"
 
-# Маркеры ботов в User-Agent
 BOT_UA_RE = re.compile(
     r'bot|crawl|spider|headless|selenium|puppeteer|playwright|python-requests|scrapy|'
     r'curl|wget|go-http|httpclient|okhttp|java\/|node-fetch|axios|postman|insomnia|phantomjs',
     re.I,
 )
 MIN_FILL_MS = 1500
+
+
+def guess_mime(name: str) -> str:
+    m, _ = mimetypes.guess_type(name)
+    return m or "application/octet-stream"
 
 
 def client_ip(request: Request) -> str:
@@ -89,6 +103,251 @@ def ua_bot_flag(ua: str) -> int:
 
 
 # ==========================================================
+#          BACKBLAZE B2: ОБЛАЧНОЕ ХРАНИЛИЩЕ
+# ==========================================================
+
+class B2Client:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.auth = None
+        self.bucket_id = None
+        self.upload_slot = None
+
+    def enabled(self) -> bool:
+        return bool(B2_KEY_ID and B2_APP_KEY and B2_BUCKET)
+
+    def _req(self, url, payload=None, headers=None, method="POST", raw=None):
+        hdrs = {}
+        if payload is not None or raw is None:
+            hdrs["Content-Type"] = "application/json"
+        if headers:
+            hdrs.update(headers)
+        data = None
+        if raw is not None:
+            data = raw
+        elif payload is not None:
+            data = json.dumps(payload).encode()
+        req = urllib.request.Request(url, data=data, headers=hdrs, method=method)
+        with urllib.request.urlopen(req, timeout=60) as r:
+            body = r.read()
+            ct = r.headers.get("Content-Type", "")
+            if ct.startswith("application/json"):
+                return json.loads(body)
+            return body
+
+    def authorize(self, force=False):
+        with self.lock:
+            if self.auth and not force:
+                return self.auth
+            basic = base64.b64encode(f"{B2_KEY_ID}:{B2_APP_KEY}".encode()).decode()
+            data = self._req(
+                f"{B2_BASE}/b2api/v2/b2_authorize_account",
+                headers={"Authorization": f"Basic {basic}", "Content-Type": "application/json"},
+                method="GET",
+            )
+            self.auth = data
+            self.bucket_id = None
+            self.upload_slot = None
+            return data
+
+    def bucket_id_get(self):
+        if self.bucket_id:
+            return self.bucket_id
+        a = self.authorize()
+        res = self._req(
+            f"{a['apiUrl']}/b2api/v2/b2_list_buckets",
+            payload={"accountId": a["accountId"], "bucketName": B2_BUCKET},
+            headers={"Authorization": a["authorizationToken"]},
+        )
+        buckets = res.get("buckets", [])
+        if not buckets:
+            raise RuntimeError("B2: бакет не найден")
+        self.bucket_id = buckets[0]["bucketId"]
+        return self.bucket_id
+
+    def upload_slot_get(self, force=False):
+        if self.upload_slot and not force:
+            return self.upload_slot
+        a = self.authorize()
+        bid = self.bucket_id_get()
+        res = self._req(
+            f"{a['apiUrl']}/b2api/v2/b2_get_upload_url",
+            payload={"bucketId": bid},
+            headers={"Authorization": a["authorizationToken"]},
+        )
+        self.upload_slot = res
+        return res
+
+    def upload_bytes(self, name, data, content_type=None, tries=3):
+        if not self.enabled():
+            return False
+        sha1 = hashlib.sha1(data).hexdigest()
+        ct = content_type or "b2/x-auto"
+        for i in range(tries):
+            try:
+                if i > 0:
+                    self.authorize(force=True)
+                slot = self.upload_slot_get(force=i > 0)
+                hdrs = {
+                    "Authorization": slot["authorizationToken"],
+                    "X-Bz-File-Name": urllib.parse.quote(name),
+                    "Content-Type": ct,
+                    "X-Bz-Content-Sha1": sha1,
+                }
+                self._req(slot["uploadUrl"], headers=hdrs, raw=data)
+                return True
+            except Exception as e:
+                print(f"[B2] upload попытка {i+1} для {name}: {e}")
+                time.sleep(1 + i)
+        return False
+
+    def download_bytes(self, name, tries=2):
+        if not self.enabled():
+            return None
+        for i in range(tries):
+            try:
+                a = self.authorize(force=i > 0)
+                url = f"{a['downloadUrl']}/file/{urllib.parse.quote(B2_BUCKET)}/{urllib.parse.quote(name)}"
+                req = urllib.request.Request(url, headers={"Authorization": a["authorizationToken"]}, method="GET")
+                with urllib.request.urlopen(req, timeout=120) as r:
+                    return r.read()
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    return None
+                print(f"[B2] download попытка {i+1} для {name}: {e}")
+            except Exception as e:
+                print(f"[B2] download попытка {i+1} для {name}: {e}")
+            time.sleep(1)
+        return None
+
+    def list_files(self, prefix, max_count=500, start=None):
+        a = self.authorize()
+        bid = self.bucket_id_get()
+        payload = {"bucketId": bid, "prefix": prefix, "maxFileCount": max_count}
+        if start:
+            payload["startFileName"] = start
+        res = self._req(
+            f"{a['apiUrl']}/b2api/v2/b2_list_file_names",
+            payload=payload,
+            headers={"Authorization": a["authorizationToken"]},
+        )
+        return res.get("files", []), res.get("nextFileName")
+
+    def list_versions(self, name, max_count=10):
+        a = self.authorize()
+        bid = self.bucket_id_get()
+        res = self._req(
+            f"{a['apiUrl']}/b2api/v2/b2_list_file_versions",
+            payload={"bucketId": bid, "prefix": name, "startFileName": name, "maxFileCount": max_count},
+            headers={"Authorization": a["authorizationToken"]},
+        )
+        return res.get("files", [])
+
+    def delete_version(self, file_id, file_name):
+        a = self.authorize()
+        self._req(
+            f"{a['apiUrl']}/b2api/v2/b2_delete_file_version",
+            payload={"fileId": file_id, "fileName": file_name},
+            headers={"Authorization": a["authorizationToken"]},
+        )
+
+
+b2 = B2Client()
+
+
+def db_snapshot_now(tag=""):
+    if not b2.enabled():
+        return
+    try:
+        conn = get_db()
+        try:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        finally:
+            conn.close()
+        with open(DB_FILE, "rb") as f:
+            data = f.read()
+        if b2.upload_bytes(SNAPSHOT_NAME, data, "application/octet-stream"):
+            print(f"[B2] снапшот базы загружен ({len(data)} байт) {tag}")
+            try:
+                versions = b2.list_versions(SNAPSHOT_NAME)
+                for v in versions[2:]:
+                    b2.delete_version(v["fileId"], v["fileName"])
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"[B2] ошибка снапшота: {e}")
+
+
+def db_restore_from_b2():
+    if not b2.enabled():
+        return
+    if os.path.exists(DB_FILE) and os.path.getsize(DB_FILE) > 0:
+        return
+    data = b2.download_bytes(SNAPSHOT_NAME)
+    if data:
+        with open(DB_FILE, "wb") as f:
+            f.write(data)
+        print(f"[B2] база восстановлена из снапшота ({len(data)} байт)")
+    else:
+        print("[B2] снапшот не найден — стартуем с чистой базы")
+
+
+def snapshot_loop():
+    while True:
+        time.sleep(300)
+        db_snapshot_now("(авто)")
+
+
+def media_cleanup():
+    cutoff = int((time.time() - MEDIA_TTL_DAYS * 86400) * 1000)
+    start = None
+    removed = 0
+    while True:
+        files, nxt = b2.list_files("uploads/", 500, start)
+        for f in files:
+            if f.get("uploadTimestamp", 0) and f["uploadTimestamp"] < cutoff:
+                try:
+                    b2.delete_version(f["fileId"], f["fileName"])
+                    removed += 1
+                except Exception:
+                    pass
+        if not nxt:
+            break
+        start = nxt
+    if removed:
+        print(f"[B2] удалено старых медиа: {removed}")
+
+
+def cleanup_loop():
+    while True:
+        time.sleep(3600)
+        try:
+            conn = get_db()
+            try:
+                row = conn.execute("SELECT value FROM meta WHERE key = 'last_media_cleanup'").fetchone()
+                last = float(row[0]) if row and row[0] else 0.0
+                now = time.time()
+                if now - last > 86400:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO meta (key, value) VALUES ('last_media_cleanup', ?)",
+                        (str(now),),
+                    )
+                    conn.commit()
+                    do = True
+                else:
+                    do = False
+            finally:
+                conn.close()
+            if do and b2.enabled():
+                media_cleanup()
+        except Exception as e:
+            print(f"[B2] ошибка cleanup: {e}")
+
+
+atexit.register(lambda: db_snapshot_now("(остановка)"))
+
+
+# ==========================================================
 #          WEB PUSH (уведомления браузера / PWA)
 # ==========================================================
 from pywebpush import webpush, WebPushException
@@ -99,7 +358,7 @@ from cryptography.hazmat.primitives.serialization import (
 
 VAPID_CLAIMS = {"sub": "mailto:admin@nexus-messenger.local"}
 
-_VAPID_MEM = None  # (private_pem, public_b64)
+_VAPID_MEM = None
 
 
 def _load_or_make_vapid(conn: sqlite3.Connection):
@@ -145,7 +404,6 @@ def get_vapid_public_b64() -> str:
 
 
 def send_web_push_to_user(username: str, title: str, body: str) -> None:
-    """Отправка через Web Push (работает в Chrome/PWA)."""
     conn = get_db()
     try:
         subs = conn.execute(
@@ -199,7 +457,6 @@ ACCESS_TOKEN_CACHE = {"token": "", "expires_at": 0}
 
 
 def get_firebase_access_token() -> Optional[str]:
-    """Получает OAuth2 access token для Google APIs, используя Service Account."""
     now = int(datetime.now(timezone.utc).timestamp())
     if ACCESS_TOKEN_CACHE["token"] and ACCESS_TOKEN_CACHE["expires_at"] > now + 60:
         return ACCESS_TOKEN_CACHE["token"]
@@ -210,7 +467,7 @@ def get_firebase_access_token() -> Optional[str]:
 
     try:
         sa_data = json.loads(FIREBASE_SERVICE_ACCOUNT_JSON)
-        from jwt import encode  # PyJWT[crypto]
+        from jwt import encode
 
         headers = {'alg': 'RS256', 'typ': 'JWT'}
         claims = {
@@ -256,7 +513,6 @@ def get_firebase_access_token() -> Optional[str]:
 
 
 def send_fcm_push(username: str, title: str, body: str) -> bool:
-    """Отправка пуша через FCM HTTP v1 API."""
     if not PROJECT_ID:
         print("[FCM] нет PROJECT_ID")
         return False
@@ -328,7 +584,6 @@ def send_fcm_push(username: str, title: str, body: str) -> bool:
 
 
 def send_fcm_topic_push(topic: str, title: str, body: str) -> bool:
-    """Пуш всем устройствам, подписанным на топик (не требует хранения токенов)."""
     if not PROJECT_ID:
         print("[UPDATE] нет PROJECT_ID, topic push пропущен")
         return False
@@ -370,7 +625,6 @@ def send_fcm_topic_push(topic: str, title: str, body: str) -> bool:
 
 
 def notify_update_if_new_version() -> None:
-    """При старте новой версии (деплое) шлёт всем пуш 'обновление — перезайдите'."""
     try:
         conn = get_db()
         try:
@@ -379,7 +633,7 @@ def notify_update_if_new_version() -> None:
         finally:
             conn.close()
         if last == APP_VERSION:
-            return  # это не деплой, а пробуждение инстанса — молчим
+            return
         send_fcm_topic_push("updates", UPDATE_NOTICE_TITLE, UPDATE_NOTICE_BODY)
         conn = get_db()
         try:
@@ -406,7 +660,6 @@ def notify_update_if_new_version() -> None:
 
 
 def notify_offline(username: str, title: str, body: str) -> None:
-    """Главный диспетчер уведомлений при закрытом приложении."""
     try:
         send_web_push_to_user(username, title, body)
     except Exception as e:
@@ -550,7 +803,7 @@ def init_db() -> None:
     ''')
     conn.commit()
     conn.close()
-    get_vapid_pair()  # прогрев/самолечение ключа при старте
+    get_vapid_pair()
 
 
 def log_access(username: str, action: str, ip: str, ua: str, bot: int) -> None:
@@ -816,8 +1069,12 @@ manager = ConnectionManager()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    db_restore_from_b2()
     init_db()
     threading.Thread(target=notify_update_if_new_version, daemon=True).start()
+    if b2.enabled():
+        threading.Thread(target=snapshot_loop, daemon=True).start()
+        threading.Thread(target=cleanup_loop, daemon=True).start()
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -830,8 +1087,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/uploads/{name}")
+async def serve_upload(name: str):
+    safe = os.path.basename(name)
+    if not safe:
+        raise HTTPException(status_code=404, detail="Не найдено")
+    local = os.path.join(UPLOAD_DIR, safe)
+    if os.path.isfile(local):
+        return FileResponse(
+            local,
+            media_type=guess_mime(safe),
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    data = await asyncio.to_thread(b2.download_bytes, f"uploads/{safe}")
+    if data is None:
+        raise HTTPException(status_code=404, detail="Файл не найден")
+    try:
+        with open(local, "wb") as f:
+            f.write(data)
+    except Exception:
+        pass
+    return Response(
+        content=data,
+        media_type=guess_mime(safe),
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 # ==========================================================
@@ -943,7 +1226,6 @@ async def push_subscribe(token: str = Form(...), subscription: str = Form(...)):
 
 @app.post("/fcm/register")
 async def register_fcm_token(token: str = Form(...), fcm_token: str = Form(...)):
-    """Сохраняет FCM-токен устройства для текущего пользователя."""
     username = require_auth(token)
     if not fcm_token.strip():
         raise HTTPException(status_code=400, detail="Пустой FCM токен")
@@ -1012,6 +1294,12 @@ async def register(
             with open(file_path, "wb") as f:
                 f.write(content)
             avatar_url = f"/uploads/{safe_name}"
+            if b2.enabled():
+                threading.Thread(
+                    target=b2.upload_bytes,
+                    args=(f"uploads/{safe_name}", content, guess_mime(safe_name)),
+                    daemon=True,
+                ).start()
         conn.execute(
             "INSERT INTO users (username, password_hash, avatar_url, bio, status_text) VALUES (?, ?, ?, ?, '')",
             (username, hash_password(password), avatar_url, ""),
@@ -1135,6 +1423,12 @@ async def update_profile(
             with open(file_path, "wb") as f:
                 f.write(content)
             avatar_url = f"/uploads/{safe_name}"
+            if b2.enabled():
+                threading.Thread(
+                    target=b2.upload_bytes,
+                    args=(f"uploads/{safe_name}", content, guess_mime(safe_name)),
+                    daemon=True,
+                ).start()
         conn.execute(
             "UPDATE users SET avatar_url = ?, bio = ?, status_text = ?, theme = ? WHERE username = ?",
             (avatar_url, bio, status_text, theme, username),
@@ -1214,6 +1508,12 @@ async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
     file_path = os.path.join(UPLOAD_DIR, safe_name)
     with open(file_path, "wb") as f:
         f.write(contents)
+    if b2.enabled():
+        threading.Thread(
+            target=b2.upload_bytes,
+            args=(f"uploads/{safe_name}", contents, guess_mime(safe_name)),
+            daemon=True,
+        ).start()
     return {"file_url": f"/uploads/{safe_name}"}
 
 
