@@ -6,6 +6,7 @@ import sqlite3
 import json
 import base64
 import asyncio
+import time
 import urllib.request
 import urllib.error
 from collections import deque
@@ -13,7 +14,7 @@ from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 from typing import Dict, List, Optional, Set
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -52,6 +53,36 @@ ALLOWED_UPLOAD_EXTENSIONS = {
     '.pdf', '.txt', '.zip', '.mp4', '.mov'
 }
 MESSAGES_PAGE_SIZE = 50
+
+# Маркеры ботов в User-Agent
+BOT_UA_RE = re.compile(
+    r'bot|crawl|spider|headless|selenium|puppeteer|playwright|python-requests|scrapy|'
+    r'curl|wget|go-http|httpclient|okhttp|java\/|node-fetch|axios|postman|insomnia|phantomjs',
+    re.I,
+)
+# Минимальное разумное время между открытием страницы и отправкой формы (мс)
+MIN_FILL_MS = 1500
+
+
+def client_ip(request: Request) -> str:
+    xf = request.headers.get("x-forwarded-for", "")
+    if xf:
+        return xf.split(",")[0].strip()
+    return request.client.host if request.client else ""
+
+
+def ws_client_ip(websocket: WebSocket) -> str:
+    xf = websocket.headers.get("x-forwarded-for", "")
+    if xf:
+        return xf.split(",")[0].strip()
+    return websocket.client.host if websocket.client else ""
+
+
+def ua_bot_flag(ua: str) -> int:
+    if not ua:
+        return 1
+    return 1 if BOT_UA_RE.search(ua) else 0
+
 
 # ==========================================================
 #          WEB PUSH (уведомления браузера / PWA)
@@ -417,9 +448,36 @@ def init_db() -> None:
             public_b64  TEXT NOT NULL
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS access_log (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts       DATETIME DEFAULT CURRENT_TIMESTAMP,
+            username TEXT DEFAULT '',
+            action   TEXT NOT NULL,
+            ip       TEXT DEFAULT '',
+            ua       TEXT DEFAULT '',
+            bot      INTEGER DEFAULT 0
+        )
+    ''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_access_log_id ON access_log(id)")
     conn.commit()
     conn.close()
     get_vapid_pair()  # прогрев/самолечение ключа при старте
+
+
+def log_access(username: str, action: str, ip: str, ua: str, bot: int) -> None:
+    try:
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO access_log (username, action, ip, ua, bot) VALUES (?, ?, ?, ?, ?)",
+                (username or "", action, ip or "", (ua or "")[:300], 1 if bot else 0),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"[ACCESS] ошибка записи: {e}")
 
 
 def get_chat_id(user1: str, user2: str) -> str:
@@ -815,10 +873,30 @@ async def register_fcm_token(token: str = Form(...), fcm_token: str = Form(...))
 
 @app.post("/register")
 async def register(
+    request: Request,
     username: str = Form(...),
     password: str = Form(...),
     avatar: UploadFile = File(None),
+    hp: str = Form(""),
+    load_ts: str = Form("0"),
 ):
+    ip = client_ip(request)
+    ua = request.headers.get("user-agent", "")
+    bot_ua = ua_bot_flag(ua)
+    honeypot = hp.strip() != ""
+    # проверка скорости заполнения формы
+    bot_fast = 0
+    try:
+        lt = int(load_ts)
+        delta = int(time.time() * 1000) - lt
+        if 0 <= delta < MIN_FILL_MS:
+            bot_fast = 1
+    except Exception:
+        pass
+    if honeypot or bot_ua:
+        log_access(username, "register_block", ip, ua, 1)
+        raise HTTPException(status_code=403, detail="Регистрация отклонена: похоже на бота")
+    bot_flag = 1 if bot_fast else 0
     if not USERNAME_RE.match(username):
         raise HTTPException(
             status_code=400,
@@ -853,21 +931,33 @@ async def register(
         conn.commit()
     finally:
         conn.close()
+    log_access(username, "register", ip, ua, bot_flag)
     token = create_session(username)
     return {"status": "ok", "username": username, "avatar_url": avatar_url,
             "bio": "", "status_text": "", "token": token}
 
 
 @app.post("/login")
-async def login(username: str = Form(...), password: str = Form(...)):
+async def login(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    hp: str = Form(""),
+    load_ts: str = Form("0"),
+):
+    ip = client_ip(request)
+    ua = request.headers.get("user-agent", "")
+    bot_flag = ua_bot_flag(ua)
     conn = get_db()
     try:
         row = conn.execute(
             "SELECT password_hash, avatar_url, bio, status_text, banned FROM users WHERE username = ?", (username,)
         ).fetchone()
         if not row:
+            log_access(username, "login_fail", ip, ua, bot_flag)
             raise HTTPException(status_code=404, detail="Пользователь не найден")
         if row[4]:
+            log_access(username, "login_fail", ip, ua, bot_flag)
             raise HTTPException(status_code=403, detail="Вы забанены администратором")
         if not row[0]:
             conn.execute(
@@ -876,9 +966,11 @@ async def login(username: str = Form(...), password: str = Form(...)):
             )
             conn.commit()
         elif not verify_password(password, row[0]):
+            log_access(username, "login_fail", ip, ua, bot_flag)
             raise HTTPException(status_code=401, detail="Неверный пароль")
     finally:
         conn.close()
+    log_access(username, "login", ip, ua, bot_flag)
     token = create_session(username)
     return {
         "status": "ok",
@@ -1254,6 +1346,24 @@ def admin_stats(token: str):
         messages_total = conn.execute(
             "SELECT COUNT(*) FROM messages WHERE msg_type != 'deleted'"
         ).fetchone()[0]
+        access = [
+            {
+                "ts": utc_str_to_msk(r[0]),
+                "username": r[1],
+                "action": r[2],
+                "ip": r[3],
+                "ua": r[4],
+                "bot": r[5],
+            }
+            for r in conn.execute(
+                "SELECT ts, username, action, ip, ua, bot FROM access_log ORDER BY id DESC LIMIT 60"
+            ).fetchall()
+        ]
+        bot_users = [
+            r[0] for r in conn.execute(
+                "SELECT DISTINCT username FROM access_log WHERE bot = 1 AND username != ''"
+            ).fetchall()
+        ]
     finally:
         conn.close()
     return {
@@ -1261,6 +1371,8 @@ def admin_stats(token: str):
         "users": users,
         "messages_total": messages_total,
         "log": list(CONNECT_LOG),
+        "access": access,
+        "bot_users": bot_users,
     }
 
 
@@ -1540,6 +1652,13 @@ async def websocket_endpoint(
         return
 
     await manager.connect(username, websocket)
+    log_access(
+        username,
+        "ws_connect",
+        ws_client_ip(websocket),
+        websocket.headers.get("user-agent", ""),
+        ua_bot_flag(websocket.headers.get("user-agent", "")),
+    )
     try:
         while True:
             data = await websocket.receive_json()
