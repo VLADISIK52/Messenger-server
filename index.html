@@ -935,6 +935,9 @@
         } catch (e) {}
     })();
 
+    let JUST_UPDATED = /[?&]fresh=/.test(location.search);
+    if (JUST_UPDATED) { try { history.replaceState(null, '', location.pathname); } catch (e) {} }
+
     let ws, currentUser = "", currentToken = "", activeChatTarget = "", isCurrentGroup = false;
     let knownUsers = [], userGroups = [], onlineUsers = [], unreadCounts = {}, profileCache = {};
     let myProfile = { avatar_url: '/uploads/default.png', bio: '', status_text: '', theme: 'dark', hide_online: false, is_admin: false };
@@ -1020,7 +1023,7 @@
         return 'был(а) ' + String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + ' в ' + hh;
     }
 
-    // ── FIREBASE FCM: регистрация токена через median.firebaseMessaging ──
+    // ── FIREBASE FCM: регистрация токена + подписка на топик обновлений ──
     let fcmRegistered = false;
     function fcmNormalize(t) {
         if (!t) return null;
@@ -1058,6 +1061,7 @@
 
         const start = () => {
             try { if (typeof fm.register === 'function') fm.register(); } catch (e) {}
+            try { if (typeof fm.subscribeToTopic === 'function') fm.subscribeToTopic('updates'); } catch (e) {}
             grabToken();
             try { if (typeof fm.tokenRefreshed === 'function') fm.tokenRefreshed(send); } catch (e) {}
         };
@@ -1258,6 +1262,14 @@
         let savedToken = localStorage.getItem('messenger_token');
         setTimeout(() => {
             document.getElementById('splash-screen').classList.add('hidden');
+            try {
+                if (sessionStorage.getItem('session_reset_after_update')) {
+                    sessionStorage.removeItem('session_reset_after_update');
+                    setTimeout(() => showToast('\u{26A0}\uFE0F} Сессия сброшена', 'Сервер обновился: войди заново — это займёт секунду'), 600);
+                } else if (JUST_UPDATED) {
+                    setTimeout(() => showToast('\u{1F4E2} Обновление', 'Приложение обновилось: если что-то работает странно — выйди и войди заново'), 600);
+                }
+            } catch (e) {}
             if (savedUser && savedToken) {
                 currentUser = savedUser; currentToken = savedToken;
                 setupUserInterface();
@@ -1772,6 +1784,7 @@
         ws.onclose = (e) => {
             stopPing();
             if (e.code === 4001) {
+                try { sessionStorage.setItem('session_reset_after_update', '1'); } catch (e2) {}
                 localStorage.removeItem('messenger_currentUser');
                 localStorage.removeItem('messenger_token');
                 location.reload();
