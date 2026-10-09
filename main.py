@@ -49,6 +49,14 @@ B2_BASE = "https://api.backblazeb2.com"
 SNAPSHOT_NAME = "snapshots/chat.db"
 MEDIA_TTL_DAYS = 90
 
+# ── ЧТО НОВОГО: верхняя строка = текст пуша и тоста об обновлении ──
+CHANGELOG = [
+    "Подключено облачное хранилище: фото, голосовые, видео и история чатов теперь сохраняются после обновлений. Перезаходить не нужно!",
+    "Оповещения об обновлениях: приложение само рассказывает, что нового на сервере.",
+    "Админ-панель: журнал доступа с IP и устройствами, защита от ботов.",
+]
+UPDATE_NOTICE_TITLE = "\U0001F504 Обновление"
+
 try:
     APP_VERSION = os.environ.get("RENDER_GIT_COMMIT", "") or str(int(os.path.getmtime("index.html")))
 except Exception:
@@ -66,15 +74,16 @@ ALLOWED_UPLOAD_EXTENSIONS = {
 }
 MESSAGES_PAGE_SIZE = 50
 
-UPDATE_NOTICE_TITLE = "\u26A0\uFE0F Внимание: обновление"
-UPDATE_NOTICE_BODY = "Перезайдите из аккаунта (выйти → войти), чтобы всё работало корректно"
-
 BOT_UA_RE = re.compile(
     r'bot|crawl|spider|headless|selenium|puppeteer|playwright|python-requests|scrapy|'
     r'curl|wget|go-http|httpclient|okhttp|java\/|node-fetch|axios|postman|insomnia|phantomjs',
     re.I,
 )
 MIN_FILL_MS = 1500
+
+
+def update_note() -> str:
+    return CHANGELOG[0] if CHANGELOG else ""
 
 
 def guess_mime(name: str) -> str:
@@ -625,6 +634,7 @@ def send_fcm_topic_push(topic: str, title: str, body: str) -> bool:
 
 
 def notify_update_if_new_version() -> None:
+    """При старте новой версии шлёт пуш 'Обновление + что добавилось'."""
     try:
         conn = get_db()
         try:
@@ -633,8 +643,9 @@ def notify_update_if_new_version() -> None:
         finally:
             conn.close()
         if last == APP_VERSION:
-            return
-        send_fcm_topic_push("updates", UPDATE_NOTICE_TITLE, UPDATE_NOTICE_BODY)
+            return  # не деплой, а пробуждение инстанса — молчим
+        note = update_note()
+        send_fcm_topic_push("updates", UPDATE_NOTICE_TITLE, note)
         conn = get_db()
         try:
             users = [r[0] for r in conn.execute("SELECT DISTINCT username FROM push_subs").fetchall()]
@@ -642,7 +653,7 @@ def notify_update_if_new_version() -> None:
             conn.close()
         for uname in users:
             try:
-                send_web_push_to_user(uname, UPDATE_NOTICE_TITLE, UPDATE_NOTICE_BODY)
+                send_web_push_to_user(uname, UPDATE_NOTICE_TITLE, note)
             except Exception:
                 pass
         conn = get_db()
@@ -654,7 +665,7 @@ def notify_update_if_new_version() -> None:
             conn.commit()
         finally:
             conn.close()
-        print(f"[UPDATE] разослано уведомление об обновлении {APP_VERSION}")
+        print(f"[UPDATE] разослано уведомление об обновлении {APP_VERSION}: {note}")
     except Exception as e:
         print(f"[UPDATE] ошибка рассылки обновления: {e}")
 
@@ -1140,7 +1151,7 @@ def get_index():
 @app.get("/version")
 def get_version():
     return JSONResponse(
-        {"version": APP_VERSION},
+        {"version": APP_VERSION, "note": update_note()},
         headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
     )
 
