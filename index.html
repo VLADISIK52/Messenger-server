@@ -458,11 +458,12 @@
         .ban-badge { background: var(--danger); color: #fff; font-size: 9px; font-weight: 800; padding: 1px 6px; border-radius: var(--radius-pill); }
         .ban-btn { background: transparent; border: none; cursor: pointer; font-size: 14px; flex-shrink: 0; transition: transform 0.12s; }
         .ban-btn:active { transform: scale(1.2); }
-        .admin-log-row { display: flex; gap: 8px; align-items: center; padding: 5px 10px; background: var(--glass); border-radius: 10px; font-size: 12px; }
+        .admin-log-row { display: flex; gap: 8px; align-items: center; padding: 5px 10px; background: var(--glass); border-radius: 10px; font-size: 12px; flex-wrap: wrap; }
         .admin-log-row .t { color: var(--text-muted); font-size: 11px; flex-shrink: 0; }
         .admin-log-row .u { flex: 1; font-weight: 600; }
         .admin-log-row .act-connect { color: var(--online); font-size: 11px; }
         .admin-log-row .act-disconnect { color: var(--text-muted); font-size: 11px; }
+        .admin-log-row .act-bot { color: var(--danger); font-size: 11px; font-weight: 700; }
         .settings-profile { display: flex; gap: 12px; align-items: center; padding: 10px; border-radius: 16px; background: rgba(255,255,255,0.05); cursor: default; }
         .settings-nick { font-weight: 800; font-size: 16px; font-family: 'Sora', sans-serif; }
         .settings-status { font-size: 12px; color: var(--online); margin-top: 2px; }
@@ -559,6 +560,8 @@
         <div class="auth-hint">Если аккаунта ещё нет — он создастся автоматически</div>
         <input type="text" id="username-input" placeholder="Логин (3-20 символов, латиница/цифры)" onkeypress="if(event.key==='Enter') document.getElementById('password-input').focus()">
         <input type="password" id="password-input" placeholder="Пароль (от 4 символов)" onkeypress="if(event.key==='Enter') login()">
+        <input type="text" id="hp-website" placeholder="Website" style="display:none" tabindex="-1" autocomplete="off">
+        <input type="hidden" id="auth-load-ts" value="">
         <div class="auth-error" id="auth-error"></div>
         <button class="btn-primary" id="btn-login" onclick="login()">Войти</button>
     </div>
@@ -739,6 +742,8 @@
         <div id="admin-users" style="display:flex; flex-direction:column; gap:6px;"></div>
         <div class="settings-section">Журнал подключений</div>
         <div id="admin-log" style="display:flex; flex-direction:column; gap:4px;"></div>
+        <div class="settings-section">Журнал доступа (IP / устройства)</div>
+        <div id="admin-access" style="display:flex; flex-direction:column; gap:4px;"></div>
         <div class="settings-section">Рассылка</div>
         <input type="text" id="broadcast-title" placeholder="Заголовок (например: Обновление сервера)">
         <textarea id="broadcast-body" rows="2" placeholder="Текст объявления..."></textarea>
@@ -949,6 +954,27 @@
     let scrollDownPending = 0;
     let chatScrollPositions = {};
 
+    const ACCESS_LABELS = {
+        register: 'регистрация',
+        login: 'вход',
+        login_fail: 'ошибка входа',
+        ws_connect: 'онлайн',
+        register_block: 'блок бота'
+    };
+
+    function shortUA(ua) {
+        if (!ua) return 'без User-Agent';
+        if (/\bwv\b/i.test(ua)) return 'Android WebView (приложение)';
+        if (/Median|GoNative/i.test(ua)) return 'приложение Median';
+        if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS Safari';
+        if (/Android/i.test(ua)) return 'Android браузер';
+        if (/Windows/i.test(ua)) return 'Windows: ' + (/Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : 'другой');
+        if (/Mac OS X/i.test(ua)) return 'macOS: ' + (/Safari\//.test(ua) ? 'Safari/Chrome' : 'другой');
+        if (/Linux/i.test(ua)) return 'Linux';
+        if (/curl|wget|python|requests|bot|spider|headless/i.test(ua)) return 'скрипт/бот: ' + ua.slice(0, 20);
+        return ua.slice(0, 24);
+    }
+
     function startPing() {
         stopPing();
         pingInterval = setInterval(() => {
@@ -1108,7 +1134,7 @@
         box.innerHTML = '';
         const sorted = [...myContacts].sort((a, b) => (onlineUsers.includes(b) ? 1 : 0) - (onlineUsers.includes(a) ? 1 : 0) || a.localeCompare(b));
         if (!sorted.length) {
-            box.innerHTML = '<div class="search-suggestion-empty">Пока пусто. Нажми «⭐ Добавить в контакты» в профиле пользователя или найди через поиск сверху</div>';
+            box.innerHTML = '<div class="search-suggestion-empty">Пока пусто. Нажми «⭐ Добавить в контакты» в профиле пользователя или найди через лупу сверху</div>';
             return;
         }
         sorted.forEach(u => {
@@ -1227,6 +1253,7 @@
     }
 
     document.addEventListener("DOMContentLoaded", () => {
+        try { document.getElementById('auth-load-ts').value = String(Date.now()); } catch (e) {}
         let savedUser = localStorage.getItem('messenger_currentUser');
         let savedToken = localStorage.getItem('messenger_token');
         setTimeout(() => {
@@ -1581,13 +1608,17 @@
         errorEl.innerText = '';
         if (!username || !password) { errorEl.innerText = 'Заполните логин и пароль'; return; }
         btn.disabled = true; btn.innerText = 'Входим...';
+        const hpVal = document.getElementById('hp-website').value;
+        const tsVal = document.getElementById('auth-load-ts').value || '0';
         try {
             const loginForm = new FormData();
             loginForm.append('username', username); loginForm.append('password', password);
+            loginForm.append('hp', hpVal); loginForm.append('load_ts', tsVal);
             let res = await fetch('/login', { method: 'POST', body: loginForm });
             if (res.status === 404) {
                 const regForm = new FormData();
                 regForm.append('username', username); regForm.append('password', password);
+                regForm.append('hp', hpVal); regForm.append('load_ts', tsVal);
                 res = await fetch('/register', { method: 'POST', body: regForm });
                 if (!res.ok) { const err = await res.json(); errorEl.innerText = err.detail || 'Не удалось создать аккаунт'; btn.disabled = false; btn.innerText = 'Войти'; return; }
             } else if (res.status === 401) {
@@ -2156,12 +2187,25 @@
             document.getElementById('admin-online').innerHTML = data.online.length === 0
                 ? '<div class="admin-row"><span class="a-name" style="color:var(--text-muted)">Никого нет в сети</span></div>'
                 : data.online.map(u => `<div class="admin-row"><span class="a-online">●</span><span class="a-name">@${escapeHtml(u)}</span></div>`).join('');
+            const botUsers = data.bot_users || [];
             document.getElementById('admin-users').innerHTML = data.users.length === 0
                 ? '<div class="admin-row"><span class="a-name" style="color:var(--text-muted)">Нет аккаунтов</span></div>'
-                : data.users.map(u => `<div class="admin-row"><span class="a-name">@${escapeHtml(u.username)}${u.banned ? ' <span class="ban-badge">БАН</span>' : ''}${u.status_text ? ' · ' + escapeHtml(u.status_text) : ''}</span><span class="a-meta">${escapeHtml(u.created_at || '')}</span><button class="ban-btn" onclick="${u.banned ? `adminUnban('${u.username}')` : `adminBan('${u.username}')`}">${u.banned ? '\u{2705}' : '\u{1F6AB}'}</button></div>`).join('');
+                : data.users.map(u => `<div class="admin-row"><span class="a-name">@${escapeHtml(u.username)}${u.banned ? ' <span class="ban-badge">БАН</span>' : ''}${botUsers.includes(u.username) ? ' \u{1F916}' : ''}${u.status_text ? ' · ' + escapeHtml(u.status_text) : ''}</span><span class="a-meta">${escapeHtml(u.created_at || '')}</span><button class="ban-btn" onclick="${u.banned ? `adminUnban('${u.username}')` : `adminBan('${u.username}')`}">${u.banned ? '\u{2705}' : '\u{1F6AB}'}</button></div>`).join('');
             document.getElementById('admin-log').innerHTML = data.log.length === 0
                 ? '<div class="admin-log-row"><span class="u" style="color:var(--text-muted)">Пока пусто</span></div>'
                 : data.log.slice(0, 30).map(l => `<div class="admin-log-row"><span class="t">${escapeHtml(l.time)}</span><span class="u">@${escapeHtml(l.user)}</span><span class="act-${l.action}">${l.action === 'connect' ? 'вошёл' : 'вышел'}</span></div>`).join('');
+            const accessBox = document.getElementById('admin-access');
+            if (accessBox) {
+                accessBox.innerHTML = (!data.access || data.access.length === 0)
+                    ? '<div class="admin-log-row"><span class="u" style="color:var(--text-muted)">Пока пусто</span></div>'
+                    : data.access.slice(0, 40).map(l => `
+                        <div class="admin-log-row">
+                            <span class="t">${escapeHtml(l.ts || '')}</span>
+                            <span class="u">@${escapeHtml(l.username || '—')}</span>
+                            <span class="${l.bot ? 'act-bot' : (l.action === 'login' || l.action === 'ws_connect' ? 'act-connect' : 'act-disconnect')}">${ACCESS_LABELS[l.action] || escapeHtml(l.action)}</span>
+                            <span class="a-meta" style="width:100%; margin-top:2px;">${escapeHtml(l.ip || '?')} · ${escapeHtml(shortUA(l.ua))} · ${l.bot ? '\u{1F916} бот' : '\u{1F9D1} человек'}</span>
+                        </div>`).join('');
+            }
         } catch (e) {
             totalEl.classList.add('err');
             totalEl.innerText = '\u{26D4} Ошибка сети: ' + e;
@@ -2299,70 +2343,6 @@
         }
     }
 
-    function onSearchInputDebounce() {
-        clearTimeout(searchDebounceTimer);
-        searchDebounceTimer = setTimeout(performSideSearch, 300);
-    }
-    async function performAccountSearch() {
-        const input = document.getElementById('side-search-input');
-        const dropdown = document.getElementById('side-search-suggestions');
-        const q = input.value.trim();
-        if (!q) { dropdown.classList.remove('open'); return; }
-        try {
-            const res = await fetch(`/search?q=${encodeURIComponent(q)}&token=${encodeURIComponent(currentToken)}`);
-            if (!res.ok) {
-                dropdown.innerHTML = `<div class="search-suggestion-empty">\u{26D4} Ошибка ${res.status}${res.status === 401 ? ' — перезайди' : ''}</div>`;
-                dropdown.classList.add('open');
-                return;
-            }
-            const results = await res.json();
-            renderSearchSuggestions(results, q);
-        } catch (e) {
-            dropdown.innerHTML = '<div class="search-suggestion-empty">\u{26D4} Ошибка сети</div>';
-            dropdown.classList.add('open');
-        }
-    }
-    function renderSearchSuggestions(results, query) {
-        const dropdown = document.getElementById('side-search-suggestions');
-        dropdown.innerHTML = '';
-        if (results.length === 0) {
-            dropdown.innerHTML = '<div class="search-suggestion-empty">Пользователь не найден</div>';
-            dropdown.classList.add('open');
-            return;
-        }
-        results.forEach(u => {
-            const item = document.createElement('div');
-            item.className = 'search-suggestion-item';
-            const avatarHtml = u.avatar_url && u.avatar_url !== '/uploads/default.png'
-                ? `<div class="avatar avatar-sm"><img src="${u.avatar_url}" loading="lazy"></div>`
-                : `<div class="avatar avatar-sm">${u.username.charAt(0).toUpperCase()}</div>`;
-            item.innerHTML = `${avatarHtml}<div class="search-suggestion-name">@${u.username}</div>`;
-            item.onclick = () => {
-                addKnownUser(u.username);
-                toggleSideSearch();
-                selectChat(u.username, false);
-            };
-            dropdown.appendChild(item);
-        });
-        dropdown.classList.add('open');
-    }
-    async function startNewChat() {
-        const input = document.getElementById('side-search-input');
-        let user = input.value.trim().replace('@', '');
-        if (!user) return;
-        if (user === currentUser) { input.value = ''; return; }
-        try {
-            const res = await fetch(`/search?q=${encodeURIComponent(user)}&token=${encodeURIComponent(currentToken)}`);
-            if (!res.ok) { showToast('\u{26D4} Ошибка', `Поиск недоступен (${res.status})`); return; }
-            const results = await res.json();
-            const exact = results.find(u => u.username.toLowerCase() === user.toLowerCase());
-            if (!exact) { showToast('\u{274C} Не найдено', `Пользователь @${user} не существует`); return; }
-            user = exact.username;
-        } catch (e) { showToast('Ошибка', 'Не удалось проверить пользователя'); return; }
-        addKnownUser(user); selectChat(user, false);
-        input.value = '';
-        document.getElementById('side-search-suggestions').classList.remove('open');
-    }
     async function submitCreateGroup() {
         let title = document.getElementById('group-title-input').value.trim();
         let members = document.getElementById('group-members-input').value.trim();
