@@ -4,321 +4,130 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Mission Control</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛰️</text></svg>">
 <style>
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     :root {
-        --bg: #051b13;
-        --text: #eafff5;
-        --sub: #b9d8c9;
-        --muted: #6f9484;
-        --card: rgba(255,255,255,0.055);
-        --card-strong: rgba(6,30,22,0.72);
-        --border: rgba(190,255,230,0.16);
-        --accent: #a99af0;
-        --accent2: #f4a988;
+        --bg: #051b13; --text: #eafff5; --sub: #b9d8c9; --muted: #6f9484;
+        --card: rgba(255,255,255,0.055); --border: rgba(190,255,230,0.16);
         --grad: linear-gradient(135deg, #ffb48f 0%, #ef8f7e 40%, #b7a4ec 100%);
-        --ok: #7ef0c0;
-        --warn: #fbbf24;
-        --bad: #ff7d92;
-        --blue: #38bdf8;
-        --purple: #a99af0;
-        --shadow: 0 18px 50px rgba(0,0,0,0.35);
+        --ok: #7ef0c0; --warn: #fbbf24; --bad: #ff7d92; --blue: #38bdf8; --purple: #a99af0;
     }
     html, body {
-        margin: 0;
-        min-height: 100%;
+        margin: 0; min-height: 100%;
         background:
-            radial-gradient(900px 500px at 80% -10%, rgba(126,240,192,0.14), transparent 60%),
-            radial-gradient(700px 500px at -10% 110%, rgba(244,169,136,0.18), transparent 60%),
+            radial-gradient(900px 500px at 80% -10%, rgba(126,240,192,0.13), transparent 60%),
+            radial-gradient(700px 500px at -10% 110%, rgba(244,169,136,0.16), transparent 60%),
             var(--bg);
         color: var(--text);
         font-family: Inter, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
     }
-    body { padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+    body { padding-bottom: max(20px, env(safe-area-inset-bottom)); }
     .hidden { display: none !important; }
     .muted { color: var(--muted); }
-    .sub { color: var(--sub); }
 
-    #login-screen {
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-    }
+    #login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
     .login-box {
-        width: min(100%, 420px);
-        background: rgba(8,36,27,0.88);
-        border: 1px solid var(--border);
-        border-radius: 28px;
-        padding: 24px;
-        box-shadow: var(--shadow);
-        backdrop-filter: blur(18px);
-        -webkit-backdrop-filter: blur(18px);
+        width: min(100%, 420px); background: rgba(8,36,27,0.92);
+        border: 1px solid var(--border); border-radius: 28px; padding: 26px;
+        box-shadow: 0 24px 60px rgba(0,0,0,0.45);
     }
-    .login-title {
-        font-family: Sora, Inter, sans-serif;
-        font-size: 28px;
-        font-weight: 800;
-        margin-bottom: 8px;
-        background: linear-gradient(90deg, #eafff5, #9adcf0 55%, #b7a4ec);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-    }
-    .login-hint { color: var(--muted); font-size: 13px; margin-bottom: 18px; line-height: 1.45; }
+    .login-title { font-family: Sora, Inter, sans-serif; font-size: 28px; font-weight: 800; margin-bottom: 8px;
+        background: linear-gradient(90deg, #eafff5, #9adcf0 55%, #b7a4ec); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .login-hint { color: var(--muted); font-size: 13px; margin-bottom: 18px; line-height: 1.5; }
     input {
-        width: 100%;
-        border: 1px solid rgba(220,255,240,0.28);
-        background: rgba(255,255,255,0.08);
-        color: var(--text);
-        border-radius: 16px;
-        padding: 14px 16px;
-        outline: none;
-        font-size: 15px;
-        margin-bottom: 10px;
+        width: 100%; border: 1px solid rgba(220,255,240,0.28); background: rgba(255,255,255,0.08);
+        color: var(--text); border-radius: 16px; padding: 14px 16px; outline: none; font-size: 15px; margin-bottom: 10px;
     }
-    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(169,154,240,0.15); }
+    input:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(169,154,240,0.15); }
     .login-error { min-height: 18px; color: var(--bad); font-size: 13px; margin-bottom: 8px; }
 
     header {
-        position: sticky;
-        top: 0;
-        z-index: 20;
+        position: sticky; top: 0; z-index: 20;
         padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
-        background: rgba(5,27,19,0.72);
-        border-bottom: 1px solid var(--border);
-        backdrop-filter: blur(18px);
-        -webkit-backdrop-filter: blur(18px);
+        background: rgba(5,27,19,0.94); border-bottom: 1px solid var(--border);
     }
-    .top-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        flex-wrap: wrap;
-        max-width: 1400px;
-        margin: 0 auto;
-    }
-    .brand {
-        font-family: Sora, Inter, sans-serif;
-        font-weight: 800;
-        font-size: 18px;
-        letter-spacing: -0.02em;
-        flex: 1;
-        min-width: 180px;
-    }
-    .status {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: var(--sub);
-        font-size: 12px;
-        white-space: nowrap;
-    }
-    .dot {
-        width: 9px;
-        height: 9px;
-        border-radius: 50%;
-        background: var(--muted);
-        box-shadow: 0 0 0 0 rgba(126,240,192,0.5);
-    }
-    .dot.ok { background: var(--ok); animation: pulse 1.8s infinite; }
-    .dot.bad { background: var(--bad); }
+    .top-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; max-width: 1400px; margin: 0 auto; }
+    .brand { font-family: Sora, Inter, sans-serif; font-weight: 800; font-size: 18px; flex: 1; min-width: 170px; }
+    .status { display: flex; align-items: center; gap: 8px; color: var(--sub); font-size: 12px; white-space: nowrap; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+    .dot.ok { background: var(--ok); box-shadow: 0 0 10px rgba(126,240,192,0.7); }
+    .dot.bad { background: var(--bad); box-shadow: 0 0 10px rgba(255,125,146,0.6); }
     .dot.wait { background: var(--warn); }
-    @keyframes pulse {
-        0% { box-shadow: 0 0 0 0 rgba(126,240,192,0.45); }
-        70% { box-shadow: 0 0 0 10px rgba(126,240,192,0); }
-        100% { box-shadow: 0 0 0 0 rgba(126,240,192,0); }
-    }
-    .actions {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        width: 100%;
-        margin-top: 10px;
-    }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; width: 100%; margin-top: 10px; }
     .btn {
-        border: 1px solid var(--border);
-        background: rgba(255,255,255,0.07);
-        color: var(--text);
-        border-radius: 999px;
-        padding: 9px 13px;
-        font-weight: 700;
-        font-size: 13px;
-        cursor: pointer;
+        border: 1px solid var(--border); background: rgba(255,255,255,0.07); color: var(--text);
+        border-radius: 999px; padding: 9px 13px; font-weight: 700; font-size: 13px; cursor: pointer;
         transition: transform 0.12s ease, background 0.15s ease, opacity 0.15s ease;
-        -webkit-tap-highlight-color: transparent;
     }
     .btn:hover { background: rgba(255,255,255,0.11); }
     .btn:active { transform: scale(0.96); }
     .btn:disabled { opacity: 0.55; cursor: default; }
-    .btn.primary {
-        background: var(--grad);
-        border: none;
-        color: #fff;
-        box-shadow: 0 0 20px rgba(244,169,136,0.28);
-    }
-    .btn.danger {
-        background: rgba(255,125,146,0.12);
-        border-color: rgba(255,125,146,0.28);
-        color: #ffc2cb;
-    }
+    .btn.primary { background: var(--grad); border: none; color: #fff; box-shadow: 0 0 20px rgba(244,169,136,0.28); }
+    .btn.danger { background: rgba(255,125,146,0.12); border-color: rgba(255,125,146,0.28); color: #ffc2cb; }
 
-    .banner {
-        max-width: 1400px;
-        margin: 10px auto 0;
-        padding: 10px 12px;
-        border-radius: 16px;
-        border: 1px solid var(--border);
-        background: rgba(255,255,255,0.06);
-        color: var(--sub);
-        font-size: 13px;
-        line-height: 1.35;
-    }
+    .banner { max-width: 1400px; margin: 10px auto 0; padding: 10px 14px; border-radius: 16px;
+        border: 1px solid var(--border); background: rgba(255,255,255,0.06); color: var(--sub); font-size: 13px; }
     .banner.ok { border-color: rgba(126,240,192,0.35); background: rgba(126,240,192,0.10); color: #d9fff0; }
-    .banner.warn { border-color: rgba(251,191,36,0.35); background: rgba(251,191,36,0.10); color: #fff0c2; }
     .banner.error { border-color: rgba(255,125,146,0.35); background: rgba(255,125,146,0.10); color: #ffd7dd; }
 
-    .wrap {
-        max-width: 1400px;
-        margin: 0 auto;
-        padding: 14px;
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 12px;
-        align-content: start;
-    }
+    .wrap { max-width: 1400px; margin: 0 auto; padding: 14px; display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; align-content: start; }
     .card {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 22px;
-        padding: 14px;
+        background: var(--card); border: 1px solid var(--border); border-radius: 22px; padding: 14px;
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 30px rgba(0,0,0,0.18);
-        backdrop-filter: blur(14px);
-        -webkit-backdrop-filter: blur(14px);
-        min-height: 96px;
     }
     .card.wide { grid-column: 1 / -1; }
-    .card h3 {
-        margin: 0 0 10px;
-        font-size: 11px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--muted);
-        font-weight: 800;
-    }
-    .big {
-        font-family: Sora, Inter, sans-serif;
-        font-size: 28px;
-        font-weight: 800;
-        line-height: 1.05;
-        word-break: break-word;
-    }
-    .mid {
-        font-family: Sora, Inter, sans-serif;
-        font-size: 18px;
-        font-weight: 800;
-    }
-    .small { font-size: 12px; color: var(--sub); line-height: 1.35; margin-top: 6px; }
-    .bar {
-        height: 10px;
-        border-radius: 999px;
-        background: rgba(255,255,255,0.10);
-        overflow: hidden;
-        margin-top: 10px;
-    }
-    .bar span {
-        display: block;
-        height: 100%;
-        width: 0%;
-        border-radius: 999px;
-        background: var(--grad);
-        transition: width 0.35s ease, background 0.35s ease;
-    }
-    .chips {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 7px;
-        margin-top: 10px;
-    }
-    .chip {
-        border: 1px solid var(--border);
-        background: rgba(255,255,255,0.07);
-        color: var(--sub);
-        border-radius: 999px;
-        padding: 6px 10px;
-        font-size: 12px;
-        font-weight: 600;
-    }
+    .card h3 { margin: 0 0 10px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 800; }
+    .big { font-family: Sora, Inter, sans-serif; font-size: 26px; font-weight: 800; line-height: 1.1; word-break: break-word; }
+    .small { font-size: 12px; color: var(--sub); line-height: 1.4; margin-top: 6px; }
+
+    .gauge { position: relative; width: 118px; height: 118px; margin: 2px auto 0; }
+    .gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .g-bg { fill: none; stroke: rgba(255,255,255,0.10); stroke-width: 10; }
+    .g-fg { fill: none; stroke: var(--ok); stroke-width: 10; stroke-linecap: round;
+        stroke-dasharray: 326.7; stroke-dashoffset: 326.7; transition: stroke-dashoffset 0.5s ease, stroke 0.5s ease; }
+    .g-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .g-val { font-family: Sora, Inter, sans-serif; font-size: 21px; font-weight: 800; }
+    .g-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 800; margin-top: 2px; }
+
+    .strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+    .mini { background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 16px; padding: 10px; }
+    .mini .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 800; }
+    .mini .value { font-size: 17px; font-weight: 800; margin-top: 4px; font-family: Sora, Inter, sans-serif; word-break: break-word; }
+
+    canvas.spark { width: 100%; height: 84px; display: block; margin-top: 8px; border-radius: 14px;
+        background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.05); }
+    .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 700px) { .charts { grid-template-columns: 1fr; } }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+    .chip { border: 1px solid var(--border); background: rgba(255,255,255,0.07); color: var(--sub);
+        border-radius: 999px; padding: 6px 10px; font-size: 12px; font-weight: 600; }
     .chip.ok { color: #d8fff0; border-color: rgba(126,240,192,0.28); background: rgba(126,240,192,0.10); }
     .chip.warn { color: #fff0c2; border-color: rgba(251,191,36,0.28); background: rgba(251,191,36,0.10); }
     .chip.bad { color: #ffd7dd; border-color: rgba(255,125,146,0.28); background: rgba(255,125,146,0.10); }
 
-    canvas.spark {
-        width: 100%;
-        height: 92px;
-        display: block;
-        margin-top: 8px;
-        border-radius: 16px;
-        background: rgba(0,0,0,0.18);
-        border: 1px solid rgba(255,255,255,0.05);
-    }
-    .events {
-        max-height: 280px;
-        overflow: auto;
-        margin-top: 4px;
-    }
-    .event {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        flex-wrap: wrap;
-        padding: 8px 0;
-        border-bottom: 1px solid rgba(255,255,255,0.06);
-        font-size: 12px;
-        color: var(--sub);
-    }
-    .event:last-child { border-bottom: none; }
-    .event .t { color: var(--muted); min-width: 72px; font-variant-numeric: tabular-nums; }
-    .event .u { font-weight: 700; color: var(--text); }
-    .kv {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 8px;
-        align-items: center;
-        font-size: 13px;
-        color: var(--sub);
-        margin-top: 8px;
-    }
+    .kv { display: grid; grid-template-columns: 1fr auto; gap: 8px; font-size: 13px; color: var(--sub); margin-top: 8px; }
     .kv b { color: var(--text); font-weight: 700; }
-    .two {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-        margin-top: 10px;
-    }
-    .mini {
-        background: rgba(255,255,255,0.05);
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 10px;
-    }
-    .mini .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 800; }
-    .mini .value { font-size: 18px; font-weight: 800; margin-top: 4px; font-family: Sora, Inter, sans-serif; }
+    .bar { height: 9px; border-radius: 999px; background: rgba(255,255,255,0.10); overflow: hidden; margin-top: 10px; }
+    .bar span { display: block; height: 100%; width: 0%; border-radius: 999px; background: var(--grad); transition: width 0.4s ease; }
+
+    .events { max-height: 300px; overflow: auto; }
+    .event { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 12px; color: var(--sub); }
+    .event:last-child { border-bottom: none; }
+    .event .t { color: var(--muted); min-width: 74px; font-variant-numeric: tabular-nums; }
+    .event .u { font-weight: 700; color: var(--text); }
 
     @media (max-width: 760px) {
         .wrap { grid-template-columns: 1fr 1fr; padding: 10px; gap: 10px; }
-        .card.wide { grid-column: 1 / -1; }
-        .big { font-size: 24px; }
+        .big { font-size: 22px; }
         .brand { font-size: 16px; }
-        .actions { gap: 6px; }
         .btn { padding: 8px 11px; font-size: 12px; }
+        .gauge { width: 104px; height: 104px; }
     }
-    @media (max-width: 430px) {
-        .wrap { grid-template-columns: 1fr; }
-        .two { grid-template-columns: 1fr; }
-    }
+    @media (max-width: 430px) { .wrap { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -326,10 +135,7 @@
 <div id="login-screen">
     <div class="login-box">
         <div class="login-title">🛰️ Mission Control</div>
-        <div class="login-hint">
-            Панель доступна только администратору.<br>
-            Войди тем же ником и паролем, который используется в мессенджере.
-        </div>
+        <div class="login-hint">Панель доступна только администратору.<br>Войди ником и паролем от мессенджера.</div>
         <input id="login-user" type="text" placeholder="Админский ник" autocomplete="username">
         <input id="login-pass" type="password" placeholder="Пароль" autocomplete="current-password">
         <div class="login-error" id="login-error"></div>
@@ -341,10 +147,7 @@
     <header>
         <div class="top-row">
             <div class="brand">🛰️ Mission Control</div>
-            <div class="status">
-                <span class="dot wait" id="live-dot"></span>
-                <span id="status-text">подключение...</span>
-            </div>
+            <div class="status"><span class="dot wait" id="live-dot"></span><span id="status-text">подключение...</span></div>
         </div>
         <div class="actions">
             <button class="btn" id="btn-refresh">↻ Обновить</button>
@@ -358,563 +161,480 @@
     <div class="banner hidden" id="banner"></div>
 
     <main class="wrap">
-        <section class="card wide">
-            <h3>Состояние системы</h3>
-            <div class="two">
-                <div class="mini">
-                    <div class="label">Uptime</div>
-                    <div class="value" id="uptime-val">—</div>
-                </div>
-                <div class="mini">
-                    <div class="label">Latency</div>
-                    <div class="value" id="latency-val">—</div>
-                </div>
-                <div class="mini">
-                    <div class="label">RPS</div>
-                    <div class="value" id="rps-val">—</div>
-                </div>
-                <div class="mini">
-                    <div class="label">Версия</div>
-                    <div class="value" id="version-val">—</div>
-                </div>
-            </div>
-            <div class="small" id="meta-line">Python — · обновлено —</div>
-        </section>
-
         <section class="card">
             <h3>CPU процесса</h3>
-            <div class="big" id="cpu-val">—</div>
-            <div class="bar"><span id="cpu-bar"></span></div>
-            <div class="small" id="cpu-load">load average: —</div>
+            <div class="gauge">
+                <svg viewBox="0 0 120 120"><circle class="g-bg" cx="60" cy="60" r="52"/><circle class="g-fg" id="g-cpu" cx="60" cy="60" r="52"/></svg>
+                <div class="g-center"><div class="g-val" id="v-cpu">—</div><div class="g-lbl">cpu</div></div>
+            </div>
+            <div class="small" id="cpu-load">load: —</div>
         </section>
 
         <section class="card">
             <h3>Память</h3>
-            <div class="big" id="mem-val">—</div>
-            <div class="bar"><span id="mem-bar"></span></div>
+            <div class="gauge">
+                <svg viewBox="0 0 120 120"><circle class="g-bg" cx="60" cy="60" r="52"/><circle class="g-fg" id="g-mem" cx="60" cy="60" r="52"/></svg>
+                <div class="g-center"><div class="g-val" id="v-mem">—</div><div class="g-lbl">ram</div></div>
+            </div>
             <div class="small" id="mem-sub">—</div>
         </section>
 
         <section class="card">
             <h3>Диск</h3>
-            <div class="big" id="disk-val">—</div>
-            <div class="bar"><span id="disk-bar"></span></div>
+            <div class="gauge">
+                <svg viewBox="0 0 120 120"><circle class="g-bg" cx="60" cy="60" r="52"/><circle class="g-fg" id="g-disk" cx="60" cy="60" r="52"/></svg>
+                <div class="g-center"><div class="g-val" id="v-disk">—</div><div class="g-lbl">disk</div></div>
+            </div>
             <div class="small" id="disk-sub">—</div>
         </section>
 
         <section class="card">
-            <h3>WebSocket</h3>
-            <div class="big" id="ws-users-val">0</div>
-            <div class="small">пользователей онлайн</div>
-            <div class="kv"><span>Активных сокетов</span><b id="ws-sockets-val">0</b></div>
-            <div class="chips" id="online-list"></div>
+            <h3>Backblaze B2</h3>
+            <div class="gauge">
+                <svg viewBox="0 0 120 120"><circle class="g-bg" cx="60" cy="60" r="52"/><circle class="g-fg" id="g-b2" cx="60" cy="60" r="52"/></svg>
+                <div class="g-center"><div class="g-val" id="v-b2">—</div><div class="g-lbl">b2</div></div>
+            </div>
+            <div class="small" id="b2-sub">—</div>
         </section>
 
         <section class="card wide">
-            <h3>График нагрузки</h3>
-            <div class="small">HTTP-запросы по 5-секундным окнам</div>
-            <canvas class="spark" id="chart-req"></canvas>
-            <div class="small" style="margin-top:10px;">WebSocket-события по 5-секундным окнам</div>
-            <canvas class="spark" id="chart-ws"></canvas>
+            <h3>Сводка</h3>
+            <div class="strip">
+                <div class="mini"><div class="label">Uptime</div><div class="value" id="s-uptime">—</div></div>
+                <div class="mini"><div class="label">Latency</div><div class="value" id="s-latency">—</div></div>
+                <div class="mini"><div class="label">RPS</div><div class="value" id="s-rps">—</div></div>
+                <div class="mini"><div class="label">Версия</div><div class="value" id="s-version">—</div></div>
+                <div class="mini"><div class="label">Python</div><div class="value" id="s-python">—</div></div>
+                <div class="mini"><div class="label">Обновлено</div><div class="value" id="s-ago">—</div></div>
+            </div>
+        </section>
+
+        <section class="card wide">
+            <h3>Живые графики</h3>
+            <div class="charts">
+                <div><div class="small">HTTP-запросы / 5 сек</div><canvas class="spark" id="ch-req"></canvas></div>
+                <div><div class="small">WS-события / 5 сек</div><canvas class="spark" id="ch-ws"></canvas></div>
+                <div><div class="small">CPU, история</div><canvas class="spark" id="ch-cpu"></canvas></div>
+                <div><div class="small">Сообщений / мин</div><canvas class="spark" id="ch-msg"></canvas></div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>Онлайн</h3>
+            <div class="big" id="ws-users">0</div>
+            <div class="small">пользователей · сокетов: <span id="ws-sockets">0</span></div>
+            <div class="chips" id="online-list"></div>
         </section>
 
         <section class="card">
             <h3>База данных</h3>
-            <div class="big" id="db-size-val">—</div>
-            <div class="kv"><span>Сообщений</span><b id="db-msgs-val">0</b></div>
-            <div class="kv"><span>Аккаунтов</span><b id="db-users-val">0</b></div>
-            <div class="kv"><span>Сессий</span><b id="db-sessions-val">0</b></div>
+            <div class="big" id="db-size">—</div>
+            <div class="kv"><span>Сообщений</span><b id="db-msgs">0</b></div>
+            <div class="kv"><span>Аккаунтов</span><b id="db-users">0</b></div>
+            <div class="kv"><span>Сессий</span><b id="db-sessions">0</b></div>
+            <div class="kv"><span>Скорость</span><b id="db-rate">—</b></div>
         </section>
 
         <section class="card">
-            <h3>Backblaze B2</h3>
-            <div class="big" id="b2-size-val">—</div>
-            <div class="bar"><span id="b2-bar"></span></div>
-            <div class="small" id="b2-sub">—</div>
-            <div class="kv"><span>Последний снапшот</span><b id="snapshot-time-val">—</b></div>
-            <div class="kv"><span>Размер снапшота</span><b id="snapshot-size-val">—</b></div>
+            <h3>Снапшоты B2</h3>
+            <div class="big" id="snap-time">—</div>
+            <div class="kv"><span>Размер</span><b id="snap-size">—</b></div>
+            <div class="kv"><span>Всего сделано</span><b id="cnt-snap">0</b></div>
+            <div class="kv"><span>Файлов в B2</span><b id="b2-files">0</b></div>
         </section>
 
         <section class="card">
-            <h3>Счётчики</h3>
-            <div class="kv"><span>WS сообщений</span><b id="cnt-ws-val">0</b></div>
-            <div class="kv"><span>FCM пушей</span><b id="cnt-fcm-val">0</b></div>
-            <div class="kv"><span>Web Push</span><b id="cnt-webpush-val">0</b></div>
-            <div class="kv"><span>Снапшотов</span><b id="cnt-snapshot-val">0</b></div>
+            <h3>Пуши и трафик</h3>
+            <div class="kv"><span>WS-сообщений</span><b id="cnt-ws">0</b></div>
+            <div class="kv"><span>FCM отправлено</span><b id="cnt-fcm">0</b></div>
+            <div class="kv"><span>Web Push</span><b id="cnt-web">0</b></div>
+            <div class="kv"><span>Запросов/сек</span><b id="cnt-rps">—</b></div>
         </section>
 
         <section class="card wide">
-            <h3>Последние события</h3>
+            <h3>Безопасность и аккаунты</h3>
+            <div class="strip">
+                <div class="mini"><div class="label">Аккаунтов</div><div class="value" id="sec-total">—</div></div>
+                <div class="mini"><div class="label">Забанено</div><div class="value" id="sec-banned">—</div></div>
+                <div class="mini"><div class="label">Ботов</div><div class="value" id="sec-bots">—</div></div>
+                <div class="mini"><div class="label">Новых за сутки</div><div class="value" id="sec-new">—</div></div>
+                <div class="mini"><div class="label">Ошибок входа</div><div class="value" id="sec-fails">—</div></div>
+                <div class="mini"><div class="label">Блоков ботов</div><div class="value" id="sec-blocks">—</div></div>
+            </div>
+            <div class="small" style="margin-top:10px;">Топ IP за последние события:</div>
+            <div class="chips" id="sec-ips"></div>
+            <div class="small" style="margin-top:10px;">Устройства:</div>
+            <div class="chips" id="sec-devices"></div>
+        </section>
+
+        <section class="card wide">
+            <h3>Лента событий</h3>
             <div class="events" id="events-list"></div>
         </section>
     </main>
 </div>
 
 <script>
-const $ = (id) => document.getElementById(id);
+(function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    var CIRC = 326.7;
+    var POLL_MS = 4000;
+    var STATS_MS = 20000;
 
-const state = {
-    token: localStorage.getItem('messenger_token') || '',
-    user: localStorage.getItem('messenger_currentUser') || '',
-    timer: null,
-    paused: false,
-    failCount: 0,
-    bannerTimer: null
-};
+    var state = {
+        token: localStorage.getItem('messenger_token') || '',
+        timer: null, statsTimer: null, agoTimer: null,
+        paused: false, fails: 0, lastPoll: 0,
+        hist: { cpu: [], msg: [] },
+        lastMsgs: null, lastMsgTime: 0,
+        sig: {}
+    };
 
-function escapeHtml(value) {
-    return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
-    }[ch]));
-}
-
-function formatBytes(bytes) {
-    const n = Number(bytes || 0);
-    if (!n) return '0 Б';
-    const units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
-    let value = n;
-    let i = 0;
-    while (value >= 1024 && i < units.length - 1) {
-        value /= 1024;
-        i++;
-    }
-    return value.toFixed(i ? 1 : 0) + ' ' + units[i];
-}
-
-function formatUptime(seconds) {
-    let s = Math.floor(Number(seconds || 0));
-    const d = Math.floor(s / 86400);
-    s %= 86400;
-    const h = Math.floor(s / 3600);
-    s %= 3600;
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return (d ? d + 'д ' : '') +
-        String(h).padStart(2, '0') + ':' +
-        String(m).padStart(2, '0') + ':' +
-        String(sec).padStart(2, '0');
-}
-
-function formatTimeFromUnix(ts) {
-    const n = Number(ts || 0);
-    if (!n) return '—';
-    return new Date(n * 1000).toLocaleTimeString('ru-RU');
-}
-
-function clampPct(value) {
-    return Math.max(0, Math.min(100, Number(value || 0)));
-}
-
-function colorForPct(pct) {
-    if (pct < 60) return 'var(--ok)';
-    if (pct < 85) return 'var(--warn)';
-    return 'var(--bad)';
-}
-
-function setBar(id, pct, color) {
-    const el = $(id);
-    if (!el) return;
-    const p = clampPct(pct);
-    el.style.width = p + '%';
-    el.style.background = color || 'var(--grad)';
-}
-
-function setStatus(type, text) {
-    const dot = $('live-dot');
-    const label = $('status-text');
-    if (!dot || !label) return;
-    dot.className = 'dot ' + (type === 'ok' ? 'ok' : type === 'bad' ? 'bad' : 'wait');
-    label.textContent = text;
-}
-
-function showBanner(type, text) {
-    const el = $('banner');
-    if (!el) return;
-    el.className = 'banner ' + type;
-    el.textContent = text;
-    clearTimeout(state.bannerTimer);
-    state.bannerTimer = setTimeout(() => el.classList.add('hidden'), 4500);
-}
-
-function showLogin(message) {
-    $('panel').classList.add('hidden');
-    $('login-screen').classList.remove('hidden');
-    $('login-error').textContent = message || '';
-}
-
-function showPanel() {
-    $('login-screen').classList.add('hidden');
-    $('panel').classList.remove('hidden');
-}
-
-function stopAuto() {
-    if (state.timer) {
-        clearInterval(state.timer);
-        state.timer = null;
-    }
-}
-
-function startAuto() {
-    stopAuto();
-    if (!state.paused && state.token) {
-        state.timer = setInterval(loadMetrics, 3000);
-    }
-}
-
-function drawChart(canvasId, series, color) {
-    const canvas = $(canvasId);
-    if (!canvas) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const width = canvas.clientWidth || 300;
-    const height = canvas.clientHeight || 92;
-
-    canvas.width = Math.max(1, Math.floor(width * dpr));
-    canvas.height = Math.max(1, Math.floor(height * dpr));
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, width, height);
-
-    const data = Array.isArray(series) ? series.map(Number) : [];
-    if (data.length < 2) return;
-
-    const max = Math.max(1, ...data);
-    const pad = 8;
-    const stepX = (width - pad * 2) / (data.length - 1);
-
-    ctx.beginPath();
-    data.forEach((value, index) => {
-        const x = pad + index * stepX;
-        const y = height - pad - (value / max) * (height - pad * 2);
-        if (index === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-    });
-
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2.5;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.stroke();
-
-    ctx.lineTo(width - pad, height - pad);
-    ctx.lineTo(pad, height - pad);
-    ctx.closePath();
-
-    ctx.globalAlpha = 0.16;
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    const lastX = pad + (data.length - 1) * stepX;
-    const lastY = height - pad - (data[data.length - 1] / max) * (height - pad * 2);
-    ctx.beginPath();
-    ctx.arc(lastX, lastY, 3.8, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-}
-
-function actionLabel(action) {
-    return ({
-        register: 'регистрация',
-        login: 'вход',
-        login_fail: 'ошибка входа',
-        ws_connect: 'ws онлайн',
-        register_block: 'блок бота'
-    })[action] || action;
-}
-
-function renderMetrics(m) {
-    const cpu = clampPct(m.cpu_proc);
-    const memTotal = Number(m.mem_total || 0);
-    const memRss = Number(m.mem_rss || 0);
-    const memPct = memTotal ? clampPct((memRss / memTotal) * 100) : 0;
-    const diskTotal = Number(m.disk_total || 0);
-    const diskUsed = Number(m.disk_used || 0);
-    const diskPct = diskTotal ? clampPct((diskUsed / diskTotal) * 100) : 0;
-
-    const b2 = m.b2 || {};
-    const b2Bytes = Number(b2.bytes || 0);
-    const b2Files = Number(b2.files || 0);
-    const b2Limit = 10 * 1024 * 1024 * 1024;
-    const b2Pct = clampPct((b2Bytes / b2Limit) * 100);
-
-    const counters = m.counters || {};
-    const snapshot = m.snapshot || {};
-
-    $('uptime-val').textContent = formatUptime(m.uptime);
-    $('latency-val').textContent = Number(m.latency_ms || 0).toFixed(1) + ' ms';
-    $('rps-val').textContent = Number(m.rps || 0).toFixed(2);
-    $('version-val').textContent = m.version ? String(m.version).slice(0, 10) : '—';
-    $('meta-line').textContent = 'Python ' + (m.python || '—') + ' · обновлено ' + formatTimeFromUnix(m.time);
-
-    $('cpu-val').textContent = cpu.toFixed(1) + '%';
-    $('cpu-val').style.color = colorForPct(cpu);
-    setBar('cpu-bar', cpu, colorForPct(cpu));
-    $('cpu-load').textContent = 'load average: ' + (Array.isArray(m.load) && m.load.length
-        ? m.load.map(x => Number(x).toFixed(2)).join(' / ')
-        : '0.00 / 0.00 / 0.00');
-
-    $('mem-val').textContent = formatBytes(memRss);
-    setBar('mem-bar', memPct, colorForPct(memPct));
-    $('mem-sub').textContent = memTotal
-        ? memPct.toFixed(1) + '% из ' + formatBytes(memTotal)
-        : '总 память недоступна';
-
-    $('disk-val').textContent = formatBytes(diskUsed);
-    setBar('disk-bar', diskPct, colorForPct(diskPct));
-    $('disk-sub').textContent = diskTotal
-        ? diskPct.toFixed(1) + '% из ' + formatBytes(diskTotal)
-        : 'диск недоступен';
-
-    $('ws-users-val').textContent = Number(m.ws_users || 0);
-    $('ws-sockets-val').textContent = Number(m.ws_sockets || 0);
-
-    const online = Array.isArray(m.online) ? m.online : [];
-    $('online-list').innerHTML = online.length
-        ? online.map(u => `<span class="chip ok">@${escapeHtml(u)}</span>`).join('')
-        : '<span class="chip">никого нет</span>';
-
-    $('db-size-val').textContent = formatBytes(m.db_size);
-    $('db-msgs-val').textContent = Number(m.msgs || 0).toLocaleString('ru-RU');
-    $('db-users-val').textContent = Number(m.users || 0).toLocaleString('ru-RU');
-    $('db-sessions-val').textContent = Number(m.sessions || 0).toLocaleString('ru-RU');
-
-    $('b2-size-val').textContent = formatBytes(b2Bytes);
-    setBar('b2-bar', b2Pct, colorForPct(b2Pct));
-    $('b2-sub').textContent = 'файлов: ' + b2Files.toLocaleString('ru-RU') + ' · ориентир 10 ГБ · ' + b2Pct.toFixed(1) + '%';
-    $('snapshot-time-val').textContent = snapshot.time ? formatTimeFromUnix(snapshot.time) : '—';
-    $('snapshot-size-val').textContent = snapshot.size ? formatBytes(snapshot.size) : '—';
-
-    $('cnt-ws-val').textContent = Number(counters.ws_msgs || 0).toLocaleString('ru-RU');
-    $('cnt-fcm-val').textContent = Number(counters.fcm_sent || 0).toLocaleString('ru-RU');
-    $('cnt-webpush-val').textContent = Number(counters.webpush_sent || 0).toLocaleString('ru-RU');
-    $('cnt-snapshot-val').textContent = Number(counters.snapshots || 0).toLocaleString('ru-RU');
-
-    const recent = Array.isArray(m.recent) ? m.recent : [];
-    $('events-list').innerHTML = recent.length
-        ? recent.map(e => `
-            <div class="event">
-                <span class="t">${escapeHtml(e.ts || '')}</span>
-                <span class="u">@${escapeHtml(e.username || '—')}</span>
-                <span>${escapeHtml(actionLabel(e.action))}</span>
-                ${e.bot ? '<span class="chip bad">бот</span>' : ''}
-            </div>
-        `).join('')
-        : '<div class="small muted">Событий пока нет.</div>';
-
-    requestAnimationFrame(() => {
-        drawChart('chart-req', m.req_series || [], '#38bdf8');
-        drawChart('chart-ws', m.ws_series || [], '#a99af0');
-    });
-}
-
-async function loadMetrics() {
-    if (!state.token) {
-        showLogin('Сначала войди в панель.');
-        stopAuto();
-        return;
-    }
-
-    try {
-        setStatus('wait', 'обновление...');
-        const res = await fetch('/admin/metrics?token=' + encodeURIComponent(state.token), {
-            cache: 'no-store'
+    function esc(v) {
+        return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
         });
-
-        if (res.status === 401) {
-            state.token = '';
-            state.user = '';
-            localStorage.removeItem('messenger_token');
-            localStorage.removeItem('messenger_currentUser');
-            stopAuto();
-            showLogin('Сессия истекла. Войди заново.');
-            return;
-        }
-
-        if (res.status === 403) {
-            const err = await res.json().catch(() => ({}));
-            setStatus('bad', 'нет прав');
-            showBanner('error', err.detail || 'Этот аккаунт не является администратором.');
-            return;
-        }
-
-        if (!res.ok) {
-            throw new Error('HTTP ' + res.status);
-        }
-
-        const metrics = await res.json();
-        state.failCount = 0;
-        renderMetrics(metrics);
-        setStatus('ok', 'live · ' + formatTimeFromUnix(metrics.time));
-    } catch (e) {
-        state.failCount++;
-        setStatus('bad', 'нет связи');
-        if (state.failCount <= 1) {
-            showBanner('error', 'Не удалось получить метрики: ' + (e && e.message ? e.message : e));
-        }
     }
-}
-
-async function postAdminAction(url, successText) {
-    if (!state.token) {
-        showBanner('error', 'Нет токена администратора.');
-        return;
+    function bytes(n) {
+        n = Number(n || 0);
+        if (!n) return '0 Б';
+        var u = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'], i = 0;
+        while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+        return n.toFixed(i ? 1 : 0) + ' ' + u[i];
     }
+    function uptime(s) {
+        s = Math.floor(Number(s || 0));
+        var d = Math.floor(s / 86400); s %= 86400;
+        var h = Math.floor(s / 3600); s %= 3600;
+        var m = Math.floor(s / 60); var sec = s % 60;
+        return (d ? d + 'д ' : '') + String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+    }
+    function hhmm(ts) { return ts ? new Date(Number(ts) * 1000).toLocaleTimeString('ru-RU') : '—'; }
+    function clamp(v) { return Math.max(0, Math.min(100, Number(v || 0))); }
+    function colr(p) { return p < 60 ? 'var(--ok)' : p < 85 ? 'var(--warn)' : 'var(--bad)'; }
 
-    const fd = new FormData();
-    fd.append('token', state.token);
-
-    try {
-        const res = await fetch(url, { method: 'POST', body: fd });
-        const data = await res.json().catch(() => ({}));
-
-        if (!res.ok) {
-            showBanner('error', data.detail || 'Ошибка запроса: HTTP ' + res.status);
-            return false;
+    function setGauge(id, valId, pct, text, color) {
+        var el = $(id);
+        if (el) {
+            el.style.strokeDashoffset = String(CIRC * (1 - clamp(pct) / 100));
+            el.style.stroke = color || 'var(--ok)';
         }
-
-        showBanner('ok', successText(data));
-        await loadMetrics();
-        return true;
-    } catch (e) {
-        showBanner('error', 'Ошибка сети: ' + (e && e.message ? e.message : e));
-        return false;
+        var v = $(valId);
+        if (v) v.textContent = text;
     }
-}
-
-async function doLogin() {
-    const username = $('login-user').value.trim();
-    const password = $('login-pass').value;
-    const errorEl = $('login-error');
-    const btn = $('btn-login');
-
-    errorEl.textContent = '';
-
-    if (!username || !password) {
-        errorEl.textContent = 'Введите ник и пароль.';
-        return;
+    function setTxt(id, text) {
+        var el = $(id);
+        if (el && el.textContent !== text) el.textContent = text;
+    }
+    function setHtml(id, html, sigKey) {
+        if (state.sig[sigKey] === html) return;
+        state.sig[sigKey] = html;
+        var el = $(id);
+        if (el) el.innerHTML = html;
+    }
+    function setStatus(type, text) {
+        var dot = $('live-dot');
+        if (dot) dot.className = 'dot ' + (type === 'ok' ? 'ok' : type === 'bad' ? 'bad' : 'wait');
+        setTxt('status-text', text);
+    }
+    function banner(type, text) {
+        var el = $('banner');
+        if (!el) return;
+        el.className = 'banner ' + type;
+        el.textContent = text;
+        el.classList.remove('hidden');
+        setTimeout(function () { el.classList.add('hidden'); }, 4500);
     }
 
-    btn.disabled = true;
-    btn.textContent = 'Проверяем...';
+    function draw(id, series, color) {
+        var c = $(id);
+        if (!c) return;
+        var dpr = window.devicePixelRatio || 1;
+        var w = c.clientWidth || 300, h = c.clientHeight || 84;
+        if (c.width !== Math.floor(w * dpr)) { c.width = Math.floor(w * dpr); c.height = Math.floor(h * dpr); }
+        var ctx = c.getContext('2d');
+        if (!ctx) return;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+        var data = (series || []).map(Number);
+        if (data.length < 2) return;
+        var max = Math.max(1, Math.max.apply(null, data));
+        var pad = 8, step = (w - pad * 2) / (data.length - 1);
+        ctx.beginPath();
+        for (var i = 0; i < data.length; i++) {
+            var x = pad + i * step;
+            var y = h - pad - (data[i] / max) * (h - pad * 2);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = color; ctx.lineWidth = 2.4; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        ctx.stroke();
+        ctx.lineTo(w - pad, h - pad); ctx.lineTo(pad, h - pad); ctx.closePath();
+        ctx.globalAlpha = 0.15; ctx.fillStyle = color; ctx.fill(); ctx.globalAlpha = 1;
+        var lx = pad + (data.length - 1) * step;
+        var ly = h - pad - (data[data.length - 1] / max) * (h - pad * 2);
+        ctx.beginPath(); ctx.arc(lx, ly, 3.6, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+    }
 
-    try {
-        const fd = new FormData();
+    function actionLabel(a) {
+        return ({ register: 'регистрация', login: 'вход', login_fail: 'ошибка входа', ws_connect: 'ws онлайн', register_block: 'блок бота' })[a] || a;
+    }
+
+    function renderMetrics(m) {
+        state.lastPoll = Date.now();
+        var cpu = clamp(m.cpu_proc);
+        var memPct = m.mem_total ? clamp(m.mem_rss / m.mem_total * 100) : 0;
+        var diskPct = m.disk_total ? clamp(m.disk_used / m.disk_total * 100) : 0;
+        var b2 = m.b2 || {};
+        var b2Bytes = Number(b2.bytes || 0);
+        var b2Pct = clamp(b2Bytes / (10 * 1024 * 1024 * 1024) * 100);
+
+        setGauge('g-cpu', 'v-cpu', cpu, cpu.toFixed(0) + '%', colr(cpu));
+        setGauge('g-mem', 'v-mem', memPct, bytes(m.mem_rss), colr(memPct));
+        setGauge('g-disk', 'v-disk', diskPct, diskPct.toFixed(0) + '%', colr(diskPct));
+        setGauge('g-b2', 'v-b2', b2Pct, bytes(b2Bytes), colr(b2Pct));
+
+        setTxt('cpu-load', 'load: ' + ((m.load || []).map(function (x) { return Number(x).toFixed(2); }).join(' / ') || '—'));
+        setTxt('mem-sub', m.mem_total ? memPct.toFixed(1) + '% из ' + bytes(m.mem_total) : '—');
+        setTxt('disk-sub', m.disk_total ? diskPct.toFixed(1) + '% из ' + bytes(m.disk_total) : '—');
+        setTxt('b2-sub', 'файлов: ' + Number(b2.files || 0) + ' · лимит 10 ГБ');
+
+        setTxt('s-uptime', uptime(m.uptime));
+        setTxt('s-latency', Number(m.latency_ms || 0).toFixed(1) + ' ms');
+        setTxt('s-rps', Number(m.rps || 0).toFixed(2));
+        setTxt('s-version', String(m.version || '—').slice(0, 10));
+        setTxt('s-python', m.python || '—');
+
+        setTxt('ws-users', String(Number(m.ws_users || 0)));
+        setTxt('ws-sockets', String(Number(m.ws_sockets || 0)));
+        setHtml('online-list', (m.online || []).map(function (u) { return '<span class="chip ok">@' + esc(u) + '</span>'; }).join('') || '<span class="chip">никого нет</span>', 'online');
+
+        setTxt('db-size', bytes(m.db_size));
+        setTxt('db-msgs', Number(m.msgs || 0).toLocaleString('ru-RU'));
+        setTxt('db-users', Number(m.users || 0).toLocaleString('ru-RU'));
+        setTxt('db-sessions', Number(m.sessions || 0).toLocaleString('ru-RU'));
+
+        var now = Date.now();
+        if (state.lastMsgs !== null && m.msgs !== undefined) {
+            var dt = (now - state.lastMsgTime) / 1000;
+            if (dt > 0.5) {
+                var rate = (Number(m.msgs) - state.lastMsgs) / dt * 60;
+                state.hist.msg.push(Math.max(0, rate));
+                if (state.hist.msg.length > 40) state.hist.msg.shift();
+                setTxt('db-rate', rate.toFixed(1) + ' /мин');
+            }
+        }
+        state.lastMsgs = Number(m.msgs || 0);
+        state.lastMsgTime = now;
+
+        state.hist.cpu.push(cpu);
+        if (state.hist.cpu.length > 40) state.hist.cpu.shift();
+
+        var snap = m.snapshot || {};
+        setTxt('snap-time', hhmm(snap.time));
+        setTxt('snap-size', bytes(snap.size));
+        var cnt = m.counters || {};
+        setTxt('cnt-snap', String(Number(cnt.snapshots || 0)));
+        setTxt('b2-files', String(Number(b2.files || 0)));
+        setTxt('cnt-ws', Number(cnt.ws_msgs || 0).toLocaleString('ru-RU'));
+        setTxt('cnt-fcm', Number(cnt.fcm_sent || 0).toLocaleString('ru-RU'));
+        setTxt('cnt-web', Number(cnt.webpush_sent || 0).toLocaleString('ru-RU'));
+        setTxt('cnt-rps', Number(m.rps || 0).toFixed(2));
+
+        setHtml('events-list', (m.recent || []).map(function (e) {
+            return '<div class="event"><span class="t">' + esc(e.ts || '') + '</span><span class="u">@' + esc(e.username || '—') +
+                '</span><span>' + esc(actionLabel(e.action)) + '</span>' + (e.bot ? '<span class="chip bad">бот</span>' : '') + '</div>';
+        }).join('') || '<div class="small muted">Событий пока нет.</div>', 'events');
+
+        draw('ch-req', m.req_series, '#38bdf8');
+        draw('ch-ws', m.ws_series, '#a99af0');
+        draw('ch-cpu', state.hist.cpu, '#7ef0c0');
+        draw('ch-msg', state.hist.msg, '#f4a988');
+    }
+
+    function renderStats(s) {
+        var users = s.users || [];
+        var banned = users.filter(function (u) { return u.banned; }).length;
+        var bots = (s.bot_users || []).length;
+        var dayAgo = Date.now() - 86400000;
+        var fresh = users.filter(function (u) {
+            var m = String(u.created_at || '').match(/(\d{2})\.(\d{2})\.(\d{4})/);
+            if (!m) return false;
+            return new Date(m[3] + '-' + m[2] + '-' + m[1]).getTime() >= dayAgo;
+        }).length;
+        var acc = s.access || [];
+        var fails = acc.filter(function (a) { return a.action === 'login_fail'; }).length;
+        var blocks = acc.filter(function (a) { return a.action === 'register_block'; }).length;
+        var ips = {};
+        var dev = {};
+        acc.forEach(function (a) {
+            if (a.ip) ips[a.ip] = (ips[a.ip] || 0) + 1;
+            var ua = String(a.ua || '');
+            var kind = /\bwv\b/i.test(ua) ? 'WebView-приложение' :
+                /Android/i.test(ua) ? 'Android' :
+                /iPhone|iPad/i.test(ua) ? 'iOS' :
+                /Windows/i.test(ua) ? 'Windows' :
+                /Mac OS X/i.test(ua) ? 'macOS' :
+                /curl|python|bot|headless/i.test(ua) ? 'скрипт/бот' : 'другое';
+            dev[kind] = (dev[kind] || 0) + 1;
+        });
+        var topIps = Object.keys(ips).sort(function (a, b) { return ips[b] - ips[a]; }).slice(0, 4);
+
+        setTxt('sec-total', String(users.length));
+        setTxt('sec-banned', String(banned));
+        setTxt('sec-bots', String(bots));
+        setTxt('sec-new', String(fresh));
+        setTxt('sec-fails', String(fails));
+        setTxt('sec-blocks', String(blocks));
+        setHtml('sec-ips', topIps.map(function (ip) { return '<span class="chip">' + esc(ip) + ' ×' + ips[ip] + '</span>'; }).join('') || '<span class="chip">нет данных</span>', 'ips');
+        setHtml('sec-devices', Object.keys(dev).map(function (k) {
+            var cls = /бот|скрипт/.test(k) ? 'chip bad' : 'chip';
+            return '<span class="' + cls + '">' + esc(k) + ' ×' + dev[k] + '</span>';
+        }).join('') || '<span class="chip">нет данных</span>', 'dev');
+    }
+
+    function loadMetrics() {
+        if (!state.token) return;
+        fetch('/admin/metrics?token=' + encodeURIComponent(state.token), { cache: 'no-store' })
+            .then(function (r) {
+                if (r.status === 401) { stopAll(); showLogin('Сессия истекла. Войди заново.'); throw new Error('auth'); }
+                if (r.status === 403) { setStatus('bad', 'нет прав'); banner('error', 'Этот аккаунт не администратор.'); throw new Error('forbidden'); }
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function (m) {
+                if (!m) return;
+                state.fails = 0;
+                renderMetrics(m);
+                setStatus('ok', 'live · ' + hhmm(m.time));
+            })
+            .catch(function (e) {
+                if (e.message === 'auth' || e.message === 'forbidden') return;
+                state.fails++;
+                setStatus('bad', 'нет связи');
+                if (state.fails === 1) banner('error', 'Метрики недоступны: ' + e.message);
+            });
+    }
+
+    function loadStats() {
+        if (!state.token) return;
+        fetch('/admin/stats?token=' + encodeURIComponent(state.token), { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (s) { if (s) renderStats(s); })
+            .catch(function () {});
+    }
+
+    function startAll() {
+        stopAll();
+        if (state.paused || !state.token) return;
+        state.timer = setInterval(loadMetrics, POLL_MS);
+        state.statsTimer = setInterval(loadStats, STATS_MS);
+        state.agoTimer = setInterval(function () {
+            var sec = Math.round((Date.now() - state.lastPoll) / 1000);
+            setTxt('s-ago', sec < 2 ? 'только что' : sec + ' сек назад');
+        }, 1000);
+    }
+    function stopAll() {
+        if (state.timer) clearInterval(state.timer);
+        if (state.statsTimer) clearInterval(state.statsTimer);
+        if (state.agoTimer) clearInterval(state.agoTimer);
+        state.timer = state.statsTimer = state.agoTimer = null;
+    }
+
+    function showLogin(msg) {
+        $('panel').classList.add('hidden');
+        $('login-screen').classList.remove('hidden');
+        $('login-error').textContent = msg || '';
+    }
+    function showPanel() {
+        $('login-screen').classList.add('hidden');
+        $('panel').classList.remove('hidden');
+    }
+
+    function doLogin() {
+        var username = $('login-user').value.trim();
+        var password = $('login-pass').value;
+        var err = $('login-error');
+        var btn = $('btn-login');
+        err.textContent = '';
+        if (!username || !password) { err.textContent = 'Введите ник и пароль.'; return; }
+        btn.disabled = true;
+        var fd = new FormData();
         fd.append('username', username);
         fd.append('password', password);
         fd.append('hp', '');
         fd.append('load_ts', String(Date.now()));
-
-        const res = await fetch('/login', { method: 'POST', body: fd });
-        const data = await res.json().catch(() => ({}));
-
-        if (!res.ok) {
-            errorEl.textContent = data.detail || 'Не удалось войти.';
-            return;
-        }
-
-        state.token = data.token;
-        state.user = data.username;
-        localStorage.setItem('messenger_token', state.token);
-        localStorage.setItem('messenger_currentUser', state.user);
-
-        showPanel();
-        setStatus('wait', 'загрузка метрик...');
-        await loadMetrics();
-        startAuto();
-    } catch (e) {
-        errorEl.textContent = 'Ошибка сети: ' + (e && e.message ? e.message : e);
-    } finally {
-        btn.disabled = false;
-        btn.textContent = 'Войти в панель';
+        fetch('/login', { method: 'POST', body: fd })
+            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+            .then(function (res) {
+                if (!res.ok) { err.textContent = res.d.detail || 'Не удалось войти.'; return; }
+                state.token = res.d.token;
+                localStorage.setItem('messenger_token', state.token);
+                localStorage.setItem('messenger_currentUser', res.d.username);
+                showPanel();
+                loadMetrics(); loadStats(); startAll();
+            })
+            .catch(function (e) { err.textContent = 'Ошибка сети: ' + e.message; })
+            .finally(function () { btn.disabled = false; });
     }
-}
 
-function logout() {
-    localStorage.removeItem('messenger_token');
-    localStorage.removeItem('messenger_currentUser');
-    state.token = '';
-    state.user = '';
-    stopAuto();
-    location.reload();
-}
-
-$('btn-login').addEventListener('click', doLogin);
-$('login-pass').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') doLogin();
-});
-
-$('btn-refresh').addEventListener('click', () => loadMetrics());
-
-$('btn-pause').addEventListener('click', () => {
-    state.paused = !state.paused;
-    $('btn-pause').textContent = state.paused ? '▶ Старт' : '⏸ Пауза';
-    if (state.paused) {
-        stopAuto();
-        setStatus('wait', 'пауза');
-    } else {
-        loadMetrics();
-        startAuto();
+    function post(url, okText) {
+        var fd = new FormData();
+        fd.append('token', state.token);
+        return fetch(url, { method: 'POST', body: fd })
+            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+            .then(function (res) {
+                if (!res.ok) { banner('error', res.d.detail || 'Ошибка запроса'); return null; }
+                banner('ok', okText(res.d));
+                loadMetrics();
+                return res.d;
+            })
+            .catch(function (e) { banner('error', 'Ошибка сети: ' + e.message); return null; });
     }
-});
 
-$('btn-snapshot').addEventListener('click', async (e) => {
-    const btn = e.currentTarget;
-    btn.disabled = true;
-    const old = btn.textContent;
-    btn.textContent = '⏳ Делаем...';
-    await postAdminAction('/admin/snapshot-now', (d) => 'Снапшот готов: ' + formatBytes(d.size || 0));
-    btn.disabled = false;
-    btn.textContent = old;
-});
+    $('btn-login').addEventListener('click', doLogin);
+    $('login-pass').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
+    $('btn-refresh').addEventListener('click', function () { loadMetrics(); loadStats(); });
+    $('btn-pause').addEventListener('click', function () {
+        state.paused = !state.paused;
+        $('btn-pause').textContent = state.paused ? '▶ Старт' : '⏸ Пауза';
+        if (state.paused) { stopAll(); setStatus('wait', 'пауза'); }
+        else { loadMetrics(); startAll(); }
+    });
+    $('btn-snapshot').addEventListener('click', function (e) {
+        var b = e.currentTarget; b.disabled = true;
+        post('/admin/snapshot-now', function (d) { return 'Снапшот готов: ' + bytes(d.size || 0); })
+            .finally(function () { b.disabled = false; });
+    });
+    $('btn-testpush').addEventListener('click', function (e) {
+        var b = e.currentTarget; b.disabled = true;
+        post('/admin/test-push', function (d) { return d.fcm ? 'Тест-пуш: FCM + Web Push' : 'Тест-пуш: Web Push'; })
+            .finally(function () { b.disabled = false; });
+    });
+    $('btn-logout').addEventListener('click', function () {
+        localStorage.removeItem('messenger_token');
+        localStorage.removeItem('messenger_currentUser');
+        location.reload();
+    });
+    document.addEventListener('visibilitychange', function () {
+        if (document.hidden) stopAll();
+        else if (!state.paused && state.token) { loadMetrics(); startAll(); }
+    });
+    window.addEventListener('resize', function () {
+        draw('ch-req', window.__lastReq || [], '#38bdf8');
+        draw('ch-ws', window.__lastWs || [], '#a99af0');
+    });
 
-$('btn-testpush').addEventListener('click', async (e) => {
-    const btn = e.currentTarget;
-    btn.disabled = true;
-    const old = btn.textContent;
-    btn.textContent = '⏳ Отправляем...';
-    await postAdminAction('/admin/test-push', (d) => d.fcm ? 'Тест-пуш отправлен через FCM + Web Push' : 'Тест-пуш отправлен через Web Push');
-    btn.disabled = false;
-    btn.textContent = old;
-});
+    var origDraw = draw;
+    draw = function (id, series, color) {
+        if (id === 'ch-req') window.__lastReq = series;
+        if (id === 'ch-ws') window.__lastWs = series;
+        origDraw(id, series, color);
+    };
 
-$('btn-logout').addEventListener('click', logout);
-
-document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-        stopAuto();
-    } else if (!state.paused && state.token) {
-        loadMetrics();
-        startAuto();
-    }
-});
-
-window.addEventListener('resize', () => {
-    if (state.lastMetrics) {
-        requestAnimationFrame(() => {
-            drawChart('chart-req', state.lastMetrics.req_series || [], '#38bdf8');
-            drawChart('chart-ws', state.lastMetrics.ws_series || [], '#a99af0');
-        });
-    }
-});
-
-(function init() {
-    if (state.token) {
-        showPanel();
-        loadMetrics();
-        startAuto();
-    } else {
-        showLogin('');
-    }
+    if (state.token) { showPanel(); loadMetrics(); loadStats(); startAll(); }
+    else showLogin('');
 })();
 </script>
-
 </body>
 </html>
