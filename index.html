@@ -221,6 +221,7 @@
         .avatar-lg { width: 88px; height: 88px; font-size: 30px; box-shadow: 0 12px 34px var(--glow-a), inset 0 -4px 10px rgba(0,0,0,0.18); }
         .user-info { flex-grow: 1; min-width: 0; }
         .user-name { font-weight: 700; font-size: 15px; }
+        .user-name .real-nick { color: var(--text-muted); font-weight: 600; font-size: 12px; }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
         .online-dot { background: var(--online); box-shadow: 0 0 8px rgba(126,240,192,0.6); animation: statusBlink 2.6s ease-in-out infinite; }
         @keyframes statusBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
@@ -765,6 +766,10 @@
         <div class="profile-view-name" id="view-profile-name">@Имя</div>
         <div class="profile-view-status" id="view-profile-status" style="display:none;"></div>
         <div class="profile-view-bio" id="view-profile-bio">Нет описания</div>
+        <div id="contact-name-row" style="display:none; gap:8px; align-items:center;">
+            <input type="text" id="contact-name-input" placeholder="Имя контакта (например: Брат)" maxlength="30">
+            <button class="btn-primary" style="width:auto; padding:0 18px; flex-shrink:0;" onclick="saveContactName()">&#x2713;</button>
+        </div>
         <button class="btn-secondary" id="view-profile-contact-btn" onclick="toggleContactCurrent()" style="display:none;">&#x2B50; Добавить в контакты</button>
         <button class="btn-danger-text" id="view-profile-block-btn" onclick="toggleBlockCurrent()">&#x1F6AB; Заблокировать</button>
         <button class="btn-secondary" onclick="closeModal('modal-view-profile')">Закрыть</button>
@@ -1008,7 +1013,7 @@
     let ws, currentUser = "", currentToken = "", activeChatTarget = "", isCurrentGroup = false;
     let knownUsers = [], userGroups = [], onlineUsers = [], unreadCounts = {}, profileCache = {};
     let myProfile = { avatar_url: '/uploads/default.png', bio: '', status_text: '', theme: 'dark', hide_online: false, is_admin: false };
-    let myBlocks = [], myContacts = [], messageCache = {}, viewedUsername = "", editMessageId = null, adminTimer = null;
+    let myBlocks = [], myContacts = [], contactNames = {}, messageCache = {}, viewedUsername = "", editMessageId = null, adminTimer = null;
     let chosenTheme = 'dark';
     let ecoMode = false;
     let settings = { sound: true, vibro: true, preview: true, fontsize: 14, bubble: 'round', enter: true, accent: '', compact: false, glass: false };
@@ -1173,12 +1178,24 @@
         if (tab === 'chats' && activeChatTarget && window.innerWidth <= 768) closeChat();
     }
 
-    // ── Контакты (только явно добавленные) ──
+    // ── Контакты (только явно добавленные) + локальные имена ──
     function loadContacts() {
         try { myContacts = JSON.parse(localStorage.getItem('contacts_' + currentUser) || '[]'); } catch (e) { myContacts = []; }
+        try { contactNames = JSON.parse(localStorage.getItem('cnames_' + currentUser) || '{}'); } catch (e) { contactNames = {}; }
     }
     function saveContacts() {
         localStorage.setItem('contacts_' + currentUser, JSON.stringify(myContacts));
+    }
+    function saveContactNames() {
+        localStorage.setItem('cnames_' + currentUser, JSON.stringify(contactNames));
+    }
+    function displayName(u) {
+        return contactNames[u] || ('@' + u);
+    }
+    function nameHtml(u) {
+        return contactNames[u]
+            ? `${escapeHtml(contactNames[u])} <span class="real-nick">@${u}</span>`
+            : `@${u}`;
     }
     function addContact(u) {
         if (!u || u === currentUser || myContacts.includes(u)) return;
@@ -1189,15 +1206,17 @@
     }
     function removeContact(u) {
         myContacts = myContacts.filter(x => x !== u);
-        saveContacts();
+        delete contactNames[u];
+        saveContacts(); saveContactNames();
         showToast('\u{274C} Убран из контактов', '@' + u);
-        renderContacts();
+        renderContacts(); renderUserList();
     }
     function toggleContactCurrent() {
         if (!viewedUsername || viewedUsername === currentUser) return;
         if (myContacts.includes(viewedUsername)) removeContact(viewedUsername);
         else addContact(viewedUsername);
         updateContactButton();
+        updateContactNameRow();
     }
     function updateContactButton() {
         const btn = document.getElementById('view-profile-contact-btn');
@@ -1205,6 +1224,25 @@
         if (!viewedUsername || viewedUsername === currentUser) { btn.style.display = 'none'; return; }
         btn.style.display = '';
         btn.innerHTML = myContacts.includes(viewedUsername) ? '\u{2B50} В контактах — убрать' : '\u{2B50} Добавить в контакты';
+    }
+    function updateContactNameRow() {
+        const row = document.getElementById('contact-name-row');
+        if (!row) return;
+        const inContacts = viewedUsername && viewedUsername !== currentUser && myContacts.includes(viewedUsername);
+        row.style.display = inContacts ? 'flex' : 'none';
+        if (inContacts) document.getElementById('contact-name-input').value = contactNames[viewedUsername] || '';
+    }
+    function saveContactName() {
+        if (!viewedUsername || viewedUsername === currentUser) return;
+        const val = document.getElementById('contact-name-input').value.trim().slice(0, 30);
+        if (val) contactNames[viewedUsername] = val; else delete contactNames[viewedUsername];
+        saveContactNames();
+        showToast('\u{270F}\uFE0F Имя контакта сохранено', val ? `Теперь отображается как «${val}»` : 'Вернули оригинальный ник');
+        renderContacts(); renderUserList();
+        if (activeChatTarget === viewedUsername && !isCurrentGroup) {
+            document.getElementById('target-username').innerText = displayName(viewedUsername);
+        }
+        updateHeaderStatus();
     }
     function renderContacts() {
         const box = document.getElementById('contacts-list');
@@ -1227,11 +1265,12 @@
                 <div class="chat-item-left">
                     <div class="avatar${isOnline ? ' online-ring' : ''}" id="contact-av-${cssSafe(u)}">${u.charAt(0).toUpperCase()}</div>
                     <div style="min-width:0;">
-                        <div class="user-name">@${u}${myBlocks.includes(u) ? ' \u{1F6AB}' : ''}</div>
+                        <div class="user-name">${nameHtml(u)}${myBlocks.includes(u) ? ' \u{1F6AB}' : ''}</div>
                         <div class="user-sub">${isOnline ? '<span class="status-dot online-dot"></span>В сети' : '<span class="status-dot offline-dot"></span>Был(а) недавно'}${customStatus ? ` · <span style="color:var(--accent-b)">${escapeHtml(customStatus)}</span>` : ''}</div>
                     </div>
                 </div>
                 <div class="chat-item-right">
+                    <button class="btn-delete-chat" onclick="event.stopPropagation(); openUserProfile('${u}')" title="Изменить имя">&#x270F;</button>
                     <button class="btn-delete-chat" onclick="event.stopPropagation(); removeContact('${u}')">\u{2716}</button>
                 </div>`;
             box.appendChild(item);
@@ -1846,11 +1885,12 @@
             if (data.is_group) selectChat(chatKey, true, chatTitle);
             else selectChat(chatKey, false);
         };
-        showToast('@' + data.sender + (data.is_group ? ` (${chatTitle})` : ''), previewText, goToChat);
+        const senderLabel = displayName(data.sender);
+        showToast(senderLabel + (data.is_group ? ` (${chatTitle})` : ''), previewText, goToChat);
         playBeep(); vibrateNow();
         if (document.hidden && "Notification" in window && Notification.permission === "granted") {
             try {
-                const n = new Notification('@' + data.sender + (data.is_group ? ` (${chatTitle})` : ''), {
+                const n = new Notification(senderLabel + (data.is_group ? ` (${chatTitle})` : ''), {
                     body: previewText, icon: '/icon-192.png', tag: chatKey, renotify: true,
                 });
                 n.onclick = () => { window.focus(); goToChat(); n.close(); };
@@ -2279,6 +2319,7 @@
         else avatarEl.innerHTML = username.charAt(0).toUpperCase();
         updateBlockButton();
         updateContactButton();
+        updateContactNameRow();
         openModal('modal-view-profile');
     }
 
@@ -2533,7 +2574,7 @@
                 <div class="chat-item-left">
                     <div class="avatar${isOnline ? ' online-ring' : ''}" id="avatar-list-${cssSafe(user)}">${user.charAt(0).toUpperCase()}</div>
                     <div style="min-width:0;">
-                        <div class="user-name">@${user}${myBlocks.includes(user) ? ' \u{1F6AB}' : ''}</div>
+                        <div class="user-name">${nameHtml(user)}${myBlocks.includes(user) ? ' \u{1F6AB}' : ''}</div>
                         <div class="user-sub">${statusHtml}</div>
                     </div>
                 </div>
@@ -2572,7 +2613,7 @@
             document.getElementById('target-status').innerText = 'Группа';
             document.getElementById('chat-header-clickable').onclick = () => openGroupProfile();
         } else {
-            document.getElementById('target-username').innerText = '@' + target;
+            document.getElementById('target-username').innerText = displayName(target);
             document.getElementById('target-avatar-letter').innerText = target.charAt(0).toUpperCase();
             updateHeaderStatus();
             document.getElementById('chat-header-clickable').onclick = () => openUserProfile(target);
@@ -2688,7 +2729,7 @@
     function setReplyTarget(msg) {
         replyTarget = msg;
         let previewText = msg.msg_type === 'text' ? msg.content : msg.msg_type === 'image' ? '\u{1F4F7} Фото' : msg.msg_type === 'voice' ? '\u{1F3A4} Голосовое сообщение' : msg.msg_type === 'video' ? '\u{1F4F9} Видео-кружок' : msg.msg_type === 'videofile' ? '\u{1F3AC} Видео' : msg.msg_type === 'sticker' ? 'Стикер ' + msg.content : '\u{1F4C1} Файл';
-        document.getElementById('reply-bar-sender').innerText = '@' + msg.sender;
+        document.getElementById('reply-bar-sender').innerText = displayName(msg.sender);
         document.getElementById('reply-bar-content').innerText = previewText;
         document.getElementById('reply-bar').classList.add('active');
         document.getElementById('msg-input').focus();
@@ -2983,7 +3024,7 @@
         let replyHtml = '';
         if (msg.reply_to) {
             let replyPreview = msg.reply_to.msg_type === 'text' ? escapeHtml(msg.reply_to.content) : msg.reply_to.msg_type === 'image' ? '\u{1F4F7} Фото' : msg.reply_to.msg_type === 'voice' ? '\u{1F3A4} Голосовое' : msg.reply_to.msg_type === 'video' ? '\u{1F4F9} Видео' : msg.reply_to.msg_type === 'videofile' ? '\u{1F3AC} Видео' : msg.reply_to.msg_type === 'sticker' ? 'Стикер ' + msg.reply_to.content : '\u{1F4C1} Файл';
-            replyHtml = `<div class="msg-reply-quote" onclick="scrollToMessage(${msg.reply_to.id})"><div class="msg-reply-quote-sender">@${msg.reply_to.sender}</div><div>${replyPreview}</div></div>`;
+            replyHtml = `<div class="msg-reply-quote" onclick="scrollToMessage(${msg.reply_to.id})"><div class="msg-reply-quote-sender">${escapeHtml(displayName(msg.reply_to.sender))}</div><div>${replyPreview}</div></div>`;
         }
         let statusHtml = isMy && !isCurrentGroup ? getStatusIconHtml(msg.status || 'sent') : '';
         let editedHtml = msg.edited ? '<span class="msg-edited">изменено</span>' : '';
@@ -2993,7 +3034,7 @@
             + (isMy && msg.msg_type !== 'deleted' ? `<span class="picker-divider"></span>` + (msg.msg_type === 'text' ? `<span class="picker-action" title="Редактировать" onclick="openEditModal(${msg.id})">\u{270F}</span>` : '') + `<span class="picker-action" title="Удалить" onclick="deleteMyMessage(${msg.id})">\u{1F5D1}</span>` : '');
         const replyPayload = JSON.stringify({ id: msg.id, sender: msg.sender, content: msg.content, msg_type: msg.msg_type }).replace(/"/g, '&quot;');
         wrapper.innerHTML = `
-            <div class="msg-sender">@${msg.sender}</div>
+            <div class="msg-sender">${escapeHtml(displayName(msg.sender))}</div>
             <div class="msg-row">
                 <div class="msg-bubble-touch-zone">
                     <div class="msg-bubble">
