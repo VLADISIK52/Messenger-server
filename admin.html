@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Mission Control</title>
+<title>Mission Control Pro</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛰️</text></svg>">
 <style>
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -25,29 +25,22 @@
     body { padding-bottom: max(20px, env(safe-area-inset-bottom)); }
     .hidden { display: none !important; }
     .muted { color: var(--muted); }
+    .small { font-size: 12px; color: var(--sub); line-height: 1.4; margin-top: 6px; }
 
     #login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-    .login-box {
-        width: min(100%, 420px); background: rgba(8,36,27,0.92);
-        border: 1px solid var(--border); border-radius: 28px; padding: 26px;
-        box-shadow: 0 24px 60px rgba(0,0,0,0.45);
-    }
+    .login-box { width: min(100%, 420px); background: rgba(8,36,27,0.92); border: 1px solid var(--border);
+        border-radius: 28px; padding: 26px; box-shadow: 0 24px 60px rgba(0,0,0,0.45); }
     .login-title { font-family: Sora, Inter, sans-serif; font-size: 28px; font-weight: 800; margin-bottom: 8px;
         background: linear-gradient(90deg, #eafff5, #9adcf0 55%, #b7a4ec); -webkit-background-clip: text; background-clip: text; color: transparent; }
     .login-hint { color: var(--muted); font-size: 13px; margin-bottom: 18px; line-height: 1.5; }
-    input {
-        width: 100%; border: 1px solid rgba(220,255,240,0.28); background: rgba(255,255,255,0.08);
-        color: var(--text); border-radius: 16px; padding: 14px 16px; outline: none; font-size: 15px; margin-bottom: 10px;
-    }
+    input { width: 100%; border: 1px solid rgba(220,255,240,0.28); background: rgba(255,255,255,0.08); color: var(--text);
+        border-radius: 16px; padding: 14px 16px; outline: none; font-size: 15px; margin-bottom: 10px; }
     input:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(169,154,240,0.15); }
     .login-error { min-height: 18px; color: var(--bad); font-size: 13px; margin-bottom: 8px; }
 
-    header {
-        position: sticky; top: 0; z-index: 20;
-        padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
-        background: rgba(5,27,19,0.94); border-bottom: 1px solid var(--border);
-    }
-    .top-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; max-width: 1400px; margin: 0 auto; }
+    header { position: sticky; top: 0; z-index: 20; padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
+        background: rgba(5,27,19,0.94); border-bottom: 1px solid var(--border); }
+    .top-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; max-width: 1440px; margin: 0 auto; }
     .brand { font-family: Sora, Inter, sans-serif; font-weight: 800; font-size: 18px; flex: 1; min-width: 170px; }
     .status { display: flex; align-items: center; gap: 8px; color: var(--sub); font-size: 12px; white-space: nowrap; }
     .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
@@ -55,32 +48,26 @@
     .dot.bad { background: var(--bad); box-shadow: 0 0 10px rgba(255,125,146,0.6); }
     .dot.wait { background: var(--warn); }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; width: 100%; margin-top: 10px; }
-    .btn {
-        border: 1px solid var(--border); background: rgba(255,255,255,0.07); color: var(--text);
-        border-radius: 999px; padding: 9px 13px; font-weight: 700; font-size: 13px; cursor: pointer;
-        transition: transform 0.12s ease, background 0.15s ease, opacity 0.15s ease;
-    }
+    .btn { border: 1px solid var(--border); background: rgba(255,255,255,0.07); color: var(--text); border-radius: 999px;
+        padding: 9px 13px; font-weight: 700; font-size: 13px; cursor: pointer; transition: transform 0.12s ease, background 0.15s ease, opacity 0.15s ease; }
     .btn:hover { background: rgba(255,255,255,0.11); }
     .btn:active { transform: scale(0.96); }
     .btn:disabled { opacity: 0.55; cursor: default; }
     .btn.primary { background: var(--grad); border: none; color: #fff; box-shadow: 0 0 20px rgba(244,169,136,0.28); }
     .btn.danger { background: rgba(255,125,146,0.12); border-color: rgba(255,125,146,0.28); color: #ffc2cb; }
 
-    .banner { max-width: 1400px; margin: 10px auto 0; padding: 10px 14px; border-radius: 16px;
-        border: 1px solid var(--border); background: rgba(255,255,255,0.06); color: var(--sub); font-size: 13px; }
+    .banner { max-width: 1440px; margin: 10px auto 0; padding: 10px 14px; border-radius: 16px; border: 1px solid var(--border);
+        background: rgba(255,255,255,0.06); color: var(--sub); font-size: 13px; }
     .banner.ok { border-color: rgba(126,240,192,0.35); background: rgba(126,240,192,0.10); color: #d9fff0; }
     .banner.error { border-color: rgba(255,125,146,0.35); background: rgba(255,125,146,0.10); color: #ffd7dd; }
 
-    .wrap { max-width: 1400px; margin: 0 auto; padding: 14px; display: grid;
+    .wrap { max-width: 1440px; margin: 0 auto; padding: 14px; display: grid;
         grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; align-content: start; }
-    .card {
-        background: var(--card); border: 1px solid var(--border); border-radius: 22px; padding: 14px;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 30px rgba(0,0,0,0.18);
-    }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 22px; padding: 14px;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 30px rgba(0,0,0,0.18); }
     .card.wide { grid-column: 1 / -1; }
     .card h3 { margin: 0 0 10px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 800; }
     .big { font-family: Sora, Inter, sans-serif; font-size: 26px; font-weight: 800; line-height: 1.1; word-break: break-word; }
-    .small { font-size: 12px; color: var(--sub); line-height: 1.4; margin-top: 6px; }
 
     .gauge { position: relative; width: 118px; height: 118px; margin: 2px auto 0; }
     .gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
@@ -88,18 +75,28 @@
     .g-fg { fill: none; stroke: var(--ok); stroke-width: 10; stroke-linecap: round;
         stroke-dasharray: 326.7; stroke-dashoffset: 326.7; transition: stroke-dashoffset 0.5s ease, stroke 0.5s ease; }
     .g-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-    .g-val { font-family: Sora, Inter, sans-serif; font-size: 21px; font-weight: 800; }
-    .g-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 800; margin-top: 2px; }
+    .g-val { font-family: Sora, Inter, sans-serif; font-size: 20px; font-weight: 800; }
+    .g-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 800; margin-top: 2px; text-align: center; }
 
-    .strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+    .strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
     .mini { background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 16px; padding: 10px; }
     .mini .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 800; }
-    .mini .value { font-size: 17px; font-weight: 800; margin-top: 4px; font-family: Sora, Inter, sans-serif; word-break: break-word; }
+    .mini .value { font-size: 16px; font-weight: 800; margin-top: 4px; font-family: Sora, Inter, sans-serif; word-break: break-word; }
 
     canvas.spark { width: 100%; height: 84px; display: block; margin-top: 8px; border-radius: 14px;
         background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.05); }
     .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media (max-width: 700px) { .charts { grid-template-columns: 1fr; } }
+
+    .hbars { display: flex; gap: 3px; align-items: flex-end; height: 64px; margin-top: 10px; }
+    .hbars span { flex: 1; min-height: 2px; border-radius: 3px 3px 0 0; background: var(--grad); opacity: 0.9; }
+    .hlabels { display: flex; gap: 3px; margin-top: 4px; }
+    .hlabels span { flex: 1; text-align: center; font-size: 9px; color: var(--muted); }
+
+    .tbar { margin-top: 8px; }
+    .tbar .row { display: flex; justify-content: space-between; font-size: 12px; color: var(--sub); margin-bottom: 3px; }
+    .tbar .track { height: 8px; border-radius: 99px; background: rgba(255,255,255,0.10); overflow: hidden; margin-bottom: 8px; }
+    .tbar .track span { display: block; height: 100%; border-radius: 99px; background: var(--grad); transition: width 0.4s ease; }
 
     .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
     .chip { border: 1px solid var(--border); background: rgba(255,255,255,0.07); color: var(--sub);
@@ -119,6 +116,9 @@
     .event:last-child { border-bottom: none; }
     .event .t { color: var(--muted); min-width: 74px; font-variant-numeric: tabular-nums; }
     .event .u { font-weight: 700; color: var(--text); }
+    .listrow { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 12px; color: var(--sub); }
+    .listrow:last-child { border-bottom: none; }
+    .listrow b { color: var(--text); }
 
     @media (max-width: 760px) {
         .wrap { grid-template-columns: 1fr 1fr; padding: 10px; gap: 10px; }
@@ -126,6 +126,7 @@
         .brand { font-size: 16px; }
         .btn { padding: 8px 11px; font-size: 12px; }
         .gauge { width: 104px; height: 104px; }
+        .g-val { font-size: 17px; }
     }
     @media (max-width: 430px) { .wrap { grid-template-columns: 1fr; } }
 </style>
@@ -134,7 +135,7 @@
 
 <div id="login-screen">
     <div class="login-box">
-        <div class="login-title">🛰️ Mission Control</div>
+        <div class="login-title">🛰️ Mission Control Pro</div>
         <div class="login-hint">Панель доступна только администратору.<br>Войди ником и паролем от мессенджера.</div>
         <input id="login-user" type="text" placeholder="Админский ник" autocomplete="username">
         <input id="login-pass" type="password" placeholder="Пароль" autocomplete="current-password">
@@ -146,7 +147,7 @@
 <div id="panel" class="hidden">
     <header>
         <div class="top-row">
-            <div class="brand">🛰️ Mission Control</div>
+            <div class="brand">🛰️ Mission Control Pro</div>
             <div class="status"><span class="dot wait" id="live-dot"></span><span id="status-text">подключение...</span></div>
         </div>
         <div class="actions">
@@ -154,6 +155,7 @@
             <button class="btn" id="btn-pause">⏸ Пауза</button>
             <button class="btn primary" id="btn-snapshot">💾 Снапшот</button>
             <button class="btn" id="btn-testpush">🔔 Тест-пуш</button>
+            <button class="btn" id="btn-report">📋 Отчёт</button>
             <button class="btn danger" id="btn-logout">🚪 Выйти</button>
         </div>
     </header>
@@ -171,7 +173,7 @@
         </section>
 
         <section class="card">
-            <h3>Память</h3>
+            <h3>Память процесса</h3>
             <div class="gauge">
                 <svg viewBox="0 0 120 120"><circle class="g-bg" cx="60" cy="60" r="52"/><circle class="g-fg" id="g-mem" cx="60" cy="60" r="52"/></svg>
                 <div class="g-center"><div class="g-val" id="v-mem">—</div><div class="g-lbl">ram</div></div>
@@ -180,19 +182,19 @@
         </section>
 
         <section class="card">
-            <h3>Диск</h3>
+            <h3>Диск хоста (Render)</h3>
             <div class="gauge">
                 <svg viewBox="0 0 120 120"><circle class="g-bg" cx="60" cy="60" r="52"/><circle class="g-fg" id="g-disk" cx="60" cy="60" r="52"/></svg>
-                <div class="g-center"><div class="g-val" id="v-disk">—</div><div class="g-lbl">disk</div></div>
+                <div class="g-center"><div class="g-val" id="v-disk">—</div><div class="g-lbl">host disk</div></div>
             </div>
-            <div class="small" id="disk-sub">—</div>
+            <div class="small" id="disk-sub">это общий слой Render, не твои данные</div>
         </section>
 
         <section class="card">
             <h3>Backblaze B2</h3>
             <div class="gauge">
                 <svg viewBox="0 0 120 120"><circle class="g-bg" cx="60" cy="60" r="52"/><circle class="g-fg" id="g-b2" cx="60" cy="60" r="52"/></svg>
-                <div class="g-center"><div class="g-val" id="v-b2">—</div><div class="g-lbl">b2</div></div>
+                <div class="g-center"><div class="g-val" id="v-b2">—</div><div class="g-lbl">b2 / 10 ГБ</div></div>
             </div>
             <div class="small" id="b2-sub">—</div>
         </section>
@@ -203,10 +205,16 @@
                 <div class="mini"><div class="label">Uptime</div><div class="value" id="s-uptime">—</div></div>
                 <div class="mini"><div class="label">Latency</div><div class="value" id="s-latency">—</div></div>
                 <div class="mini"><div class="label">RPS</div><div class="value" id="s-rps">—</div></div>
+                <div class="mini"><div class="label">Запросов всего</div><div class="value" id="s-reqtotal">—</div></div>
                 <div class="mini"><div class="label">Версия</div><div class="value" id="s-version">—</div></div>
                 <div class="mini"><div class="label">Python</div><div class="value" id="s-python">—</div></div>
                 <div class="mini"><div class="label">Обновлено</div><div class="value" id="s-ago">—</div></div>
             </div>
+        </section>
+
+        <section class="card wide">
+            <h3>Здоровье систем</h3>
+            <div class="chips" id="health-list"></div>
         </section>
 
         <section class="card wide">
@@ -216,6 +224,22 @@
                 <div><div class="small">WS-события / 5 сек</div><canvas class="spark" id="ch-ws"></canvas></div>
                 <div><div class="small">CPU, история</div><canvas class="spark" id="ch-cpu"></canvas></div>
                 <div><div class="small">Сообщений / мин</div><canvas class="spark" id="ch-msg"></canvas></div>
+            </div>
+        </section>
+
+        <section class="card wide">
+            <h3>Активность</h3>
+            <div class="charts">
+                <div>
+                    <div class="small">Регистрации за 7 дней</div>
+                    <div class="hbars" id="bars-regs"></div>
+                    <div class="hlabels" id="labs-regs"></div>
+                </div>
+                <div>
+                    <div class="small">События по часам суток (MSK)</div>
+                    <div class="hbars" id="bars-hours"></div>
+                    <div class="hlabels" id="labs-hours"></div>
+                </div>
             </div>
         </section>
 
@@ -229,26 +253,48 @@
         <section class="card">
             <h3>База данных</h3>
             <div class="big" id="db-size">—</div>
-            <div class="kv"><span>Сообщений</span><b id="db-msgs">0</b></div>
+            <div class="kv"><span>Сообщений всего</span><b id="db-msgs">0</b></div>
+            <div class="kv"><span>За 1 час</span><b id="db-1h">0</b></div>
+            <div class="kv"><span>За 24 часа</span><b id="db-24h">0</b></div>
             <div class="kv"><span>Аккаунтов</span><b id="db-users">0</b></div>
             <div class="kv"><span>Сессий</span><b id="db-sessions">0</b></div>
             <div class="kv"><span>Скорость</span><b id="db-rate">—</b></div>
         </section>
 
         <section class="card">
-            <h3>Снапшоты B2</h3>
-            <div class="big" id="snap-time">—</div>
-            <div class="kv"><span>Размер</span><b id="snap-size">—</b></div>
-            <div class="kv"><span>Всего сделано</span><b id="cnt-snap">0</b></div>
-            <div class="kv"><span>Файлов в B2</span><b id="b2-files">0</b></div>
+            <h3>Данные приложения</h3>
+            <div class="big" id="st-app">—</div>
+            <div class="kv"><span>Файлов локально</span><b id="st-files">0</b></div>
+            <div class="kv"><span>В B2 всего</span><b id="st-b2">—</b></div>
+            <div class="kv"><span>Файлов в B2</span><b id="st-b2files">0</b></div>
+            <div class="kv"><span>Снапшот</span><b id="st-snaptime">—</b></div>
+            <div class="kv"><span>Размер снапшота</span><b id="st-snapsize">—</b></div>
         </section>
 
         <section class="card">
             <h3>Пуши и трафик</h3>
-            <div class="kv"><span>WS-сообщений</span><b id="cnt-ws">0</b></div>
-            <div class="kv"><span>FCM отправлено</span><b id="cnt-fcm">0</b></div>
-            <div class="kv"><span>Web Push</span><b id="cnt-web">0</b></div>
-            <div class="kv"><span>Запросов/сек</span><b id="cnt-rps">—</b></div>
+            <div class="kv"><span>Web Push подписок</span><b id="p-subs">0</b></div>
+            <div class="kv"><span>FCM токенов</span><b id="p-fcm">0</b></div>
+            <div class="kv"><span>WS-сообщений</span><b id="c-ws">0</b></div>
+            <div class="kv"><span>FCM отправлено</span><b id="c-fcm">0</b></div>
+            <div class="kv"><span>Web Push отправлено</span><b id="c-web">0</b></div>
+            <div class="kv"><span>Снапшотов</span><b id="c-snap">0</b></div>
+        </section>
+
+        <section class="card wide">
+            <h3>Аналитика контента</h3>
+            <div class="charts">
+                <div>
+                    <div class="small">Типы сообщений</div>
+                    <div id="types-bars"></div>
+                </div>
+                <div>
+                    <div class="small">Топ чатов по сообщениям</div>
+                    <div id="top-chats"></div>
+                    <div class="kv"><span>Всего реакций</span><b id="c-reactions">0</b></div>
+                    <div class="kv"><span>Групп</span><b id="c-groups">0</b></div>
+                </div>
+            </div>
         </section>
 
         <section class="card wide">
@@ -258,10 +304,12 @@
                 <div class="mini"><div class="label">Забанено</div><div class="value" id="sec-banned">—</div></div>
                 <div class="mini"><div class="label">Ботов</div><div class="value" id="sec-bots">—</div></div>
                 <div class="mini"><div class="label">Новых за сутки</div><div class="value" id="sec-new">—</div></div>
+                <div class="mini"><div class="label">Входов за сутки</div><div class="value" id="sec-logins">—</div></div>
                 <div class="mini"><div class="label">Ошибок входа</div><div class="value" id="sec-fails">—</div></div>
-                <div class="mini"><div class="label">Блоков ботов</div><div class="value" id="sec-blocks">—</div></div>
+                <div class="mini"><div class="label">Блоков ботов</div><div class="value" id="sec-blocks2">—</div></div>
+                <div class="mini"><div class="label">Чёрный список</div><div class="value" id="sec-bl">—</div></div>
             </div>
-            <div class="small" style="margin-top:10px;">Топ IP за последние события:</div>
+            <div class="small" style="margin-top:10px;">Топ IP:</div>
             <div class="chips" id="sec-ips"></div>
             <div class="small" style="margin-top:10px;">Устройства:</div>
             <div class="chips" id="sec-devices"></div>
@@ -277,149 +325,177 @@
 <script>
 (function () {
     'use strict';
-    var $ = function (id) { return document.getElementById(id); };
-    var CIRC = 326.7;
-    var POLL_MS = 4000;
-    var STATS_MS = 20000;
+    const $ = (id) => document.getElementById(id);
+    const CIRC = 326.7;
+    const POLL_MS = 4000;
+    const STATS_MS = 20000;
 
-    var state = {
+    const state = {
         token: localStorage.getItem('messenger_token') || '',
         timer: null, statsTimer: null, agoTimer: null,
         paused: false, fails: 0, lastPoll: 0,
         hist: { cpu: [], msg: [] },
         lastMsgs: null, lastMsgTime: 0,
-        sig: {}
+        sig: {}, lastM: null, lastS: null
     };
 
-    function esc(v) {
-        return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
-            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-        });
-    }
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+
     function bytes(n) {
         n = Number(n || 0);
         if (!n) return '0 Б';
-        var u = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'], i = 0;
+        const u = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+        let i = 0;
         while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
         return n.toFixed(i ? 1 : 0) + ' ' + u[i];
     }
     function uptime(s) {
         s = Math.floor(Number(s || 0));
-        var d = Math.floor(s / 86400); s %= 86400;
-        var h = Math.floor(s / 3600); s %= 3600;
-        var m = Math.floor(s / 60); var sec = s % 60;
+        const d = Math.floor(s / 86400); s %= 86400;
+        const h = Math.floor(s / 3600); s %= 3600;
+        const m = Math.floor(s / 60); const sec = s % 60;
         return (d ? d + 'д ' : '') + String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
     }
-    function hhmm(ts) { return ts ? new Date(Number(ts) * 1000).toLocaleTimeString('ru-RU') : '—'; }
-    function clamp(v) { return Math.max(0, Math.min(100, Number(v || 0))); }
-    function colr(p) { return p < 60 ? 'var(--ok)' : p < 85 ? 'var(--warn)' : 'var(--bad)'; }
+    const hhmm = (ts) => ts ? new Date(Number(ts) * 1000).toLocaleTimeString('ru-RU') : '—';
+    const clamp = (v) => Math.max(0, Math.min(100, Number(v || 0)));
+    const colr = (p) => p < 60 ? 'var(--ok)' : p < 85 ? 'var(--warn)' : 'var(--bad)';
 
     function setGauge(id, valId, pct, text, color) {
-        var el = $(id);
-        if (el) {
-            el.style.strokeDashoffset = String(CIRC * (1 - clamp(pct) / 100));
-            el.style.stroke = color || 'var(--ok)';
-        }
-        var v = $(valId);
-        if (v) v.textContent = text;
+        const el = $(id);
+        if (el) { el.style.strokeDashoffset = String(CIRC * (1 - clamp(pct) / 100)); el.style.stroke = color || 'var(--ok)'; }
+        setTxt(valId, text);
     }
     function setTxt(id, text) {
-        var el = $(id);
+        const el = $(id);
         if (el && el.textContent !== text) el.textContent = text;
     }
-    function setHtml(id, html, sigKey) {
-        if (state.sig[sigKey] === html) return;
-        state.sig[sigKey] = html;
-        var el = $(id);
+    function setHtml(id, html, key) {
+        if (state.sig[key] === html) return;
+        state.sig[key] = html;
+        const el = $(id);
         if (el) el.innerHTML = html;
     }
     function setStatus(type, text) {
-        var dot = $('live-dot');
+        const dot = $('live-dot');
         if (dot) dot.className = 'dot ' + (type === 'ok' ? 'ok' : type === 'bad' ? 'bad' : 'wait');
         setTxt('status-text', text);
     }
     function banner(type, text) {
-        var el = $('banner');
+        const el = $('banner');
         if (!el) return;
         el.className = 'banner ' + type;
         el.textContent = text;
         el.classList.remove('hidden');
-        setTimeout(function () { el.classList.add('hidden'); }, 4500);
+        setTimeout(() => el.classList.add('hidden'), 4500);
     }
 
     function draw(id, series, color) {
-        var c = $(id);
+        const c = $(id);
         if (!c) return;
-        var dpr = window.devicePixelRatio || 1;
-        var w = c.clientWidth || 300, h = c.clientHeight || 84;
+        const dpr = window.devicePixelRatio || 1;
+        const w = c.clientWidth || 300, h = c.clientHeight || 84;
         if (c.width !== Math.floor(w * dpr)) { c.width = Math.floor(w * dpr); c.height = Math.floor(h * dpr); }
-        var ctx = c.getContext('2d');
+        const ctx = c.getContext('2d');
         if (!ctx) return;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, w, h);
-        var data = (series || []).map(Number);
+        const data = (series || []).map(Number);
         if (data.length < 2) return;
-        var max = Math.max(1, Math.max.apply(null, data));
-        var pad = 8, step = (w - pad * 2) / (data.length - 1);
+        const max = Math.max(1, ...data);
+        const pad = 8, step = (w - pad * 2) / (data.length - 1);
         ctx.beginPath();
-        for (var i = 0; i < data.length; i++) {
-            var x = pad + i * step;
-            var y = h - pad - (data[i] / max) * (h - pad * 2);
-            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        }
+        data.forEach((v, i) => {
+            const x = pad + i * step;
+            const y = h - pad - (v / max) * (h - pad * 2);
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        });
         ctx.strokeStyle = color; ctx.lineWidth = 2.4; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
         ctx.stroke();
         ctx.lineTo(w - pad, h - pad); ctx.lineTo(pad, h - pad); ctx.closePath();
         ctx.globalAlpha = 0.15; ctx.fillStyle = color; ctx.fill(); ctx.globalAlpha = 1;
-        var lx = pad + (data.length - 1) * step;
-        var ly = h - pad - (data[data.length - 1] / max) * (h - pad * 2);
+        const lx = pad + (data.length - 1) * step;
+        const ly = h - pad - (data[data.length - 1] / max) * (h - pad * 2);
         ctx.beginPath(); ctx.arc(lx, ly, 3.6, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+    }
+
+    function hbars(id, labId, values, labels) {
+        const max = Math.max(1, ...values);
+        setHtml(id, values.map(v => `<span style="height:${Math.max(3, Math.round(v / max * 100))}%"></span>`).join(''), id);
+        if (labId) setHtml(labId, labels.map(l => `<span>${esc(l)}</span>`).join(''), labId);
     }
 
     function actionLabel(a) {
         return ({ register: 'регистрация', login: 'вход', login_fail: 'ошибка входа', ws_connect: 'ws онлайн', register_block: 'блок бота' })[a] || a;
     }
+    const TYPE_LABELS = { text: 'Текст', image: 'Фото', voice: 'Голос', video: 'Кружки', videofile: 'Видео', sticker: 'Стикеры', file: 'Файлы', deleted: 'Удалённые' };
+
+    function renderHealth(h, m) {
+        const chips = [];
+        chips.push(h.b2 ? '<span class="chip ok">B2 подключён</span>' : '<span class="chip bad">B2 не подключён</span>');
+        chips.push(h.fcm ? '<span class="chip ok">FCM настроен</span>' : '<span class="chip warn">FCM не настроен</span>');
+        chips.push('<span class="chip ok">Web Push активен</span>');
+        if (h.snapshot_age_sec == null) chips.push('<span class="chip bad">Снапшотов нет</span>');
+        else if (h.snapshot_age_sec < 400) chips.push('<span class="chip ok">Снапшот свежий</span>');
+        else if (h.snapshot_age_sec < 1800) chips.push('<span class="chip warn">Снапшот ageing</span>');
+        else chips.push('<span class="chip bad">Снапшот старый</span>');
+        chips.push(`<span class="chip">Потоков: ${Number(h.threads || 0)}</span>`);
+        chips.push(`<span class="chip">Клиентов в фоне: ${Number(h.hidden_clients || 0)}</span>`);
+        chips.push(`<span class="chip">Запросов всего: ${Number(m.req_total || 0).toLocaleString('ru-RU')}</span>`);
+        setHtml('health-list', chips.join(''), 'health');
+    }
 
     function renderMetrics(m) {
         state.lastPoll = Date.now();
-        var cpu = clamp(m.cpu_proc);
-        var memPct = m.mem_total ? clamp(m.mem_rss / m.mem_total * 100) : 0;
-        var diskPct = m.disk_total ? clamp(m.disk_used / m.disk_total * 100) : 0;
-        var b2 = m.b2 || {};
-        var b2Bytes = Number(b2.bytes || 0);
-        var b2Pct = clamp(b2Bytes / (10 * 1024 * 1024 * 1024) * 100);
+        state.lastM = m;
+        const cpu = clamp(m.cpu_proc);
+        const memPct = m.mem_total ? clamp(m.mem_rss / m.mem_total * 100) : 0;
+        const diskPct = m.disk_total ? clamp(m.disk_used / m.disk_total * 100) : 0;
+        const b2 = m.b2 || {};
+        const b2Bytes = Number(b2.bytes || 0);
+        const b2Pct = clamp(b2Bytes / (10 * 1024 * 1024 * 1024) * 100);
+        const extra = m.extra || {};
+        const health = m.health || {};
+        const snap = m.snapshot || {};
+        const cnt = m.counters || {};
 
         setGauge('g-cpu', 'v-cpu', cpu, cpu.toFixed(0) + '%', colr(cpu));
         setGauge('g-mem', 'v-mem', memPct, bytes(m.mem_rss), colr(memPct));
         setGauge('g-disk', 'v-disk', diskPct, diskPct.toFixed(0) + '%', colr(diskPct));
         setGauge('g-b2', 'v-b2', b2Pct, bytes(b2Bytes), colr(b2Pct));
 
-        setTxt('cpu-load', 'load: ' + ((m.load || []).map(function (x) { return Number(x).toFixed(2); }).join(' / ') || '—'));
+        setTxt('cpu-load', 'load 1/5/15: ' + ((m.load || []).map(x => Number(x).toFixed(2)).join(' / ') || '—'));
         setTxt('mem-sub', m.mem_total ? memPct.toFixed(1) + '% из ' + bytes(m.mem_total) : '—');
-        setTxt('disk-sub', m.disk_total ? diskPct.toFixed(1) + '% из ' + bytes(m.disk_total) : '—');
+        setTxt('disk-sub', m.disk_total ? bytes(m.disk_used) + ' из ' + bytes(m.disk_total) + ' · общий слой Render' : '—');
         setTxt('b2-sub', 'файлов: ' + Number(b2.files || 0) + ' · лимит 10 ГБ');
 
         setTxt('s-uptime', uptime(m.uptime));
         setTxt('s-latency', Number(m.latency_ms || 0).toFixed(1) + ' ms');
         setTxt('s-rps', Number(m.rps || 0).toFixed(2));
+        setTxt('s-reqtotal', Number(m.req_total || 0).toLocaleString('ru-RU'));
         setTxt('s-version', String(m.version || '—').slice(0, 10));
         setTxt('s-python', m.python || '—');
 
+        renderHealth(health, m);
+
         setTxt('ws-users', String(Number(m.ws_users || 0)));
         setTxt('ws-sockets', String(Number(m.ws_sockets || 0)));
-        setHtml('online-list', (m.online || []).map(function (u) { return '<span class="chip ok">@' + esc(u) + '</span>'; }).join('') || '<span class="chip">никого нет</span>', 'online');
+        setHtml('online-list', (m.online || []).map(u => `<span class="chip ok">@${esc(u)}</span>`).join('') || '<span class="chip">никого нет</span>', 'online');
 
         setTxt('db-size', bytes(m.db_size));
         setTxt('db-msgs', Number(m.msgs || 0).toLocaleString('ru-RU'));
+        setTxt('db-1h', Number(extra.msgs_1h || 0).toLocaleString('ru-RU'));
+        setTxt('db-24h', Number(extra.msgs_24h || 0).toLocaleString('ru-RU'));
         setTxt('db-users', Number(m.users || 0).toLocaleString('ru-RU'));
         setTxt('db-sessions', Number(m.sessions || 0).toLocaleString('ru-RU'));
 
-        var now = Date.now();
-        if (state.lastMsgs !== null && m.msgs !== undefined) {
-            var dt = (now - state.lastMsgTime) / 1000;
+        const now = Date.now();
+        if (state.lastMsgs !== null) {
+            const dt = (now - state.lastMsgTime) / 1000;
             if (dt > 0.5) {
-                var rate = (Number(m.msgs) - state.lastMsgs) / dt * 60;
-                state.hist.msg.push(Math.max(0, rate));
+                const rate = Math.max(0, (Number(m.msgs || 0) - state.lastMsgs) / dt * 60);
+                state.hist.msg.push(rate);
                 if (state.hist.msg.length > 40) state.hist.msg.shift();
                 setTxt('db-rate', rate.toFixed(1) + ' /мин');
             }
@@ -430,21 +506,45 @@
         state.hist.cpu.push(cpu);
         if (state.hist.cpu.length > 40) state.hist.cpu.shift();
 
-        var snap = m.snapshot || {};
-        setTxt('snap-time', hhmm(snap.time));
-        setTxt('snap-size', bytes(snap.size));
-        var cnt = m.counters || {};
-        setTxt('cnt-snap', String(Number(cnt.snapshots || 0)));
-        setTxt('b2-files', String(Number(b2.files || 0)));
-        setTxt('cnt-ws', Number(cnt.ws_msgs || 0).toLocaleString('ru-RU'));
-        setTxt('cnt-fcm', Number(cnt.fcm_sent || 0).toLocaleString('ru-RU'));
-        setTxt('cnt-web', Number(cnt.webpush_sent || 0).toLocaleString('ru-RU'));
-        setTxt('cnt-rps', Number(m.rps || 0).toFixed(2));
+        setTxt('st-app', bytes(m.app_bytes));
+        setTxt('st-files', String(Number(m.uploads_local || 0)));
+        setTxt('st-b2', bytes(b2Bytes));
+        setTxt('st-b2files', String(Number(b2.files || 0)));
+        setTxt('st-snaptime', hhmm(snap.time));
+        setTxt('st-snapsize', bytes(snap.size));
 
-        setHtml('events-list', (m.recent || []).map(function (e) {
-            return '<div class="event"><span class="t">' + esc(e.ts || '') + '</span><span class="u">@' + esc(e.username || '—') +
-                '</span><span>' + esc(actionLabel(e.action)) + '</span>' + (e.bot ? '<span class="chip bad">бот</span>' : '') + '</div>';
-        }).join('') || '<div class="small muted">Событий пока нет.</div>', 'events');
+        setTxt('p-subs', Number(extra.push_subs || 0).toLocaleString('ru-RU'));
+        setTxt('p-fcm', Number(extra.fcm_tokens || 0).toLocaleString('ru-RU'));
+        setTxt('c-ws', Number(cnt.ws_msgs || 0).toLocaleString('ru-RU'));
+        setTxt('c-fcm', Number(cnt.fcm_sent || 0).toLocaleString('ru-RU'));
+        setTxt('c-web', Number(cnt.webpush_sent || 0).toLocaleString('ru-RU'));
+        setTxt('c-snap', Number(cnt.snapshots || 0).toLocaleString('ru-RU'));
+
+        const types = extra.msg_types || {};
+        const tKeys = Object.keys(types).sort((a, b) => types[b] - types[a]);
+        const tMax = Math.max(1, ...tKeys.map(k => types[k]));
+        setHtml('types-bars', tKeys.length ? tKeys.map(k => `
+            <div class="tbar">
+                <div class="row"><span>${esc(TYPE_LABELS[k] || k)}</span><b>${Number(types[k]).toLocaleString('ru-RU')}</b></div>
+                <div class="track"><span style="width:${Math.round(types[k] / tMax * 100)}%"></span></div>
+            </div>`).join('') : '<div class="small muted">Сообщений пока нет.</div>', 'types');
+
+        const tops = extra.top_chats || [];
+        setHtml('top-chats', tops.length ? tops.map(t => {
+            const name = String(t.chat || '').startsWith('group_') ? '👥 группа' : esc(String(t.chat || '').replace(/_/g, ' ↔ '));
+            return `<div class="listrow"><span>${name}</span><b>${Number(t.count || 0).toLocaleString('ru-RU')}</b></div>`;
+        }).join('') : '<div class="small muted">Пока пусто.</div>', 'tops');
+        setTxt('c-reactions', Number(extra.reactions_total || 0).toLocaleString('ru-RU'));
+        setTxt('c-groups', Number(extra.groups_count || 0).toLocaleString('ru-RU'));
+
+        setTxt('sec-new', String(Number(extra.regs_24h || 0)));
+        setTxt('sec-logins', String(Number(extra.logins_24h || 0)));
+        setTxt('sec-bl', String(Number(extra.blocks_count || 0)));
+
+        setHtml('events-list', (m.recent || []).map(e => `
+            <div class="event"><span class="t">${esc(e.ts || '')}</span><span class="u">@${esc(e.username || '—')}</span>
+            <span>${esc(actionLabel(e.action))}</span>${e.bot ? '<span class="chip bad">бот</span>' : ''}</div>`
+        ).join('') || '<div class="small muted">Событий пока нет.</div>', 'events');
 
         draw('ch-req', m.req_series, '#38bdf8');
         draw('ch-ws', m.ws_series, '#a99af0');
@@ -453,24 +553,57 @@
     }
 
     function renderStats(s) {
-        var users = s.users || [];
-        var banned = users.filter(function (u) { return u.banned; }).length;
-        var bots = (s.bot_users || []).length;
-        var dayAgo = Date.now() - 86400000;
-        var fresh = users.filter(function (u) {
-            var m = String(u.created_at || '').match(/(\d{2})\.(\d{2})\.(\d{4})/);
-            if (!m) return false;
-            return new Date(m[3] + '-' + m[2] + '-' + m[1]).getTime() >= dayAgo;
-        }).length;
-        var acc = s.access || [];
-        var fails = acc.filter(function (a) { return a.action === 'login_fail'; }).length;
-        var blocks = acc.filter(function (a) { return a.action === 'register_block'; }).length;
-        var ips = {};
-        var dev = {};
-        acc.forEach(function (a) {
+        state.lastS = s;
+        const users = s.users || [];
+        const banned = users.filter(u => u.banned).length;
+        const bots = (s.bot_users || []).length;
+        const dayAgo = Date.now() - 86400000;
+
+        const days = [];
+        const dayLabels = [];
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date(Date.now() - i * 86400000);
+            const key = d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            dayLabels.push(d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }));
+            days.push(users.filter(u => (u.created_at || '').startsWith(key.slice(0, 6) + key.slice(6))).length);
+        }
+        const fixed = users.map(u => u).length;
+        const regs = new Array(7).fill(0);
+        users.forEach(u => {
+            const mdate = String(u.created_at || '').match(/(\d{2})\.(\d{2})\.(\d{4})/);
+            if (!mdate) return;
+            const t = new Date(mdate[3] + '-' + mdate[2] + '-' + mdate[1]).getTime();
+            const diff = Math.floor((Date.now() - t) / 86400000);
+            if (diff >= 0 && diff <= 6) regs[6 - diff]++;
+        });
+        hbars('bars-regs', 'labs-regs', regs, dayLabels);
+
+        const hours = new Array(24).fill(0);
+        (s.access || []).forEach(a => {
+            const mtime = String(a.ts || '').match(/(\d{2}):(\d{2})$/);
+            if (mtime) hours[Number(mtime[1])]++;
+        });
+        const hlabels = [];
+        for (let i = 0; i < 24; i += 3) hlabels.push(String(i).padStart(2, '0'));
+        while (hlabels.length < 8) hlabels.push('');
+        hbars('bars-hours', 'labs-hours', hours, [0, 3, 6, 9, 12, 15, 18, 21].map(h => String(h).padStart(2, '0')));
+
+        setTxt('sec-total', String(users.length));
+        setTxt('sec-banned', String(banned));
+        setTxt('sec-bots', String(bots));
+
+        const acc = s.access || [];
+        const fails = acc.filter(a => a.action === 'login_fail').length;
+        const blocks = acc.filter(a => a.action === 'register_block').length;
+        setTxt('sec-fails', String(fails));
+        setTxt('sec-blocks2', String(blocks));
+
+        const ips = {};
+        const dev = {};
+        acc.forEach(a => {
             if (a.ip) ips[a.ip] = (ips[a.ip] || 0) + 1;
-            var ua = String(a.ua || '');
-            var kind = /\bwv\b/i.test(ua) ? 'WebView-приложение' :
+            const ua = String(a.ua || '');
+            const kind = /\bwv\b/i.test(ua) ? 'WebView-приложение' :
                 /Android/i.test(ua) ? 'Android' :
                 /iPhone|iPad/i.test(ua) ? 'iOS' :
                 /Windows/i.test(ua) ? 'Windows' :
@@ -478,37 +611,30 @@
                 /curl|python|bot|headless/i.test(ua) ? 'скрипт/бот' : 'другое';
             dev[kind] = (dev[kind] || 0) + 1;
         });
-        var topIps = Object.keys(ips).sort(function (a, b) { return ips[b] - ips[a]; }).slice(0, 4);
-
-        setTxt('sec-total', String(users.length));
-        setTxt('sec-banned', String(banned));
-        setTxt('sec-bots', String(bots));
-        setTxt('sec-new', String(fresh));
-        setTxt('sec-fails', String(fails));
-        setTxt('sec-blocks', String(blocks));
-        setHtml('sec-ips', topIps.map(function (ip) { return '<span class="chip">' + esc(ip) + ' ×' + ips[ip] + '</span>'; }).join('') || '<span class="chip">нет данных</span>', 'ips');
-        setHtml('sec-devices', Object.keys(dev).map(function (k) {
-            var cls = /бот|скрипт/.test(k) ? 'chip bad' : 'chip';
-            return '<span class="' + cls + '">' + esc(k) + ' ×' + dev[k] + '</span>';
+        const topIps = Object.keys(ips).sort((a, b) => ips[b] - ips[a]).slice(0, 4);
+        setHtml('sec-ips', topIps.map(ip => `<span class="chip">${esc(ip)} ×${ips[ip]}</span>`).join('') || '<span class="chip">нет данных</span>', 'ips');
+        setHtml('sec-devices', Object.keys(dev).map(k => {
+            const cls = /бот|скрипт/.test(k) ? 'chip bad' : 'chip';
+            return `<span class="${cls}">${esc(k)} ×${dev[k]}</span>`;
         }).join('') || '<span class="chip">нет данных</span>', 'dev');
     }
 
     function loadMetrics() {
         if (!state.token) return;
         fetch('/admin/metrics?token=' + encodeURIComponent(state.token), { cache: 'no-store' })
-            .then(function (r) {
+            .then(r => {
                 if (r.status === 401) { stopAll(); showLogin('Сессия истекла. Войди заново.'); throw new Error('auth'); }
                 if (r.status === 403) { setStatus('bad', 'нет прав'); banner('error', 'Этот аккаунт не администратор.'); throw new Error('forbidden'); }
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.json();
             })
-            .then(function (m) {
+            .then(m => {
                 if (!m) return;
                 state.fails = 0;
                 renderMetrics(m);
                 setStatus('ok', 'live · ' + hhmm(m.time));
             })
-            .catch(function (e) {
+            .catch(e => {
                 if (e.message === 'auth' || e.message === 'forbidden') return;
                 state.fails++;
                 setStatus('bad', 'нет связи');
@@ -519,9 +645,9 @@
     function loadStats() {
         if (!state.token) return;
         fetch('/admin/stats?token=' + encodeURIComponent(state.token), { cache: 'no-store' })
-            .then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (s) { if (s) renderStats(s); })
-            .catch(function () {});
+            .then(r => r.ok ? r.json() : null)
+            .then(s => { if (s) renderStats(s); })
+            .catch(() => {});
     }
 
     function startAll() {
@@ -529,8 +655,8 @@
         if (state.paused || !state.token) return;
         state.timer = setInterval(loadMetrics, POLL_MS);
         state.statsTimer = setInterval(loadStats, STATS_MS);
-        state.agoTimer = setInterval(function () {
-            var sec = Math.round((Date.now() - state.lastPoll) / 1000);
+        state.agoTimer = setInterval(() => {
+            const sec = Math.round((Date.now() - state.lastPoll) / 1000);
             setTxt('s-ago', sec < 2 ? 'только что' : sec + ' сек назад');
         }, 1000);
     }
@@ -552,21 +678,21 @@
     }
 
     function doLogin() {
-        var username = $('login-user').value.trim();
-        var password = $('login-pass').value;
-        var err = $('login-error');
-        var btn = $('btn-login');
+        const username = $('login-user').value.trim();
+        const password = $('login-pass').value;
+        const err = $('login-error');
+        const btn = $('btn-login');
         err.textContent = '';
         if (!username || !password) { err.textContent = 'Введите ник и пароль.'; return; }
         btn.disabled = true;
-        var fd = new FormData();
+        const fd = new FormData();
         fd.append('username', username);
         fd.append('password', password);
         fd.append('hp', '');
         fd.append('load_ts', String(Date.now()));
         fetch('/login', { method: 'POST', body: fd })
-            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
-            .then(function (res) {
+            .then(r => r.json().then(d => ({ ok: r.ok, d })))
+            .then(res => {
                 if (!res.ok) { err.textContent = res.d.detail || 'Не удалось войти.'; return; }
                 state.token = res.d.token;
                 localStorage.setItem('messenger_token', state.token);
@@ -574,63 +700,74 @@
                 showPanel();
                 loadMetrics(); loadStats(); startAll();
             })
-            .catch(function (e) { err.textContent = 'Ошибка сети: ' + e.message; })
-            .finally(function () { btn.disabled = false; });
+            .catch(e => { err.textContent = 'Ошибка сети: ' + e.message; })
+            .finally(() => { btn.disabled = false; });
     }
 
     function post(url, okText) {
-        var fd = new FormData();
+        const fd = new FormData();
         fd.append('token', state.token);
         return fetch(url, { method: 'POST', body: fd })
-            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
-            .then(function (res) {
+            .then(r => r.json().then(d => ({ ok: r.ok, d })))
+            .then(res => {
                 if (!res.ok) { banner('error', res.d.detail || 'Ошибка запроса'); return null; }
                 banner('ok', okText(res.d));
                 loadMetrics();
                 return res.d;
             })
-            .catch(function (e) { banner('error', 'Ошибка сети: ' + e.message); return null; });
+            .catch(e => { banner('error', 'Ошибка сети: ' + e.message); return null; });
+    }
+
+    function makeReport() {
+        const m = state.lastM;
+        if (!m) { banner('error', 'Ещё нет данных для отчёта'); return; }
+        const h = m.health || {};
+        const lines = [
+            '🛰️ Mission Control — отчёт ' + new Date().toLocaleString('ru-RU'),
+            'Версия: ' + m.version + ' · Python ' + m.python,
+            'Uptime: ' + uptime(m.uptime) + ' · Latency: ' + Number(m.latency_ms || 0).toFixed(1) + ' ms · RPS: ' + m.rps,
+            'CPU: ' + m.cpu_proc + '% · RAM: ' + bytes(m.mem_rss) + ' · Диск хоста: ' + bytes(m.disk_used),
+            'Данные приложения: ' + bytes(m.app_bytes) + ' · файлов локально: ' + m.uploads_local,
+            'B2: ' + bytes((m.b2 || {}).bytes) + ' · файлов: ' + ((m.b2 || {}).files || 0) + ' · снапшот: ' + hhmm((m.snapshot || {}).time),
+            'Онлайн: ' + m.ws_users + ' · сообщений: ' + m.msgs + ' · аккаунтов: ' + m.users,
+            'Здоровье: B2=' + (h.b2 ? 'ok' : 'OFF') + ' FCM=' + (h.fcm ? 'ok' : 'OFF') + ' snapshot=' + (h.snapshot_age_sec == null ? 'нет' : Math.round(h.snapshot_age_sec) + 's'),
+            'Пуши: FCM ' + ((m.counters || {}).fcm_sent || 0) + ' · Web ' + ((m.counters || {}).webpush_sent || 0)
+        ];
+        const text = lines.join('\n');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => banner('ok', 'Отчёт скопирован в буфер обмена'));
+        } else {
+            banner('ok', text);
+        }
     }
 
     $('btn-login').addEventListener('click', doLogin);
-    $('login-pass').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
-    $('btn-refresh').addEventListener('click', function () { loadMetrics(); loadStats(); });
-    $('btn-pause').addEventListener('click', function () {
+    $('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+    $('btn-refresh').addEventListener('click', () => { loadMetrics(); loadStats(); });
+    $('btn-pause').addEventListener('click', () => {
         state.paused = !state.paused;
         $('btn-pause').textContent = state.paused ? '▶ Старт' : '⏸ Пауза';
         if (state.paused) { stopAll(); setStatus('wait', 'пауза'); }
         else { loadMetrics(); startAll(); }
     });
-    $('btn-snapshot').addEventListener('click', function (e) {
-        var b = e.currentTarget; b.disabled = true;
-        post('/admin/snapshot-now', function (d) { return 'Снапшот готов: ' + bytes(d.size || 0); })
-            .finally(function () { b.disabled = false; });
+    $('btn-snapshot').addEventListener('click', e => {
+        const b = e.currentTarget; b.disabled = true;
+        post('/admin/snapshot-now', d => 'Снапшот готов: ' + bytes(d.size || 0)).finally(() => { b.disabled = false; });
     });
-    $('btn-testpush').addEventListener('click', function (e) {
-        var b = e.currentTarget; b.disabled = true;
-        post('/admin/test-push', function (d) { return d.fcm ? 'Тест-пуш: FCM + Web Push' : 'Тест-пуш: Web Push'; })
-            .finally(function () { b.disabled = false; });
+    $('btn-testpush').addEventListener('click', e => {
+        const b = e.currentTarget; b.disabled = true;
+        post('/admin/test-push', d => d.fcm ? 'Тест-пуш: FCM + Web Push' : 'Тест-пуш: Web Push').finally(() => { b.disabled = false; });
     });
-    $('btn-logout').addEventListener('click', function () {
+    $('btn-report').addEventListener('click', makeReport);
+    $('btn-logout').addEventListener('click', () => {
         localStorage.removeItem('messenger_token');
         localStorage.removeItem('messenger_currentUser');
         location.reload();
     });
-    document.addEventListener('visibilitychange', function () {
+    document.addEventListener('visibilitychange', () => {
         if (document.hidden) stopAll();
         else if (!state.paused && state.token) { loadMetrics(); startAll(); }
     });
-    window.addEventListener('resize', function () {
-        draw('ch-req', window.__lastReq || [], '#38bdf8');
-        draw('ch-ws', window.__lastWs || [], '#a99af0');
-    });
-
-    var origDraw = draw;
-    draw = function (id, series, color) {
-        if (id === 'ch-req') window.__lastReq = series;
-        if (id === 'ch-ws') window.__lastWs = series;
-        origDraw(id, series, color);
-    };
 
     if (state.token) { showPanel(); loadMetrics(); loadStats(); startAll(); }
     else showLogin('');
