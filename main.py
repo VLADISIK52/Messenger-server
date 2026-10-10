@@ -633,7 +633,6 @@ def send_fcm_topic_push(topic: str, title: str, body: str) -> bool:
 
 
 def notify_update_if_new_version() -> None:
-    """При старте новой версии шлёт короткий пуш 'Внимание: обновление'."""
     try:
         conn = get_db()
         try:
@@ -642,7 +641,7 @@ def notify_update_if_new_version() -> None:
         finally:
             conn.close()
         if last == APP_VERSION:
-            return  # не деплой, а пробуждение инстанса — молчим
+            return
         send_fcm_topic_push("updates", UPDATE_NOTICE_TITLE, UPDATE_NOTICE_BODY)
         conn = get_db()
         try:
@@ -666,6 +665,25 @@ def notify_update_if_new_version() -> None:
         print(f"[UPDATE] разослано уведомление об обновлении {APP_VERSION}")
     except Exception as e:
         print(f"[UPDATE] ошибка рассылки обновления: {e}")
+
+
+def push_text_for(msg_type: str, content: str) -> str:
+    """Человеческий текст пуша для разных типов сообщений."""
+    if msg_type == 'text':
+        return content[:100]
+    if msg_type == 'voice':
+        return "\U0001F3A4 Голосовое сообщение"
+    if msg_type == 'video':
+        return "\U0001F4F9 Видео-кружок"
+    if msg_type == 'videofile':
+        return "\U0001F3AC Видеофайл"
+    if msg_type == 'image':
+        return "\U0001F4F7 Фото"
+    if msg_type == 'file':
+        return "\U0001F4C1 Файл"
+    if msg_type == 'sticker':
+        return f"Стикер {content}"
+    return "Новое сообщение"
 
 
 def notify_offline(username: str, title: str, body: str) -> None:
@@ -1020,6 +1038,7 @@ def get_group_member_usernames(group_id: str) -> List[str]:
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, Set[WebSocket]] = {}
+        self.hidden_state: Dict[str, bool] = {}
 
     async def connect(self, username: str, websocket: WebSocket) -> None:
         await websocket.accept()
@@ -1037,10 +1056,12 @@ class ConnectionManager:
             return
         if websocket is None:
             self.active_connections.pop(username, None)
+            self.hidden_state.pop(username, None)
         else:
             socks.discard(websocket)
             if not socks:
                 self.active_connections.pop(username, None)
+                self.hidden_state.pop(username, None)
         print(f"[WS] - disconnect: {username}", flush=True)
         CONNECT_LOG.appendleft({
             "time": datetime.now(MSK).strftime("%d.%m %H:%M:%S"),
@@ -1050,6 +1071,12 @@ class ConnectionManager:
 
     def is_online(self, username: str) -> bool:
         return bool(self.active_connections.get(username))
+
+    def set_hidden(self, username: str, hidden: bool) -> None:
+        self.hidden_state[username] = bool(hidden)
+
+    def is_hidden(self, username: str) -> bool:
+        return bool(self.hidden_state.get(username, False))
 
     async def send_to_user(self, message: dict, target_user: str) -> bool:
         socks = list(self.active_connections.get(target_user, ()))
@@ -2121,19 +2148,19 @@ async def websocket_endpoint(
                         if member_user == username:
                             continue
                         ok = await manager.send_to_user(msg_payload, member_user)
-                        if not ok:
+                        if not ok or manager.is_hidden(member_user):
                             await asyncio.to_thread(
                                 notify_offline, member_user,
-                                f"👥 {username}", content[:100],
+                                f"👥 {username}", push_text_for(content_type, content),
                             )
                 else:
                     await manager.send_to_user(msg_payload, username)
                     if target != username:
                         ok = await manager.send_to_user(msg_payload, target)
-                        if not ok:
+                        if not ok or manager.is_hidden(target):
                             await asyncio.to_thread(
                                 notify_offline, target,
-                                f"💬 {username}", content[:100],
+                                f"💬 {username}", push_text_for(content_type, content),
                             )
 
             elif msg_type == "read_receipt":
@@ -2205,6 +2232,10 @@ async def websocket_endpoint(
 
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
+                continue
+
+            elif msg_type == "visibility":
+                manager.set_hidden(username, bool(data.get("hidden", False)))
                 continue
 
             elif msg_type == "typing":
