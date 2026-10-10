@@ -541,6 +541,52 @@
         html[data-theme="light"] .contacts-results { background: rgba(255,255,255,0.96); }
         html[data-theme="amoled"] #bottom-nav { background: rgba(5,5,5,0.96); }
         html[data-theme="amoled"] .contacts-results { background: rgba(10,10,10,0.97); }
+        /* ── Эффект «жидкое стекло» (вкл/выкл в настройках) ── */
+        html.glass #sidebar, html.glass .chat-header, html.glass .input-container,
+        html.glass #bottom-nav, html.glass .modal-box, html.glass .toast,
+        html.glass .attach-menu, html.glass .wp-menu, html.glass .reaction-picker,
+        html.glass #side-search-bar, html.glass .contacts-results, html.glass .search-suggestions {
+            backdrop-filter: blur(18px) saturate(1.5);
+            -webkit-backdrop-filter: blur(18px) saturate(1.5);
+        }
+        html.glass #sidebar { background: rgba(6,30,22,0.55); }
+        html.glass .chat-header { background: rgba(8,36,27,0.55); }
+        html.glass .input-container { background: rgba(6,30,22,0.60); }
+        html.glass #bottom-nav { background: rgba(6,30,22,0.65); }
+        html.glass .modal-box { background: rgba(8,36,27,0.72); }
+        html.glass .toast { background: rgba(8,36,27,0.78); }
+        html.glass .msg-wrapper.my .msg-bubble, html.glass .msg-wrapper.other .msg-bubble {
+            position: relative; overflow: hidden;
+            backdrop-filter: blur(10px) saturate(1.4);
+            -webkit-backdrop-filter: blur(10px) saturate(1.4);
+        }
+        html.glass .msg-wrapper.my .msg-bubble {
+            background: linear-gradient(120deg, rgba(255,255,255,0.42), rgba(255,255,255,0.10) 45%, rgba(255,255,255,0.22)), var(--accent-grad);
+            box-shadow: 0 0 22px var(--glow-a), inset 0 1px 0 rgba(255,255,255,0.65), inset 0 -8px 16px rgba(255,255,255,0.12);
+        }
+        html.glass .msg-wrapper.other .msg-bubble {
+            background: linear-gradient(160deg, rgba(224,255,246,0.50), rgba(146,214,190,0.24));
+            box-shadow: 0 0 18px rgba(190,255,230,0.28), inset 0 1px 0 rgba(255,255,255,0.50), inset 0 -8px 16px rgba(255,255,255,0.10);
+        }
+        html.glass .msg-bubble::before {
+            content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+            background: linear-gradient(115deg, transparent 32%, rgba(255,255,255,0.26) 46%, transparent 60%);
+            background-size: 250% 100%;
+            animation: glassSheen 6s linear infinite;
+        }
+        @keyframes glassSheen { 0% { background-position: 130% 0; } 100% { background-position: -130% 0; } }
+        html.glass .chat-item { background: rgba(255,255,255,0.06); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+        html.glass[data-theme="light"] #sidebar { background: rgba(246,247,252,0.60); }
+        html.glass[data-theme="light"] .chat-header, html.glass[data-theme="light"] .input-container { background: rgba(255,255,255,0.60); }
+        html.glass[data-theme="light"] #bottom-nav { background: rgba(255,255,255,0.65); }
+        html.glass[data-theme="light"] .modal-box { background: rgba(255,255,255,0.75); }
+        html.glass[data-theme="light"] .msg-wrapper.other .msg-bubble { background: linear-gradient(160deg, rgba(255,255,255,0.75), rgba(255,255,255,0.45)); }
+        html.glass[data-theme="amoled"] #sidebar { background: rgba(5,5,5,0.60); }
+        html.glass[data-theme="amoled"] .chat-header, html.glass[data-theme="amoled"] .input-container { background: rgba(5,5,5,0.65); }
+        html.glass[data-theme="amoled"] #bottom-nav { background: rgba(5,5,5,0.70); }
+        html.glass[data-theme="amoled"] .modal-box { background: rgba(10,10,10,0.80); }
+        html.eco.glass * , html.eco.glass *::before { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+        html.eco.glass .msg-bubble::before { display: none; }
         @media (max-width: 768px) {
             #sidebar { width: 100%; position: absolute; inset: 0; z-index: 2; transform: translateX(0); transition: transform 0.32s cubic-bezier(0.4,0,0.2,1); }
             #chat-area { width: 100%; position: absolute; inset: 0; display: flex; z-index: 3; transform: translateX(100%); transition: transform 0.32s cubic-bezier(0.4,0,0.2,1); }
@@ -638,6 +684,7 @@
                 <button data-b="square">Квадрат</button>
             </div>
         </div>
+        <div class="settings-row"><span>&#x1F4A7; Жидкое стекло</span><label class="switch"><input type="checkbox" id="glass-switch"><span class="slider"></span></label></div>
         <div class="settings-row"><span>&#x1F4E6; Компактный режим</span><label class="switch"><input type="checkbox" id="compact-switch"><span class="slider"></span></label></div>
         <div class="settings-row"><span>&#x1F50B; Эко-режим</span><label class="switch"><input type="checkbox" id="eco-switch"><span class="slider"></span></label></div>
         <div class="settings-section">Уведомления</div>
@@ -967,7 +1014,7 @@
     let myBlocks = [], myContacts = [], messageCache = {}, viewedUsername = "", editMessageId = null, adminTimer = null;
     let chosenTheme = 'dark';
     let ecoMode = false;
-    let settings = { sound: true, vibro: true, preview: true, fontsize: 14, bubble: 'round', enter: true, accent: '', compact: false };
+    let settings = { sound: true, vibro: true, preview: true, fontsize: 14, bubble: 'round', enter: true, accent: '', compact: false, glass: false };
     let audioCtx = null;
     let photoState = null;
     let webPushActive = false;
@@ -1355,10 +1402,12 @@
         document.documentElement.style.setProperty('--msg-font', (settings.fontsize || 14) + 'px');
         document.documentElement.classList.toggle('bubbles-square', settings.bubble === 'square');
         document.documentElement.classList.toggle('compact', !!settings.compact);
+        document.documentElement.classList.toggle('glass', !!settings.glass);
         document.documentElement.setAttribute('data-accent', settings.accent || 'default');
         document.querySelectorAll('#accent-swatches .accent-swatch').forEach(b => b.classList.toggle('active', (b.dataset.ac || '') === (settings.accent || '')));
         setSwitch('eco-switch', ecoMode);
         setSwitch('compact-switch', !!settings.compact);
+        setSwitch('glass-switch', !!settings.glass);
         setSwitch('sound-switch', settings.sound);
         setSwitch('vibro-switch', settings.vibro);
         setSwitch('preview-switch', settings.preview);
@@ -1373,6 +1422,11 @@
             localStorage.setItem('eco_' + currentUser, ecoMode ? '1' : '0');
             applyEco();
             showToast(ecoMode ? '\u{1F50B} Эко-режим включён' : '\u{2728} Анимации возвращены', ecoMode ? 'Анимации отключены для экономии батареи' : 'Все анимации снова работают');
+        });
+        document.getElementById('glass-switch').addEventListener('change', (e) => {
+            settings.glass = e.target.checked;
+            saveSettings();
+            showToast(settings.glass ? '\u{1F4A7} Жидкое стекло включено' : '\u{1F910} Жидкое стекло выключено', settings.glass ? 'Поверхности стали прозрачными и переливаются' : 'Вернулись привычные матовые поверхности');
         });
         document.getElementById('compact-switch').addEventListener('change', (e) => { settings.compact = e.target.checked; saveSettings(); });
         document.getElementById('sound-switch').addEventListener('change', (e) => { settings.sound = e.target.checked; saveSettings(); });
