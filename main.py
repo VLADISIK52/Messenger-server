@@ -9,6 +9,8 @@ import asyncio
 import threading
 import atexit
 import mimetypes
+import platform
+import shutil
 import time
 import urllib.request
 import urllib.error
@@ -261,6 +263,90 @@ class B2Client:
 b2 = B2Client()
 
 
+# ==========================================================
+#          МЕТРИКИ СЕРВЕРА (для панели мониторинга)
+# ==========================================================
+START_TIME = time.time()
+_resource = None
+try:
+    import resource as _resource
+except Exception:
+    _resource = None
+LAST_CPU = {"wall": time.time(), "proc": 0.0}
+if _resource:
+    LAST_CPU["proc"] = sum(_resource.getrusage(_resource.RUSAGE_SELF)[:2])
+
+REQ_BUCKETS = deque(maxlen=120)     # [5-секундный бакет, счётчик] HTTP-запросов
+WSMSG_BUCKETS = deque(maxlen=120)   # [5-секундный бакет, счётчик] WS-сообщений
+LATENCY_EMA = {"ms": 0.0}
+COUNTERS = {"ws_msgs": 0, "fcm_sent": 0, "webpush_sent": 0, "snapshots": 0}
+SNAPSHOT_INFO = {"time": 0.0, "size": 0}
+B2_STATS_CACHE = {"time": 0.0, "files": 0, "bytes": 0}
+
+
+def _bump(bucket_deque):
+    key = int(time.time() // 5)
+    if bucket_deque and bucket_deque[-1][0] == key:
+        bucket_deque[-1][1] += 1
+    else:
+        bucket_deque.append([key, 1])
+
+
+def metrics_cpu_mem():
+    cpu = 0.0
+    try:
+        if _resource:
+            proc = sum(_resource.getrusage(_resource.RUSAGE_SELF)[:2])
+            wall = time.time()
+            dw = max(wall - LAST_CPU["wall"], 0.001)
+            cpu = max(0.0, (proc - LAST_CPU["proc"]) / dw * 100.0)
+            LAST_CPU["wall"] = wall
+            LAST_CPU["proc"] = proc
+    except Exception:
+        pass
+    rss = 0
+    mem_total = 0
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    rss = int(line.split()[1]) * 1024
+                    break
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    mem_total = int(line.split()[1]) * 1024
+                    break
+    except Exception:
+        if _resource:
+            rss = _resource.getrusage(_resource.RUSAGE_SELF).ru_maxrss * 1024
+    return cpu, rss, mem_total
+
+
+def b2_stats():
+    now = time.time()
+    if not b2.enabled():
+        return {"time": now, "files": 0, "bytes": 0}
+    if now - B2_STATS_CACHE["time"] < 300 and (B2_STATS_CACHE["bytes"] or B2_STATS_CACHE["files"]):
+        return B2_STATS_CACHE
+    try:
+        a = b2.authorize()
+        res = b2._req(
+            f"{a['apiUrl']}/b2api/v2/b2_list_buckets",
+            payload={"accountId": a["accountId"], "bucketName": B2_BUCKET},
+            headers={"Authorization": a["authorizationToken"]},
+        )
+        b0 = (res.get("buckets") or [{}])[0]
+        B2_STATS_CACHE.update({
+            "time": now,
+            "files": b0.get("fileCount", 0),
+            "bytes": b0.get("fileSizeCount", 0),
+        })
+    except Exception as e:
+        print(f"[B2] stats error: {e}")
+    return B2_STATS_CACHE
+
+
 def db_snapshot_now(tag=""):
     if not b2.enabled():
         return
@@ -273,6 +359,9 @@ def db_snapshot_now(tag=""):
         with open(DB_FILE, "rb") as f:
             data = f.read()
         if b2.upload_bytes(SNAPSHOT_NAME, data, "application/octet-stream"):
+            SNAPSHOT_INFO["time"] = time.time()
+            SNAPSHOT_INFO["size"] = len(data)
+            COUNTERS["snapshots"] += 1
             print(f"[B2] снапшот базы загружен ({len(data)} байт) {tag}")
             try:
                 versions = b2.list_versions(SNAPSHOT_NAME)
@@ -436,6 +525,7 @@ def send_web_push_to_user(username: str, title: str, body: str) -> None:
                 vapid_private_key=private_pem,
                 vapid_claims=VAPID_CLAIMS,
             )
+            COUNTERS["webpush_sent"] += 1
         except WebPushException as e:
             print(f"[WEBPUSH] ошибка для {username}: {e}")
             resp = getattr(e, "response", None)
@@ -588,6 +678,7 @@ def send_fcm_push(username: str, title: str, body: str) -> bool:
         except Exception as e:
             print(f"[FCM] ошибка отправки на {device_token[:10]}...: {e}")
 
+    COUNTERS["fcm_sent"] += success_count
     return success_count > 0
 
 
@@ -668,7 +759,6 @@ def notify_update_if_new_version() -> None:
 
 
 def push_text_for(msg_type: str, content: str) -> str:
-    """Человеческий текст пуша для разных типов сообщений."""
     if msg_type == 'text':
         return content[:100]
     if msg_type == 'voice':
@@ -1124,6 +1214,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def _metrics_middleware(request: Request, call_next):
+    _bump(REQ_BUCKETS)
+    t0 = time.time()
+    response = await call_next(request)
+    dt = (time.time() - t0) * 1000.0
+    LATENCY_EMA["ms"] = (LATENCY_EMA["ms"] * 0.9 + dt * 0.1) if LATENCY_EMA["ms"] else dt
+    return response
+
+
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
@@ -1171,6 +1272,17 @@ def get_index():
             "Cache-Control": "no-store, no-cache, must-revalidate",
             "Pragma": "no-cache",
         },
+    )
+
+
+@app.get("/admin-panel")
+def get_admin_panel():
+    if not os.path.isfile("admin.html"):
+        raise HTTPException(status_code=404, detail="Панель ещё не добавлена в репозиторий")
+    return FileResponse(
+        "admin.html",
+        media_type="text/html; charset=utf-8",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
     )
 
 
@@ -1560,7 +1672,7 @@ def get_online_users():
 
 
 # ==========================================================
-#                    АДМИН: БАНЫ И РАССЫЛКА
+#                    АДМИН: БАНЫ, РАССЫЛКА, МЕТРИКИ
 # ==========================================================
 
 @app.post("/admin/ban")
@@ -1636,6 +1748,138 @@ async def admin_broadcast(
         "online": online_count,
         "pushed": len(users),
         "fcm_pushed": len(fcm_users),
+    }
+
+
+@app.post("/admin/snapshot-now")
+async def admin_snapshot_now(token: str = Form(...)):
+    require_admin(token)
+    await asyncio.to_thread(db_snapshot_now, "(вручную)")
+    return {"status": "ok", "time": SNAPSHOT_INFO["time"], "size": SNAPSHOT_INFO["size"]}
+
+
+@app.post("/admin/test-push")
+async def admin_test_push(token: str = Form(...)):
+    username = require_admin(token)
+    ok = await asyncio.to_thread(send_fcm_push, username, "\U0001F6E1 Панель мониторинга", "Тестовый пуш работает!")
+    await asyncio.to_thread(send_web_push_to_user, username, "\U0001F6E1 Панель мониторинга", "Тестовый пуш работает!")
+    return {"status": "ok", "fcm": ok}
+
+
+@app.get("/admin/metrics")
+def admin_metrics(token: str):
+    require_admin(token)
+    cpu, rss, mem_total = metrics_cpu_mem()
+    try:
+        load = list(os.getloadavg())
+    except Exception:
+        load = [0.0, 0.0, 0.0]
+    du = shutil.disk_usage(DATA_DIR)
+    now = time.time()
+    cur = int(now // 5)
+
+    def series_filled(deq, buckets=24):
+        m = {k: v for k, v in deq}
+        return [m.get(cur - i, 0) for i in range(buckets)][::-1]
+
+    req_series = series_filled(REQ_BUCKETS)
+    ws_series = series_filled(WSMSG_BUCKETS)
+    rps = round(sum(req_series) / (len(req_series) * 5), 2)
+    conn = get_db()
+    try:
+        msgs = conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+        users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        sessions = conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+        recent = [
+            {"ts": utc_str_to_msk(r[0]), "username": r[1], "action": r[2], "bot": r[3]}
+            for r in conn.execute(
+                "SELECT ts, username, action, bot FROM access_log ORDER BY id DESC LIMIT 12"
+            ).fetchall()
+        ]
+    finally:
+        conn.close()
+    db_size = 0
+    for p in (DB_FILE, DB_FILE + "-wal", DB_FILE + "-shm"):
+        try:
+            db_size += os.path.getsize(p)
+        except Exception:
+            pass
+    return {
+        "time": now,
+        "uptime": now - START_TIME,
+        "version": APP_VERSION,
+        "python": platform.python_version(),
+        "cpu_proc": round(cpu, 1),
+        "load": [round(x, 2) for x in load],
+        "mem_rss": rss,
+        "mem_total": mem_total,
+        "disk_used": du.used,
+        "disk_total": du.total,
+        "rps": rps,
+        "req_series": req_series,
+        "ws_series": ws_series,
+        "latency_ms": round(LATENCY_EMA["ms"], 1),
+        "ws_users": len(manager.active_connections),
+        "ws_sockets": sum(len(s) for s in manager.active_connections.values()),
+        "online": list(manager.active_connections.keys()),
+        "counters": dict(COUNTERS),
+        "snapshot": dict(SNAPSHOT_INFO),
+        "b2": b2_stats(),
+        "db_size": db_size,
+        "msgs": msgs,
+        "users": users,
+        "sessions": sessions,
+        "recent": recent,
+    }
+
+
+@app.get("/admin/stats")
+def admin_stats(token: str):
+    require_admin(token)
+    conn = get_db()
+    try:
+        users = [
+            {
+                "username": r[0],
+                "avatar_url": r[1] or "/uploads/default.png",
+                "status_text": r[2] or "",
+                "created_at": utc_str_to_msk(r[3]),
+                "banned": r[4] or 0,
+            }
+            for r in conn.execute(
+                "SELECT username, avatar_url, status_text, created_at, banned FROM users ORDER BY rowid"
+            ).fetchall()
+        ]
+        messages_total = conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE msg_type != 'deleted'"
+        ).fetchone()[0]
+        access = [
+            {
+                "ts": utc_str_to_msk(r[0]),
+                "username": r[1],
+                "action": r[2],
+                "ip": r[3],
+                "ua": r[4],
+                "bot": r[5],
+            }
+            for r in conn.execute(
+                "SELECT ts, username, action, ip, ua, bot FROM access_log ORDER BY id DESC LIMIT 60"
+            ).fetchall()
+        ]
+        bot_users = [
+            r[0] for r in conn.execute(
+                "SELECT DISTINCT username FROM access_log WHERE bot = 1 AND username != ''"
+            ).fetchall()
+        ]
+    finally:
+        conn.close()
+    return {
+        "online": list(manager.active_connections.keys()),
+        "users": users,
+        "messages_total": messages_total,
+        "log": list(CONNECT_LOG),
+        "access": access,
+        "bot_users": bot_users,
     }
 
 
@@ -1745,60 +1989,6 @@ async def message_delete(msg_id: int, token: str = Form(...)):
     for user in chat_recipients(chat_id):
         await manager.send_to_user(payload, user)
     return {"status": "ok"}
-
-
-# ==========================================================
-#                    АДМИН-ПАНЕЛЬ
-# ==========================================================
-
-@app.get("/admin/stats")
-def admin_stats(token: str):
-    require_admin(token)
-    conn = get_db()
-    try:
-        users = [
-            {
-                "username": r[0],
-                "avatar_url": r[1] or "/uploads/default.png",
-                "status_text": r[2] or "",
-                "created_at": utc_str_to_msk(r[3]),
-                "banned": r[4] or 0,
-            }
-            for r in conn.execute(
-                "SELECT username, avatar_url, status_text, created_at, banned FROM users ORDER BY rowid"
-            ).fetchall()
-        ]
-        messages_total = conn.execute(
-            "SELECT COUNT(*) FROM messages WHERE msg_type != 'deleted'"
-        ).fetchone()[0]
-        access = [
-            {
-                "ts": utc_str_to_msk(r[0]),
-                "username": r[1],
-                "action": r[2],
-                "ip": r[3],
-                "ua": r[4],
-                "bot": r[5],
-            }
-            for r in conn.execute(
-                "SELECT ts, username, action, ip, ua, bot FROM access_log ORDER BY id DESC LIMIT 60"
-            ).fetchall()
-        ]
-        bot_users = [
-            r[0] for r in conn.execute(
-                "SELECT DISTINCT username FROM access_log WHERE bot = 1 AND username != ''"
-            ).fetchall()
-        ]
-    finally:
-        conn.close()
-    return {
-        "online": list(manager.active_connections.keys()),
-        "users": users,
-        "messages_total": messages_total,
-        "log": list(CONNECT_LOG),
-        "access": access,
-        "bot_users": bot_users,
-    }
 
 
 # ==========================================================
@@ -2087,6 +2277,8 @@ async def websocket_endpoint(
     try:
         while True:
             data = await websocket.receive_json()
+            _bump(WSMSG_BUCKETS)
+            COUNTERS["ws_msgs"] += 1
             msg_type = data.get("type", "message")
 
             if msg_type == "message":
