@@ -39,11 +39,9 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
 
-# Firebase Cloud Messaging (нативные пуши APK через median)
 FIREBASE_SERVICE_ACCOUNT_JSON = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "")
 PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "")
 
-# Backblaze B2 (облачное хранилище медиа и бэкапов базы)
 B2_KEY_ID = os.environ.get("B2_KEY_ID", "")
 B2_APP_KEY = os.environ.get("B2_APP_KEY", "")
 B2_BUCKET = os.environ.get("B2_BUCKET", "")
@@ -51,7 +49,6 @@ B2_BASE = "https://api.backblazeb2.com"
 SNAPSHOT_NAME = "snapshots/chat.db"
 MEDIA_TTL_DAYS = 90
 
-# Оповещение об обновлении: коротко и без лишних слов
 UPDATE_NOTICE_TITLE = "\u26A0\uFE0F Внимание: обновление"
 UPDATE_NOTICE_BODY = ""
 UPDATE_NOTE_SHORT = "Внимание: обновление"
@@ -276,9 +273,10 @@ LAST_CPU = {"wall": time.time(), "proc": 0.0}
 if _resource:
     LAST_CPU["proc"] = sum(_resource.getrusage(_resource.RUSAGE_SELF)[:2])
 
-REQ_BUCKETS = deque(maxlen=120)     # [5-секундный бакет, счётчик] HTTP-запросов
-WSMSG_BUCKETS = deque(maxlen=120)   # [5-секундный бакет, счётчик] WS-сообщений
+REQ_BUCKETS = deque(maxlen=120)
+WSMSG_BUCKETS = deque(maxlen=120)
 LATENCY_EMA = {"ms": 0.0}
+REQ_TOTAL = 0
 COUNTERS = {"ws_msgs": 0, "fcm_sent": 0, "webpush_sent": 0, "snapshots": 0}
 SNAPSHOT_INFO = {"time": 0.0, "size": 0}
 B2_STATS_CACHE = {"time": 0.0, "files": 0, "bytes": 0}
@@ -1217,6 +1215,8 @@ app.add_middleware(
 
 @app.middleware("http")
 async def _metrics_middleware(request: Request, call_next):
+    global REQ_TOTAL
+    REQ_TOTAL += 1
     _bump(REQ_BUCKETS)
     t0 = time.time()
     response = await call_next(request)
@@ -1785,6 +1785,7 @@ def admin_metrics(token: str):
     req_series = series_filled(REQ_BUCKETS)
     ws_series = series_filled(WSMSG_BUCKETS)
     rps = round(sum(req_series) / (len(req_series) * 5), 2)
+
     conn = get_db()
     try:
         msgs = conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
@@ -1796,14 +1797,54 @@ def admin_metrics(token: str):
                 "SELECT ts, username, action, bot FROM access_log ORDER BY id DESC LIMIT 12"
             ).fetchall()
         ]
+        extra = {
+            "msgs_1h": conn.execute("SELECT COUNT(*) FROM messages WHERE timestamp >= datetime('now','-1 hour')").fetchone()[0],
+            "msgs_24h": conn.execute("SELECT COUNT(*) FROM messages WHERE timestamp >= datetime('now','-1 day')").fetchone()[0],
+            "reactions_total": conn.execute("SELECT COUNT(*) FROM reactions").fetchone()[0],
+            "groups_count": conn.execute("SELECT COUNT(*) FROM groups").fetchone()[0],
+            "push_subs": conn.execute("SELECT COUNT(*) FROM push_subs").fetchone()[0],
+            "fcm_tokens": conn.execute("SELECT COUNT(*) FROM users WHERE fcm_token IS NOT NULL AND fcm_token != ''").fetchone()[0],
+            "blocks_count": conn.execute("SELECT COUNT(*) FROM blocks").fetchone()[0],
+            "regs_24h": conn.execute("SELECT COUNT(*) FROM users WHERE created_at >= datetime('now','-1 day')").fetchone()[0],
+            "logins_24h": conn.execute("SELECT COUNT(*) FROM access_log WHERE action='login' AND ts >= datetime('now','-1 day')").fetchone()[0],
+            "msg_types": {r[0]: r[1] for r in conn.execute("SELECT msg_type, COUNT(*) FROM messages GROUP BY msg_type").fetchall()},
+            "top_chats": [
+                {"chat": r[0], "count": r[1]}
+                for r in conn.execute(
+                    "SELECT chat_id, COUNT(*) AS c FROM messages GROUP BY chat_id ORDER BY c DESC LIMIT 5"
+                ).fetchall()
+            ],
+        }
     finally:
         conn.close()
+
     db_size = 0
     for p in (DB_FILE, DB_FILE + "-wal", DB_FILE + "-shm"):
         try:
             db_size += os.path.getsize(p)
         except Exception:
             pass
+
+    app_bytes = db_size
+    uploads_local = 0
+    try:
+        for fn in os.listdir(UPLOAD_DIR):
+            fp = os.path.join(UPLOAD_DIR, fn)
+            if os.path.isfile(fp):
+                app_bytes += os.path.getsize(fp)
+                uploads_local += 1
+    except Exception:
+        pass
+
+    health = {
+        "b2": b2.enabled(),
+        "fcm": bool(PROJECT_ID and FIREBASE_SERVICE_ACCOUNT_JSON),
+        "webpush": True,
+        "snapshot_age_sec": (now - SNAPSHOT_INFO["time"]) if SNAPSHOT_INFO["time"] else None,
+        "threads": threading.active_count(),
+        "hidden_clients": sum(1 for u in manager.active_connections if manager.is_hidden(u)),
+    }
+
     return {
         "time": now,
         "uptime": now - START_TIME,
@@ -1815,7 +1856,10 @@ def admin_metrics(token: str):
         "mem_total": mem_total,
         "disk_used": du.used,
         "disk_total": du.total,
+        "app_bytes": app_bytes,
+        "uploads_local": uploads_local,
         "rps": rps,
+        "req_total": REQ_TOTAL,
         "req_series": req_series,
         "ws_series": ws_series,
         "latency_ms": round(LATENCY_EMA["ms"], 1),
@@ -1830,6 +1874,8 @@ def admin_metrics(token: str):
         "users": users,
         "sessions": sessions,
         "recent": recent,
+        "extra": extra,
+        "health": health,
     }
 
 
