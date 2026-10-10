@@ -1370,6 +1370,11 @@
         });
         wireSettingsControls();
         wirePhotoEditor();
+        document.addEventListener('visibilitychange', () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                try { ws.send(JSON.stringify({ type: 'visibility', hidden: document.hidden })); } catch (e) {}
+            }
+        });
     });
 
     function loadSettings() {
@@ -1866,7 +1871,7 @@
         const url = `${protocol}//${window.location.host}/ws/${encodeURIComponent(currentUser)}?token=${encodeURIComponent(currentToken)}`;
         setConnIndicator('подключение...');
         ws = new WebSocket(url);
-        ws.onopen = () => { wsFails = 0; setConnIndicator('онлайн'); startPing(); };
+        ws.onopen = () => { wsFails = 0; setConnIndicator('онлайн'); startPing(); try { ws.send(JSON.stringify({ type: 'visibility', hidden: document.hidden })); } catch (e) {} };
         ws.onclose = (e) => {
             stopPing();
             if (e.code === 4001) {
