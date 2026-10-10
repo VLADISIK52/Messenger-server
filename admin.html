@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Mission Control</title>
+<style>
+    * { box-sizing: border-box; }
+    :root {
+        --bg: #051b13;
+        --text: #eafff5;
+        --sub: #b9d8c9;
+        --muted: #6f9484;
+        --card: rgba(255,255,255,0.055);
+        --card-strong: rgba(6,30,22,0.72);
+        --border: rgba(190,255,230,0.16);
+        --accent: #a99af0;
+        --accent2: #f4a988;
+        --grad: linear-gradient(135deg, #ffb48f 0%, #ef8f7e 40%, #b7a4ec 100%);
+        --ok: #7ef0c0;
+        --warn: #fbbf24;
+        --bad: #ff7d92;
+        --blue: #38bdf8;
+        --purple: #a99af0;
+        --shadow: 0 18px 50px rgba(0,0,0,0.35);
+    }
+    html, body {
+        margin: 0;
+        min-height: 100%;
+        background:
+            radial-gradient(900px 500px at 80% -10%, rgba(126,240,192,0.14), transparent 60%),
+            radial-gradient(700px 500px at -10% 110%, rgba(244,169,136,0.18), transparent 60%),
+            var(--bg);
+        color: var(--text);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    }
+    body { padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+    .hidden { display: none !important; }
+    .muted { color: var(--muted); }
+    .sub { color: var(--sub); }
+
+    #login-screen {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+    .login-box {
+        width: min(100%, 420px);
+        background: rgba(8,36,27,0.88);
+        border: 1px solid var(--border);
+        border-radius: 28px;
+        padding: 24px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+    }
+    .login-title {
+        font-family: Sora, Inter, sans-serif;
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        background: linear-gradient(90deg, #eafff5, #9adcf0 55%, #b7a4ec);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+    .login-hint { color: var(--muted); font-size: 13px; margin-bottom: 18px; line-height: 1.45; }
+    input {
+        width: 100%;
+        border: 1px solid rgba(220,255,240,0.28);
+        background: rgba(255,255,255,0.08);
+        color: var(--text);
+        border-radius: 16px;
+        padding: 14px 16px;
+        outline: none;
+        font-size: 15px;
+        margin-bottom: 10px;
+    }
+    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(169,154,240,0.15); }
+    .login-error { min-height: 18px; color: var(--bad); font-size: 13px; margin-bottom: 8px; }
+
+    header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
+        background: rgba(5,27,19,0.72);
+        border-bottom: 1px solid var(--border);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+    }
+    .top-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+    .brand {
+        font-family: Sora, Inter, sans-serif;
+        font-weight: 800;
+        font-size: 18px;
+        letter-spacing: -0.02em;
+        flex: 1;
+        min-width: 180px;
+    }
+    .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--sub);
+        font-size: 12px;
+        white-space: nowrap;
+    }
+    .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--muted);
+        box-shadow: 0 0 0 0 rgba(126,240,192,0.5);
+    }
+    .dot.ok { background: var(--ok); animation: pulse 1.8s infinite; }
+    .dot.bad { background: var(--bad); }
+    .dot.wait { background: var(--warn); }
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(126,240,192,0.45); }
+        70% { box-shadow: 0 0 0 10px rgba(126,240,192,0); }
+        100% { box-shadow: 0 0 0 0 rgba(126,240,192,0); }
+    }
+    .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        width: 100%;
+        margin-top: 10px;
+    }
+    .btn {
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.07);
+        color: var(--text);
+        border-radius: 999px;
+        padding: 9px 13px;
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+        transition: transform 0.12s ease, background 0.15s ease, opacity 0.15s ease;
+        -webkit-tap-highlight-color: transparent;
+    }
+    .btn:hover { background: rgba(255,255,255,0.11); }
+    .btn:active { transform: scale(0.96); }
+    .btn:disabled { opacity: 0.55; cursor: default; }
+    .btn.primary {
+        background: var(--grad);
+        border: none;
+        color: #fff;
+        box-shadow: 0 0 20px rgba(244,169,136,0.28);
+    }
+    .btn.danger {
+        background: rgba(255,125,146,0.12);
+        border-color: rgba(255,125,146,0.28);
+        color: #ffc2cb;
+    }
+
+    .banner {
+        max-width: 1400px;
+        margin: 10px auto 0;
+        padding: 10px 12px;
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.06);
+        color: var(--sub);
+        font-size: 13px;
+        line-height: 1.35;
+    }
+    .banner.ok { border-color: rgba(126,240,192,0.35); background: rgba(126,240,192,0.10); color: #d9fff0; }
+    .banner.warn { border-color: rgba(251,191,36,0.35); background: rgba(251,191,36,0.10); color: #fff0c2; }
+    .banner.error { border-color: rgba(255,125,146,0.35); background: rgba(255,125,146,0.10); color: #ffd7dd; }
+
+    .wrap {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 14px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
+        align-content: start;
+    }
+    .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        padding: 14px;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 30px rgba(0,0,0,0.18);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        min-height: 96px;
+    }
+    .card.wide { grid-column: 1 / -1; }
+    .card h3 {
+        margin: 0 0 10px;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 800;
+    }
+    .big {
+        font-family: Sora, Inter, sans-serif;
+        font-size: 28px;
+        font-weight: 800;
+        line-height: 1.05;
+        word-break: break-word;
+    }
+    .mid {
+        font-family: Sora, Inter, sans-serif;
+        font-size: 18px;
+        font-weight: 800;
+    }
+    .small { font-size: 12px; color: var(--sub); line-height: 1.35; margin-top: 6px; }
+    .bar {
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.10);
+        overflow: hidden;
+        margin-top: 10px;
+    }
+    .bar span {
+        display: block;
+        height: 100%;
+        width: 0%;
+        border-radius: 999px;
+        background: var(--grad);
+        transition: width 0.35s ease, background 0.35s ease;
+    }
+    .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: 10px;
+    }
+    .chip {
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.07);
+        color: var(--sub);
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .chip.ok { color: #d8fff0; border-color: rgba(126,240,192,0.28); background: rgba(126,240,192,0.10); }
+    .chip.warn { color: #fff0c2; border-color: rgba(251,191,36,0.28); background: rgba(251,191,36,0.10); }
+    .chip.bad { color: #ffd7dd; border-color: rgba(255,125,146,0.28); background: rgba(255,125,146,0.10); }
+
+    canvas.spark {
+        width: 100%;
+        height: 92px;
+        display: block;
+        margin-top: 8px;
+        border-radius: 16px;
+        background: rgba(0,0,0,0.18);
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+    .events {
+        max-height: 280px;
+        overflow: auto;
+        margin-top: 4px;
+    }
+    .event {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        font-size: 12px;
+        color: var(--sub);
+    }
+    .event:last-child { border-bottom: none; }
+    .event .t { color: var(--muted); min-width: 72px; font-variant-numeric: tabular-nums; }
+    .event .u { font-weight: 700; color: var(--text); }
+    .kv {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        align-items: center;
+        font-size: 13px;
+        color: var(--sub);
+        margin-top: 8px;
+    }
+    .kv b { color: var(--text); font-weight: 700; }
+    .two {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 10px;
+    }
+    .mini {
+        background: rgba(255,255,255,0.05);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 10px;
+    }
+    .mini .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 800; }
+    .mini .value { font-size: 18px; font-weight: 800; margin-top: 4px; font-family: Sora, Inter, sans-serif; }
+
+    @media (max-width: 760px) {
+        .wrap { grid-template-columns: 1fr 1fr; padding: 10px; gap: 10px; }
+        .card.wide { grid-column: 1 / -1; }
+        .big { font-size: 24px; }
+        .brand { font-size: 16px; }
+        .actions { gap: 6px; }
+        .btn { padding: 8px 11px; font-size: 12px; }
+    }
+    @media (max-width: 430px) {
+        .wrap { grid-template-columns: 1fr; }
+        .two { grid-template-columns: 1fr; }
+    }
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+    <div class="login-box">
+        <div class="login-title">🛰️ Mission Control</div>
+        <div class="login-hint">
+            Панель доступна только администратору.<br>
+            Войди тем же ником и паролем, который используется в мессенджере.
+        </div>
+        <input id="login-user" type="text" placeholder="Админский ник" autocomplete="username">
+        <input id="login-pass" type="password" placeholder="Пароль" autocomplete="current-password">
+        <div class="login-error" id="login-error"></div>
+        <button class="btn primary" id="btn-login" style="width:100%;">Войти в панель</button>
+    </div>
+</div>
+
+<div id="panel" class="hidden">
+    <header>
+        <div class="top-row">
+            <div class="brand">🛰️ Mission Control</div>
+            <div class="status">
+                <span class="dot wait" id="live-dot"></span>
+                <span id="status-text">подключение...</span>
+            </div>
+        </div>
+        <div class="actions">
+            <button class="btn" id="btn-refresh">↻ Обновить</button>
+            <button class="btn" id="btn-pause">⏸ Пауза</button>
+            <button class="btn primary" id="btn-snapshot">💾 Снапшот</button>
+            <button class="btn" id="btn-testpush">🔔 Тест-пуш</button>
+            <button class="btn danger" id="btn-logout">🚪 Выйти</button>
+        </div>
+    </header>
+
+    <div class="banner hidden" id="banner"></div>
+
+    <main class="wrap">
+        <section class="card wide">
+            <h3>Состояние системы</h3>
+            <div class="two">
+                <div class="mini">
+                    <div class="label">Uptime</div>
+                    <div class="value" id="uptime-val">—</div>
+                </div>
+                <div class="mini">
+                    <div class="label">Latency</div>
+                    <div class="value" id="latency-val">—</div>
+                </div>
+                <div class="mini">
+                    <div class="label">RPS</div>
+                    <div class="value" id="rps-val">—</div>
+                </div>
+                <div class="mini">
+                    <div class="label">Версия</div>
+                    <div class="value" id="version-val">—</div>
+                </div>
+            </div>
+            <div class="small" id="meta-line">Python — · обновлено —</div>
+        </section>
+
+        <section class="card">
+            <h3>CPU процесса</h3>
+            <div class="big" id="cpu-val">—</div>
+            <div class="bar"><span id="cpu-bar"></span></div>
+            <div class="small" id="cpu-load">load average: —</div>
+        </section>
+
+        <section class="card">
+            <h3>Память</h3>
+            <div class="big" id="mem-val">—</div>
+            <div class="bar"><span id="mem-bar"></span></div>
+            <div class="small" id="mem-sub">—</div>
+        </section>
+
+        <section class="card">
+            <h3>Диск</h3>
+            <div class="big" id="disk-val">—</div>
+            <div class="bar"><span id="disk-bar"></span></div>
+            <div class="small" id="disk-sub">—</div>
+        </section>
+
+        <section class="card">
+            <h3>WebSocket</h3>
+            <div class="big" id="ws-users-val">0</div>
+            <div class="small">пользователей онлайн</div>
+            <div class="kv"><span>Активных сокетов</span><b id="ws-sockets-val">0</b></div>
+            <div class="chips" id="online-list"></div>
+        </section>
+
+        <section class="card wide">
+            <h3>График нагрузки</h3>
+            <div class="small">HTTP-запросы по 5-секундным окнам</div>
+            <canvas class="spark" id="chart-req"></canvas>
+            <div class="small" style="margin-top:10px;">WebSocket-события по 5-секундным окнам</div>
+            <canvas class="spark" id="chart-ws"></canvas>
+        </section>
+
+        <section class="card">
+            <h3>База данных</h3>
+            <div class="big" id="db-size-val">—</div>
+            <div class="kv"><span>Сообщений</span><b id="db-msgs-val">0</b></div>
+            <div class="kv"><span>Аккаунтов</span><b id="db-users-val">0</b></div>
+            <div class="kv"><span>Сессий</span><b id="db-sessions-val">0</b></div>
+        </section>
+
+        <section class="card">
+            <h3>Backblaze B2</h3>
+            <div class="big" id="b2-size-val">—</div>
+            <div class="bar"><span id="b2-bar"></span></div>
+            <div class="small" id="b2-sub">—</div>
+            <div class="kv"><span>Последний снапшот</span><b id="snapshot-time-val">—</b></div>
+            <div class="kv"><span>Размер снапшота</span><b id="snapshot-size-val">—</b></div>
+        </section>
+
+        <section class="card">
+            <h3>Счётчики</h3>
+            <div class="kv"><span>WS сообщений</span><b id="cnt-ws-val">0</b></div>
+            <div class="kv"><span>FCM пушей</span><b id="cnt-fcm-val">0</b></div>
+            <div class="kv"><span>Web Push</span><b id="cnt-webpush-val">0</b></div>
+            <div class="kv"><span>Снапшотов</span><b id="cnt-snapshot-val">0</b></div>
+        </section>
+
+        <section class="card wide">
+            <h3>Последние события</h3>
+            <div class="events" id="events-list"></div>
+        </section>
+    </main>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+const state = {
+    token: localStorage.getItem('messenger_token') || '',
+    user: localStorage.getItem('messenger_currentUser') || '',
+    timer: null,
+    paused: false,
+    failCount: 0,
+    bannerTimer: null
+};
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[ch]));
+}
+
+function formatBytes(bytes) {
+    const n = Number(bytes || 0);
+    if (!n) return '0 Б';
+    const units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+    let value = n;
+    let i = 0;
+    while (value >= 1024 && i < units.length - 1) {
+        value /= 1024;
+        i++;
+    }
+    return value.toFixed(i ? 1 : 0) + ' ' + units[i];
+}
+
+function formatUptime(seconds) {
+    let s = Math.floor(Number(seconds || 0));
+    const d = Math.floor(s / 86400);
+    s %= 86400;
+    const h = Math.floor(s / 3600);
+    s %= 3600;
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return (d ? d + 'д ' : '') +
+        String(h).padStart(2, '0') + ':' +
+        String(m).padStart(2, '0') + ':' +
+        String(sec).padStart(2, '0');
+}
+
+function formatTimeFromUnix(ts) {
+    const n = Number(ts || 0);
+    if (!n) return '—';
+    return new Date(n * 1000).toLocaleTimeString('ru-RU');
+}
+
+function clampPct(value) {
+    return Math.max(0, Math.min(100, Number(value || 0)));
+}
+
+function colorForPct(pct) {
+    if (pct < 60) return 'var(--ok)';
+    if (pct < 85) return 'var(--warn)';
+    return 'var(--bad)';
+}
+
+function setBar(id, pct, color) {
+    const el = $(id);
+    if (!el) return;
+    const p = clampPct(pct);
+    el.style.width = p + '%';
+    el.style.background = color || 'var(--grad)';
+}
+
+function setStatus(type, text) {
+    const dot = $('live-dot');
+    const label = $('status-text');
+    if (!dot || !label) return;
+    dot.className = 'dot ' + (type === 'ok' ? 'ok' : type === 'bad' ? 'bad' : 'wait');
+    label.textContent = text;
+}
+
+function showBanner(type, text) {
+    const el = $('banner');
+    if (!el) return;
+    el.className = 'banner ' + type;
+    el.textContent = text;
+    clearTimeout(state.bannerTimer);
+    state.bannerTimer = setTimeout(() => el.classList.add('hidden'), 4500);
+}
+
+function showLogin(message) {
+    $('panel').classList.add('hidden');
+    $('login-screen').classList.remove('hidden');
+    $('login-error').textContent = message || '';
+}
+
+function showPanel() {
+    $('login-screen').classList.add('hidden');
+    $('panel').classList.remove('hidden');
+}
+
+function stopAuto() {
+    if (state.timer) {
+        clearInterval(state.timer);
+        state.timer = null;
+    }
+}
+
+function startAuto() {
+    stopAuto();
+    if (!state.paused && state.token) {
+        state.timer = setInterval(loadMetrics, 3000);
+    }
+}
+
+function drawChart(canvasId, series, color) {
+    const canvas = $(canvasId);
+    if (!canvas) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const width = canvas.clientWidth || 300;
+    const height = canvas.clientHeight || 92;
+
+    canvas.width = Math.max(1, Math.floor(width * dpr));
+    canvas.height = Math.max(1, Math.floor(height * dpr));
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const data = Array.isArray(series) ? series.map(Number) : [];
+    if (data.length < 2) return;
+
+    const max = Math.max(1, ...data);
+    const pad = 8;
+    const stepX = (width - pad * 2) / (data.length - 1);
+
+    ctx.beginPath();
+    data.forEach((value, index) => {
+        const x = pad + index * stepX;
+        const y = height - pad - (value / max) * (height - pad * 2);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    ctx.lineTo(width - pad, height - pad);
+    ctx.lineTo(pad, height - pad);
+    ctx.closePath();
+
+    ctx.globalAlpha = 0.16;
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    const lastX = pad + (data.length - 1) * stepX;
+    const lastY = height - pad - (data[data.length - 1] / max) * (height - pad * 2);
+    ctx.beginPath();
+    ctx.arc(lastX, lastY, 3.8, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+}
+
+function actionLabel(action) {
+    return ({
+        register: 'регистрация',
+        login: 'вход',
+        login_fail: 'ошибка входа',
+        ws_connect: 'ws онлайн',
+        register_block: 'блок бота'
+    })[action] || action;
+}
+
+function renderMetrics(m) {
+    const cpu = clampPct(m.cpu_proc);
+    const memTotal = Number(m.mem_total || 0);
+    const memRss = Number(m.mem_rss || 0);
+    const memPct = memTotal ? clampPct((memRss / memTotal) * 100) : 0;
+    const diskTotal = Number(m.disk_total || 0);
+    const diskUsed = Number(m.disk_used || 0);
+    const diskPct = diskTotal ? clampPct((diskUsed / diskTotal) * 100) : 0;
+
+    const b2 = m.b2 || {};
+    const b2Bytes = Number(b2.bytes || 0);
+    const b2Files = Number(b2.files || 0);
+    const b2Limit = 10 * 1024 * 1024 * 1024;
+    const b2Pct = clampPct((b2Bytes / b2Limit) * 100);
+
+    const counters = m.counters || {};
+    const snapshot = m.snapshot || {};
+
+    $('uptime-val').textContent = formatUptime(m.uptime);
+    $('latency-val').textContent = Number(m.latency_ms || 0).toFixed(1) + ' ms';
+    $('rps-val').textContent = Number(m.rps || 0).toFixed(2);
+    $('version-val').textContent = m.version ? String(m.version).slice(0, 10) : '—';
+    $('meta-line').textContent = 'Python ' + (m.python || '—') + ' · обновлено ' + formatTimeFromUnix(m.time);
+
+    $('cpu-val').textContent = cpu.toFixed(1) + '%';
+    $('cpu-val').style.color = colorForPct(cpu);
+    setBar('cpu-bar', cpu, colorForPct(cpu));
+    $('cpu-load').textContent = 'load average: ' + (Array.isArray(m.load) && m.load.length
+        ? m.load.map(x => Number(x).toFixed(2)).join(' / ')
+        : '0.00 / 0.00 / 0.00');
+
+    $('mem-val').textContent = formatBytes(memRss);
+    setBar('mem-bar', memPct, colorForPct(memPct));
+    $('mem-sub').textContent = memTotal
+        ? memPct.toFixed(1) + '% из ' + formatBytes(memTotal)
+        : '总 память недоступна';
+
+    $('disk-val').textContent = formatBytes(diskUsed);
+    setBar('disk-bar', diskPct, colorForPct(diskPct));
+    $('disk-sub').textContent = diskTotal
+        ? diskPct.toFixed(1) + '% из ' + formatBytes(diskTotal)
+        : 'диск недоступен';
+
+    $('ws-users-val').textContent = Number(m.ws_users || 0);
+    $('ws-sockets-val').textContent = Number(m.ws_sockets || 0);
+
+    const online = Array.isArray(m.online) ? m.online : [];
+    $('online-list').innerHTML = online.length
+        ? online.map(u => `<span class="chip ok">@${escapeHtml(u)}</span>`).join('')
+        : '<span class="chip">никого нет</span>';
+
+    $('db-size-val').textContent = formatBytes(m.db_size);
+    $('db-msgs-val').textContent = Number(m.msgs || 0).toLocaleString('ru-RU');
+    $('db-users-val').textContent = Number(m.users || 0).toLocaleString('ru-RU');
+    $('db-sessions-val').textContent = Number(m.sessions || 0).toLocaleString('ru-RU');
+
+    $('b2-size-val').textContent = formatBytes(b2Bytes);
+    setBar('b2-bar', b2Pct, colorForPct(b2Pct));
+    $('b2-sub').textContent = 'файлов: ' + b2Files.toLocaleString('ru-RU') + ' · ориентир 10 ГБ · ' + b2Pct.toFixed(1) + '%';
+    $('snapshot-time-val').textContent = snapshot.time ? formatTimeFromUnix(snapshot.time) : '—';
+    $('snapshot-size-val').textContent = snapshot.size ? formatBytes(snapshot.size) : '—';
+
+    $('cnt-ws-val').textContent = Number(counters.ws_msgs || 0).toLocaleString('ru-RU');
+    $('cnt-fcm-val').textContent = Number(counters.fcm_sent || 0).toLocaleString('ru-RU');
+    $('cnt-webpush-val').textContent = Number(counters.webpush_sent || 0).toLocaleString('ru-RU');
+    $('cnt-snapshot-val').textContent = Number(counters.snapshots || 0).toLocaleString('ru-RU');
+
+    const recent = Array.isArray(m.recent) ? m.recent : [];
+    $('events-list').innerHTML = recent.length
+        ? recent.map(e => `
+            <div class="event">
+                <span class="t">${escapeHtml(e.ts || '')}</span>
+                <span class="u">@${escapeHtml(e.username || '—')}</span>
+                <span>${escapeHtml(actionLabel(e.action))}</span>
+                ${e.bot ? '<span class="chip bad">бот</span>' : ''}
+            </div>
+        `).join('')
+        : '<div class="small muted">Событий пока нет.</div>';
+
+    requestAnimationFrame(() => {
+        drawChart('chart-req', m.req_series || [], '#38bdf8');
+        drawChart('chart-ws', m.ws_series || [], '#a99af0');
+    });
+}
+
+async function loadMetrics() {
+    if (!state.token) {
+        showLogin('Сначала войди в панель.');
+        stopAuto();
+        return;
+    }
+
+    try {
+        setStatus('wait', 'обновление...');
+        const res = await fetch('/admin/metrics?token=' + encodeURIComponent(state.token), {
+            cache: 'no-store'
+        });
+
+        if (res.status === 401) {
+            state.token = '';
+            state.user = '';
+            localStorage.removeItem('messenger_token');
+            localStorage.removeItem('messenger_currentUser');
+            stopAuto();
+            showLogin('Сессия истекла. Войди заново.');
+            return;
+        }
+
+        if (res.status === 403) {
+            const err = await res.json().catch(() => ({}));
+            setStatus('bad', 'нет прав');
+            showBanner('error', err.detail || 'Этот аккаунт не является администратором.');
+            return;
+        }
+
+        if (!res.ok) {
+            throw new Error('HTTP ' + res.status);
+        }
+
+        const metrics = await res.json();
+        state.failCount = 0;
+        renderMetrics(metrics);
+        setStatus('ok', 'live · ' + formatTimeFromUnix(metrics.time));
+    } catch (e) {
+        state.failCount++;
+        setStatus('bad', 'нет связи');
+        if (state.failCount <= 1) {
+            showBanner('error', 'Не удалось получить метрики: ' + (e && e.message ? e.message : e));
+        }
+    }
+}
+
+async function postAdminAction(url, successText) {
+    if (!state.token) {
+        showBanner('error', 'Нет токена администратора.');
+        return;
+    }
+
+    const fd = new FormData();
+    fd.append('token', state.token);
+
+    try {
+        const res = await fetch(url, { method: 'POST', body: fd });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+            showBanner('error', data.detail || 'Ошибка запроса: HTTP ' + res.status);
+            return false;
+        }
+
+        showBanner('ok', successText(data));
+        await loadMetrics();
+        return true;
+    } catch (e) {
+        showBanner('error', 'Ошибка сети: ' + (e && e.message ? e.message : e));
+        return false;
+    }
+}
+
+async function doLogin() {
+    const username = $('login-user').value.trim();
+    const password = $('login-pass').value;
+    const errorEl = $('login-error');
+    const btn = $('btn-login');
+
+    errorEl.textContent = '';
+
+    if (!username || !password) {
+        errorEl.textContent = 'Введите ник и пароль.';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Проверяем...';
+
+    try {
+        const fd = new FormData();
+        fd.append('username', username);
+        fd.append('password', password);
+        fd.append('hp', '');
+        fd.append('load_ts', String(Date.now()));
+
+        const res = await fetch('/login', { method: 'POST', body: fd });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+            errorEl.textContent = data.detail || 'Не удалось войти.';
+            return;
+        }
+
+        state.token = data.token;
+        state.user = data.username;
+        localStorage.setItem('messenger_token', state.token);
+        localStorage.setItem('messenger_currentUser', state.user);
+
+        showPanel();
+        setStatus('wait', 'загрузка метрик...');
+        await loadMetrics();
+        startAuto();
+    } catch (e) {
+        errorEl.textContent = 'Ошибка сети: ' + (e && e.message ? e.message : e);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Войти в панель';
+    }
+}
+
+function logout() {
+    localStorage.removeItem('messenger_token');
+    localStorage.removeItem('messenger_currentUser');
+    state.token = '';
+    state.user = '';
+    stopAuto();
+    location.reload();
+}
+
+$('btn-login').addEventListener('click', doLogin);
+$('login-pass').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') doLogin();
+});
+
+$('btn-refresh').addEventListener('click', () => loadMetrics());
+
+$('btn-pause').addEventListener('click', () => {
+    state.paused = !state.paused;
+    $('btn-pause').textContent = state.paused ? '▶ Старт' : '⏸ Пауза';
+    if (state.paused) {
+        stopAuto();
+        setStatus('wait', 'пауза');
+    } else {
+        loadMetrics();
+        startAuto();
+    }
+});
+
+$('btn-snapshot').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.textContent = '⏳ Делаем...';
+    await postAdminAction('/admin/snapshot-now', (d) => 'Снапшот готов: ' + formatBytes(d.size || 0));
+    btn.disabled = false;
+    btn.textContent = old;
+});
+
+$('btn-testpush').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.textContent = '⏳ Отправляем...';
+    await postAdminAction('/admin/test-push', (d) => d.fcm ? 'Тест-пуш отправлен через FCM + Web Push' : 'Тест-пуш отправлен через Web Push');
+    btn.disabled = false;
+    btn.textContent = old;
+});
+
+$('btn-logout').addEventListener('click', logout);
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        stopAuto();
+    } else if (!state.paused && state.token) {
+        loadMetrics();
+        startAuto();
+    }
+});
+
+window.addEventListener('resize', () => {
+    if (state.lastMetrics) {
+        requestAnimationFrame(() => {
+            drawChart('chart-req', state.lastMetrics.req_series || [], '#38bdf8');
+            drawChart('chart-ws', state.lastMetrics.ws_series || [], '#a99af0');
+        });
+    }
+});
+
+(function init() {
+    if (state.token) {
+        showPanel();
+        loadMetrics();
+        startAuto();
+    } else {
+        showLogin('');
+    }
+})();
+</script>
+
+</body>
+</html>
